@@ -164,14 +164,18 @@ const LK = {
 console.log(`  limits: ${JSON.stringify(LK)}`);
 
 function fipsOf(row) {
-  if (fipsKey && row[fipsKey] != null) {
-    const s = String(row[fipsKey]).replace(/\D/g, '');
-    return s.padStart(5, '0').slice(-5);
-  }
+  // PREFER state + county. HUD's `fips` column is a 9-digit compound
+  // (state+county+5-digit subgroup), not the standard 5-digit county FIPS,
+  // so we ignore it here.
   if (stateKey && countyKey) {
     const s = String(row[stateKey] ?? '').replace(/\D/g, '').padStart(2, '0');
     const c = String(row[countyKey] ?? '').replace(/\D/g, '').padStart(3, '0');
-    return s + c;
+    if (s.length === 2 && c.length === 3) return s + c;
+  }
+  // Fallback: take first 5 digits of the fips column (if state+county absent).
+  if (fipsKey && row[fipsKey] != null) {
+    const s = String(row[fipsKey]).replace(/\D/g, '');
+    if (s.length >= 5) return s.slice(0, 5).padStart(5, '0');
   }
   return null;
 }
@@ -186,12 +190,15 @@ function round50(v) {
 }
 
 const out = {};
-let skipped = 0;
+let skipped = 0, deduped = 0;
 for (const row of rows) {
   const fips = fipsOf(row);
   if (!fips || fips.length !== 5) { skipped++; continue; }
   const mfi = n(row[mfiKey]);
   if (!mfi) { skipped++; continue; }
+  // Keep the first occurrence for each county. HUD lists each county once
+  // per sub-area; values are identical at the county level.
+  if (out[fips]) { deduped++; continue; }
 
   // HUD household-size adjustment for 4-person base → 2-person: 0.80
   const mfi_4p = mfi;
@@ -224,7 +231,8 @@ for (const row of rows) {
 
 await mkdir(OUT_DIR, { recursive: true });
 await writeFile(OUT_FILE, JSON.stringify(out, null, 2));
-console.log(`✓ Wrote HUD AMI for ${Object.keys(out).length} counties (skipped ${skipped}) to ${OUT_FILE}`);
+console.log(`✓ Wrote HUD AMI for ${Object.keys(out).length} counties ` +
+            `(skipped ${skipped}, deduped ${deduped} multi-row entries) to ${OUT_FILE}`);
 
 // DIAGNOSTIC: print a few sample counties so we can spot-check the join.
 const samples = ['13215', '13293', '13053', '01073', '06037', '36061', '48201'];
