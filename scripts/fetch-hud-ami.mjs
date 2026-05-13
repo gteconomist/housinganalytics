@@ -25,21 +25,49 @@ const OUT_FILE   = join(OUT_DIR, 'hud-ami.json');
 
 // HUD publishes annual Section 8 Income Limits. URL pattern:
 //   https://www.huduser.gov/portal/datasets/il/il{YY}/Section8-FY{YY}.xlsx
-// Update HUD_IL_URL once a year. The build will still succeed if the fetch
-// fails — HUD AMI panels just won't appear.
+// HUD blocks fetch requests that don't look like a browser, so we send a
+// proper User-Agent and Accept header. If HUD updates the URL pattern,
+// override via HUD_IL_URL env var.
 const HUD_URL = process.env.HUD_IL_URL
-  || 'https://www.huduser.gov/portal/datasets/il/il25/Section8-FY25.xlsx';
+  || 'https://www.huduser.gov/portal/datasets/il/il26/Section8-FY26.xlsx';
 
-console.log(`Fetching HUD Income Limits from ${HUD_URL}...`);
+const HUD_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (housinganalytics.org build pipeline)',
+  'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream, */*',
+};
+
+async function fetchWithFallback(urls) {
+  let lastErr;
+  for (const url of urls) {
+    try {
+      console.log(`Trying ${url}...`);
+      const res = await fetch(url, { headers: HUD_HEADERS, redirect: 'follow' });
+      if (!res.ok) { lastErr = new Error(`HTTP ${res.status} ${res.statusText}`); continue; }
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0) { lastErr = new Error('200 OK with empty body'); continue; }
+      console.log(`Downloaded ${buf.length.toLocaleString()} bytes from ${url}.`);
+      return buf;
+    } catch (e) {
+      lastErr = e;
+      console.warn(`  Attempt failed: ${e.message}`);
+    }
+  }
+  throw lastErr ?? new Error('All HUD URLs failed.');
+}
+
+// Try the configured URL first, then fall back to previous fiscal years.
+const URL_CANDIDATES = [
+  HUD_URL,
+  'https://www.huduser.gov/portal/datasets/il/il26/Section8-FY26.xlsx',
+  'https://www.huduser.gov/portal/datasets/il/il25/Section8-FY25.xlsx',
+  'https://www.huduser.gov/portal/datasets/il/il24/Section8-FY24.xlsx',
+];
 
 let buf;
 try {
-  const res = await fetch(HUD_URL);
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-  buf = Buffer.from(await res.arrayBuffer());
-  console.log(`Downloaded ${buf.length.toLocaleString()} bytes.`);
+  buf = await fetchWithFallback([...new Set(URL_CANDIDATES)]);
 } catch (err) {
-  console.warn(`WARNING: HUD fetch failed: ${err.message}`);
+  console.warn(`WARNING: All HUD fetch attempts failed: ${err.message}`);
   console.warn('Site will build without HUD AMI; panels will show "—".');
   await mkdir(OUT_DIR, { recursive: true });
   await writeFile(OUT_FILE, JSON.stringify({}, null, 2));
@@ -76,7 +104,7 @@ const stateKey   = findKey('state', 'state_alpha', 'STUSAB');
 const countyKey  = findKey('county');
 const fipsKey    = findKey('fips2010', 'fips', 'fips_code');
 const areaKey    = findKey('Areaname', 'AreaName', 'FMR Area Name', 'area_name');
-const mfiKey     = findKey('Median2025', 'Median2024', 'Median_Income', 'median', 'medY1');
+const mfiKey     = findKey('Median2026', 'Median2025', 'Median2024', 'Median_Income', 'median', 'medY1');
 
 if (!fipsKey && !(stateKey && countyKey)) {
   console.error('Could not identify county FIPS columns in HUD file. Available keys:');
