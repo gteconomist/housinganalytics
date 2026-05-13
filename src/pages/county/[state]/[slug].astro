@@ -214,7 +214,13 @@ const hud = county.hud_ami;
         <div class="kpi"><div class="kpi__label">Owner cost-burden rate</div>
           <div class="kpi__value">{fmtPct(county.owner_cost_burden_rate)}</div>
           <div class="kpi__delta muted">≥30% of income</div></div>
-        <div class="kpi"><div class="kpi__label">Vacancy rate</div>
+        <div class="kpi"><div class="kpi__label">Homeowner vacancy</div>
+          <div class="kpi__value">{fmtPct(county.homeowner_vacancy_rate)}</div>
+          <div class="kpi__delta muted">Of owner-occupied + for-sale units</div></div>
+        <div class="kpi"><div class="kpi__label">Rental vacancy</div>
+          <div class="kpi__value">{fmtPct(county.rental_vacancy_rate)}</div>
+          <div class="kpi__delta muted">Of renter-occupied + for-rent units</div></div>
+        <div class="kpi"><div class="kpi__label">Overall vacancy</div>
           <div class="kpi__value">{fmtPct(county.vacancy_rate)}</div>
           <div class="kpi__delta muted">All housing units</div></div>
         <div class="kpi"><div class="kpi__label">Price-to-income ratio</div>
@@ -545,9 +551,12 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.race.labels,
-      datasets: [{ label: 'County share (%)', data: chartData.race.county, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.race.county, backgroundColor: C.navy, borderRadius: 4 }],
     },
-    options: pctOpts(100),
+    options: {
+      scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } },
+      plugins: { legend: { display: false } },
+    },
   });
 
   mk('education', {
