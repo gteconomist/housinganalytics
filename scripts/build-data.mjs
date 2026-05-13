@@ -376,16 +376,16 @@ counties.forEach(c => {
 // ─────────────────────────────────────────────────────────────────
 // Write outputs
 // ─────────────────────────────────────────────────────────────────
+
+// HUD AMI lookup MUST happen before we wipe the output directory, since
+// hud-ami.json lives there (written by the preceding `npm run hud` step).
+const hudAmi = await loadHudAmi();
+console.log(`HUD AMI loaded for ${Object.keys(hudAmi).length} counties.`);
+
 if (existsSync(OUT_DIR)) await rm(OUT_DIR, { recursive: true, force: true });
 await mkdir(OUT_DIR, { recursive: true });
 await mkdir(join(OUT_DIR, 'counties'), { recursive: true });
 await mkdir(join(OUT_DIR, 'states'),   { recursive: true });
-
-// HUD AMI lookup (FIPS → AMI fields). Empty {} if fetch-hud-ami.mjs hasn't
-// run, or if HUD's site was unreachable at build time. The page templates
-// fall back gracefully when fields are null.
-const hudAmi = await loadHudAmi();
-console.log(`HUD AMI loaded for ${Object.keys(hudAmi).length} counties.`);
 
 // Per-county files
 for (const c of counties) {
