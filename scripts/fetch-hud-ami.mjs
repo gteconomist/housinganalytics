@@ -153,11 +153,14 @@ function findLimitKey(prefix, hh) {
   );
 }
 const LK = {
+  l80_1: findLimitKey('l80', 1),
   l80_2: findLimitKey('l80', 2),
   l80_4: findLimitKey('l80', 4),
+  l50_1: findLimitKey('l50', 1),
   l50_2: findLimitKey('l50', 2),
   l50_4: findLimitKey('l50', 4),
   // 30% AMI may be named ELI (Extremely Low Income) in newer HUD files.
+  l30_1: findLimitKey('l30', 1) || findKey('ELI_1', 'eli_1', 'L_ELI_1', 'extr_low_1'),
   l30_2: findLimitKey('l30', 2) || findKey('ELI_2', 'eli_2', 'L_ELI_2', 'extr_low_2'),
   l30_4: findLimitKey('l30', 4) || findKey('ELI_4', 'eli_4', 'L_ELI_4', 'extr_low_4'),
 };
@@ -200,19 +203,24 @@ for (const row of rows) {
   // per sub-area; values are identical at the county level.
   if (out[fips]) { deduped++; continue; }
 
-  // HUD household-size adjustment for 4-person base → 2-person: 0.80
+  // HUD household-size adjustments from the 4-person base:
+  //   1-person = 70%, 2-person = 80%, (3-person = 90%, used elsewhere)
   const mfi_4p = mfi;
   const mfi_2p = mfi * 0.80;
+  const mfi_1p = mfi * 0.70;
 
   // 80% AMI: prefer HUD's published rounded values; fall back to computed.
+  const ami_80_1p = n(row[LK.l80_1]) ?? round50(mfi_1p * 0.80);
   const ami_80_2p = n(row[LK.l80_2]) ?? round50(mfi_2p * 0.80);
   const ami_80_4p = n(row[LK.l80_4]) ?? round50(mfi_4p * 0.80);
 
-  // 100% AMI: equals HUD MFI for 4-person; 0.80 × MFI for 2-person.
+  // 100% AMI: equals HUD MFI for 4-person; 0.80 × MFI for 2-person; 0.70 for 1-person.
+  const ami_100_1p = mfi_1p;
   const ami_100_2p = mfi_2p;
   const ami_100_4p = mfi_4p;
 
   // 120% AMI: HUD doesn't publish; standard workforce convention.
+  const ami_120_1p = round50(mfi_1p * 1.20);
   const ami_120_2p = round50(mfi_2p * 1.20);
   const ami_120_4p = round50(mfi_4p * 1.20);
 
@@ -220,10 +228,14 @@ for (const row of rows) {
     fmr_area: areaKey ? row[areaKey] : null,
     mfi_4p,
     mfi_2p,
+    mfi_1p,
+    ami_80_1p,
     ami_80_2p,
     ami_80_4p,
+    ami_100_1p,
     ami_100_2p,
     ami_100_4p,
+    ami_120_1p,
     ami_120_2p,
     ami_120_4p,
   };
