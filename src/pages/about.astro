@@ -10,14 +10,12 @@ import { fmtInt } from '../lib/format.js';
     <p>
       housinganalytics.org turns the <a href="https://www.census.gov/programs-surveys/acs">American Community
       Survey</a> into the figures, tables, and plain-language summaries an economic-development analyst
-      would otherwise spend days assembling per county. It's modelled on the structure of housing studies
-      produced by <a href="https://cedr.gatech.edu/">Georgia Tech CEDR</a> and similar regional research
-      organizations.
+      would otherwise spend days assembling per county.
     </p>
 
     <h2>What's in v1</h2>
     <p>
-      {fmtInt(manifest.county_count)} county profiles · {fmtInt(manifest.state_count)} states · 2024 ACS
+      {fmtInt(manifest.county_count)} county profiles · all 50 states plus D.C. and Puerto Rico · 2024 ACS
       5-year estimates. Each county profile is structured to mirror the three sections of a typical
       housing study: Community Profile, Residential Market Analysis, and Workforce Housing Needs
       Assessment, plus a parametric affordability calculator.
