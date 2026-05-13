@@ -29,6 +29,10 @@ export const VARIABLES = [
   { field: 'units_occupied',            label: 'Occupied Housing Units',                 acs: 'B25002_002E', group: 'occupancy' },
   { field: 'units_vacant',              label: 'Vacant Housing Units',                   acs: 'B25002_003E', group: 'occupancy' },
   { field: 'units_total',               label: 'Total Housing Units',                    acs: 'B25024_001E', group: 'structure' },
+  // Homeowner & rental vacancy rates — ACS publishes these as rates directly.
+  // Add these two columns to the spreadsheet to see the split on the KPI bar.
+  { field: 'homeowner_vacancy_rate',    label: 'Homeowner Vacancy Rate',                 acs: 'DP04_0004E', group: 'occupancy' },
+  { field: 'rental_vacancy_rate',       label: 'Rental Vacancy Rate',                    acs: 'DP04_0005E', group: 'occupancy' },
 
   // ── Structure type (B25024) ──────────────────────────────────────
   { field: 'structure_1_detached',      label: '1, Detached Unit',                       acs: 'B25024_002E', group: 'structure' },
