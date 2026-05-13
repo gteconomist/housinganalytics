@@ -1,0 +1,104 @@
+---
+// Base layout — site shell with brand header and footer.
+import '../styles/tokens.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  county?: { name: string; state_name: string };
+}
+const { title, description, county } = Astro.props;
+const fullTitle = title.includes('housinganalytics')
+  ? title
+  : `${title} — housinganalytics.org`;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="generator" content={Astro.generator} />
+  <title>{fullTitle}</title>
+  {description && <meta name="description" content={description} />}
+  <link rel="preconnect" href="https://rsms.me/" />
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a class="brand" href="/">
+        <span class="brand__mark">housing<span>analytics</span>.org</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="/">Counties</a>
+        <a href="/compare">Compare</a>
+        <a href="/states">States</a>
+        <a href="/about">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <slot />
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p class="muted">
+        Data: <a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">American Community Survey</a>, 2024 5-year estimates.
+        Methodology based on housing studies by <a href="https://cedr.gatech.edu/" target="_blank" rel="noreferrer">Georgia Tech CEDR</a> and similar regional research.
+      </p>
+      <p class="muted small">housinganalytics.org · built {new Date().getFullYear()}</p>
+    </div>
+  </footer>
+</body>
+</html>
+
+<style>
+  .site-header {
+    background: var(--color-navy);
+    color: var(--text-on-dark);
+    border-bottom: 4px solid var(--color-gold);
+  }
+  .site-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-5);
+  }
+  .brand {
+    color: var(--text-on-dark);
+    text-decoration: none;
+    font-weight: var(--fw-bold);
+    font-size: var(--fs-lg);
+    letter-spacing: -0.02em;
+  }
+  .brand span { color: var(--color-gold); }
+  .site-nav {
+    display: flex;
+    gap: var(--space-5);
+  }
+  .site-nav a {
+    color: var(--text-on-dark);
+    text-decoration: none;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    letter-spacing: 0.02em;
+    border-bottom: 2px solid transparent;
+    padding-bottom: 2px;
+  }
+  .site-nav a:hover {
+    border-bottom-color: var(--color-gold);
+  }
+  .site-footer {
+    border-top: 1px solid var(--border-soft);
+    padding: var(--space-7) 0;
+    margin-top: var(--space-9);
+    background: var(--bg-section);
+  }
+  .site-footer .small { margin-top: var(--space-2); }
+  @media (max-width: 640px) {
+    .site-header__inner { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+    .site-nav { flex-wrap: wrap; gap: var(--space-3); }
+  }
+</style>

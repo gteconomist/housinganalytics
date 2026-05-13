@@ -1,0 +1,59 @@
+---
+import Base from '../layouts/Base.astro';
+import manifest from '../data/generated/manifest.json';
+import { fmtInt } from '../lib/format.js';
+---
+<Base title="About — housinganalytics.org">
+  <section class="container narrow">
+    <p class="eyebrow">About</p>
+    <h1>What this site is</h1>
+    <p>
+      housinganalytics.org turns the <a href="https://www.census.gov/programs-surveys/acs">American Community
+      Survey</a> into the figures, tables, and plain-language summaries an economic-development analyst
+      would otherwise spend days assembling per county. It's modelled on the structure of housing studies
+      produced by <a href="https://cedr.gatech.edu/">Georgia Tech CEDR</a> and similar regional research
+      organizations.
+    </p>
+
+    <h2>What's in v1</h2>
+    <p>
+      {fmtInt(manifest.county_count)} county profiles · {fmtInt(manifest.state_count)} states · 2024 ACS
+      5-year estimates. Each county profile is structured to mirror the three sections of a typical
+      housing study: Community Profile, Residential Market Analysis, and Workforce Housing Needs
+      Assessment, plus a parametric affordability calculator.
+    </p>
+
+    <h2>What it does not do</h2>
+    <p>
+      housinganalytics.org does not replace subscription data sources (Zillow, CoStar, Lightcast, Woods &amp;
+      Poole), GIS analyses, or stakeholder qualitative research. It is intended to accelerate the
+      ACS-derived backbone of a housing study, leaving the analyst time for everything else.
+    </p>
+
+    <h2>Updates</h2>
+    <p>
+      The site is rebuilt annually from a single Excel workbook when each new ACS 5-year vintage publishes
+      in December.
+    </p>
+
+    <h2>Methodology notes</h2>
+    <p>
+      State and national comparisons are population-weighted aggregates of county-level estimates. These
+      approximate but do not exactly match the medians the Census Bureau publishes at the state and national
+      level (which use unit-level microdata). For most analytical uses the difference is immaterial; a
+      future version will swap in published state/national medians where available.
+    </p>
+    <p>
+      The affordability calculator follows the 30%-of-gross-income rule used in the Columbus Regional
+      Housing Study and the Thomaston Housing Needs Assessment. Default parameters: 30-year mortgage, 7%
+      interest, 5% down, 0.5% PMI, $2,500/year taxes &amp; insurance.
+    </p>
+  </section>
+</Base>
+
+<style>
+  .narrow { max-width: var(--content-narrow); padding-top: var(--space-7); padding-bottom: var(--space-9); }
+  .narrow h1 { margin: var(--space-2) 0 var(--space-5); }
+  .narrow h2 { margin: var(--space-6) 0 var(--space-3); font-size: var(--fs-lg); }
+  .narrow p { font-size: var(--fs-md); color: var(--text-body); margin-bottom: var(--space-4); }
+</style>

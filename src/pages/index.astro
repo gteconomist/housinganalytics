@@ -1,0 +1,140 @@
+---
+import Base from '../layouts/Base.astro';
+import manifest from '../data/generated/manifest.json';
+import { fmtInt } from '../lib/format.js';
+---
+
+<Base title="housinganalytics.org — ACS housing data for every U.S. county"
+      description="County-level housing data for economic-development analysts, drawn from the American Community Survey.">
+
+  <section class="hero">
+    <div class="container hero__inner">
+      <p class="eyebrow">housinganalytics.org</p>
+      <h1>Housing data for every U.S. county, ready for your next study.</h1>
+      <p class="hero__lede">
+        County profiles drawn from the American Community Survey, formatted for economic-development
+        analysts. {fmtInt(manifest.county_count)} counties · {fmtInt(manifest.state_count)} states ·
+        2024 ACS 5-year estimates.
+      </p>
+
+      <form class="search" role="search" data-county-search>
+        <input
+          type="search"
+          name="q"
+          placeholder="Search a county — e.g. Muscogee, Upson, Cook…"
+          autocomplete="off"
+          aria-label="Search counties" />
+        <ul class="search__results" hidden></ul>
+      </form>
+    </div>
+  </section>
+
+  <section class="container">
+    <h2>Browse by state</h2>
+    <ul class="state-list">
+      {manifest.states.map(s => (
+        <li>
+          <a href={`/state/${s.slug}`}>
+            <span class="state-name">{s.name}</span>
+            <span class="state-meta muted">{fmtInt(s.county_count)} counties · {fmtInt(s.population_total)} people</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</Base>
+
+<script type="module" define:vars={{ counties: manifest.counties }}>
+  // Lightweight typeahead.
+  const form  = document.querySelector('[data-county-search]');
+  const input = form.querySelector('input');
+  const out   = form.querySelector('.search__results');
+
+  function render(matches) {
+    if (!matches.length) { out.hidden = true; out.innerHTML = ''; return; }
+    out.hidden = false;
+    out.innerHTML = matches.slice(0, 8).map(c => `
+      <li><a href="/county/${c.state_slug}/${c.slug}">
+        <span>${c.name}</span>
+        <span class="muted">${c.state}</span>
+      </a></li>
+    `).join('');
+  }
+
+  input.addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    if (q.length < 2) return render([]);
+    render(counties.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.state.toLowerCase().includes(q)
+    ));
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => render([]), 200));
+</script>
+
+<style>
+  .hero {
+    background: var(--bg-section);
+    padding: var(--space-9) 0 var(--space-7);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .hero h1 { max-width: 18ch; margin-bottom: var(--space-4); }
+  .hero__lede { max-width: 60ch; font-size: var(--fs-md); color: var(--text-muted); margin-bottom: var(--space-6); }
+
+  .search { position: relative; max-width: 560px; }
+  .search input {
+    width: 100%;
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--fs-md);
+    font-family: inherit;
+    border: 2px solid var(--color-navy);
+    border-radius: var(--radius-md);
+    background: var(--bg-page);
+    box-shadow: var(--shadow-soft);
+  }
+  .search input:focus {
+    outline: 3px solid var(--color-gold);
+    outline-offset: 1px;
+  }
+  .search__results {
+    position: absolute; top: 100%; left: 0; right: 0;
+    list-style: none; margin: var(--space-2) 0 0; padding: 0;
+    background: var(--bg-page);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    z-index: 10;
+  }
+  .search__results li { border-bottom: 1px solid var(--border-soft); }
+  .search__results li:last-child { border-bottom: none; }
+  .search__results a {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: var(--space-3) var(--space-4);
+    text-decoration: none; color: var(--text-body);
+  }
+  .search__results a:hover { background: var(--bg-section); }
+
+  .container > h2 { margin: var(--space-7) 0 var(--space-5); }
+  .state-list {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-3);
+  }
+  .state-list a {
+    display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--text-body);
+    background: var(--bg-card);
+  }
+  .state-list a:hover {
+    border-color: var(--color-gold);
+    color: var(--color-navy);
+  }
+  .state-name { font-weight: var(--fw-medium); }
+  .state-meta { font-size: var(--fs-xs); }
+</style>

@@ -1,0 +1,19 @@
+{
+  "name": "housinganalytics",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "housinganalytics.org — ACS housing data for every U.S. county",
+  "scripts": {
+    "data": "node scripts/build-data.mjs",
+    "dev": "npm run data && astro dev",
+    "build": "npm run data && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^4.16.18",
+    "chart.js": "^4.4.7",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}
