@@ -20,17 +20,17 @@ export function deltaText(county, comparison, { higher = 'higher', lower = 'lowe
   return `${units ? Math.abs(diff).toFixed(1) + units : '−' + Math.abs(diff).toFixed(1)} ${lower} than`;
 }
 
-// Affordability calculator — matches the Columbus / Thomaston reports' formula.
+// Affordability calculator — standard 30%-of-income / 30-year-mortgage formula.
 //   monthly_cost_max = monthly_income * 0.30
 //   P&I portion = monthly_cost_max - (taxes/insurance/12) - PMI
 //   solve for principal at given rate/term.
 export function affordableHomePrice({
   annualIncome,
-  interestRate = 0.07,       // 7% (Columbus); Thomaston used 6.5%
+  interestRate = 0.07,
   termYears    = 30,
   downPaymentPct = 0.05,
   annualTaxesInsurance = 2500,
-  pmiRate      = 0.005,      // 0.5% (Thomaston); Columbus omitted PMI
+  pmiRate      = 0.005,
   housingBudgetPct = 0.30,
 } = {}) {
   if (annualIncome == null) return null;
