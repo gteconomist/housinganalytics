@@ -4,7 +4,7 @@ ACS housing data for every U.S. county, presented in the structure of an economi
 
 ## What this is
 
-A static website that turns the [American Community Survey](https://www.census.gov/programs-surveys/acs) into the figures, tables, and plain-language summaries an economic-development analyst would otherwise spend days assembling per county. Inspired by housing studies produced by [Georgia Tech CEDR / Enterprise Innovation Institute](https://cedr.gatech.edu/) and similar regional research organizations.
+A static website that turns the [American Community Survey](https://www.census.gov/programs-surveys/acs) into the figures, tables, and plain-language summaries an economic-development analyst would otherwise spend days assembling per county.
 
 The site replaces the spreadsheet-wrangling and chart-making portion of a housing study. It does **not** replace subscription data sources (Zillow, CoStar, Lightcast, Woods & Poole), GIS work, or stakeholder qualitative research.
 
