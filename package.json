@@ -5,9 +5,10 @@
   "private": true,
   "description": "housinganalytics.org — ACS housing data for every U.S. county",
   "scripts": {
+    "hud": "node scripts/fetch-hud-ami.mjs",
     "data": "node scripts/build-data.mjs",
-    "dev": "npm run data && astro dev",
-    "build": "npm run data && astro build",
+    "dev": "npm run hud && npm run data && astro dev",
+    "build": "npm run hud && npm run data && astro build",
     "preview": "astro preview",
     "astro": "astro"
   },
