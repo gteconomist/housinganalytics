@@ -385,16 +385,19 @@ const hud = county.hud_ami;
           <Fragment>
             <table class="ami-table">
               <thead>
-                <tr><th></th><th>2-person</th><th>4-person</th></tr>
+                <tr><th></th><th>1-person</th><th>2-person</th><th>4-person</th></tr>
               </thead>
               <tbody>
                 <tr><th>80% AMI</th>
+                  <td>{fmtMoney(hud.ami_80_1p)}</td>
                   <td>{fmtMoney(hud.ami_80_2p)}</td>
                   <td>{fmtMoney(hud.ami_80_4p)}</td></tr>
                 <tr><th>100% AMI</th>
+                  <td>{fmtMoney(hud.ami_100_1p)}</td>
                   <td>{fmtMoney(hud.ami_100_2p)}</td>
                   <td>{fmtMoney(hud.ami_100_4p)}</td></tr>
                 <tr><th>120% AMI</th>
+                  <td>{fmtMoney(hud.ami_120_1p)}</td>
                   <td>{fmtMoney(hud.ami_120_2p)}</td>
                   <td>{fmtMoney(hud.ami_120_4p)}</td></tr>
               </tbody>
@@ -420,6 +423,9 @@ const hud = county.hud_ami;
             <option value="mhi" selected>ACS median household income</option>
             {hud && (
               <Fragment>
+                <option value="ami_80_1p">HUD AMI · 1-person · 80%</option>
+                <option value="ami_100_1p">HUD AMI · 1-person · 100%</option>
+                <option value="ami_120_1p">HUD AMI · 1-person · 120%</option>
                 <option value="ami_80_2p">HUD AMI · 2-person · 80%</option>
                 <option value="ami_100_2p">HUD AMI · 2-person · 100%</option>
                 <option value="ami_120_2p">HUD AMI · 2-person · 120%</option>
@@ -583,7 +589,10 @@ const hud = county.hud_ami;
       labels: chartData.structure.labels,
       datasets: [{ data: chartData.structure.values, backgroundColor: C.teal, borderRadius: 4 }],
     },
-    options: pctOpts(),
+    options: {
+      scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' } } },
+      plugins: { legend: { display: false } },
+    },
   });
 
   mk('yearBuilt', {
@@ -695,6 +704,9 @@ const hud = county.hud_ami;
   // changes the dropdown. "custom" leaves whatever they typed alone.
   const basisValues = {
     mhi: county.hh_income_median ?? null,
+    ami_80_1p:  county.hud_ami?.ami_80_1p  ?? null,
+    ami_100_1p: county.hud_ami?.ami_100_1p ?? null,
+    ami_120_1p: county.hud_ami?.ami_120_1p ?? null,
     ami_80_2p:  county.hud_ami?.ami_80_2p  ?? null,
     ami_100_2p: county.hud_ami?.ami_100_2p ?? null,
     ami_120_2p: county.hud_ami?.ami_120_2p ?? null,
