@@ -100,11 +100,29 @@ const keys = Object.keys(rows[0]);
 const ci = name => keys.find(k => k.toLowerCase() === name.toLowerCase());
 const findKey = (...candidates) => candidates.map(ci).find(Boolean) || null;
 
-const stateKey   = findKey('state', 'state_alpha', 'STUSAB');
-const countyKey  = findKey('county');
-const fipsKey    = findKey('fips2010', 'fips', 'fips_code');
-const areaKey    = findKey('Areaname', 'AreaName', 'FMR Area Name', 'area_name');
-const mfiKey     = findKey('Median2026', 'Median2025', 'Median2024', 'Median_Income', 'median', 'medY1');
+const stateKey   = findKey('state', 'state_alpha', 'STUSAB', 'fips_state');
+const countyKey  = findKey('county', 'fips_county', 'cntycd');
+const fipsKey    = findKey('fips2010', 'fips', 'fips_code', 'fips2020', 'GeoID', 'geoid');
+const areaKey    = findKey(
+  'Areaname', 'AreaName', 'FMR Area Name', 'area_name', 'hud_area_name',
+  'HUD_Area_Name', 'name', 'hud_areaname', 'fmr_areaname', 'FMR_Area',
+  'IL_Area_Name', 'area',
+);
+const mfiKey     = findKey('Median2026', 'Median2025', 'Median2024', 'Median_Income',
+                           'median', 'medY1', 'MFI', 'mfi', 'median_2026');
+
+// ── DIAGNOSTIC: show first row's keys + values so we can see what HUD ──
+// is actually publishing. Helps debug when column names drift across years.
+console.log('\n── First-row diagnostic ──');
+console.log(`Total rows: ${rows.length}`);
+console.log(`Available column keys (first 40):`);
+keys.slice(0, 40).forEach(k => {
+  const v = rows[0][k];
+  const display = v == null ? 'null' : (typeof v === 'string' ? `"${v}"` : v);
+  console.log(`  ${k.padEnd(30)} = ${display}`);
+});
+if (keys.length > 40) console.log(`  ... and ${keys.length - 40} more columns`);
+console.log('──────────────────────────\n');
 
 if (!fipsKey && !(stateKey && countyKey)) {
   console.error('Could not identify county FIPS columns in HUD file. Available keys:');
@@ -122,12 +140,16 @@ console.log(`  state=${stateKey}  county=${countyKey}  fips=${fipsKey}`);
 console.log(`  area=${areaKey}    mfi=${mfiKey}`);
 
 function findLimitKey(prefix, hh) {
+  // Try every variant we've seen across HUD's recent file versions.
   return findKey(
     `${prefix}_${hh}`,
     `${prefix}${hh}`,
     `${prefix}_${hh}p`,
+    `${prefix}_${hh}_person`,
     `L${prefix.slice(1)}_${hh}`,
     `${prefix.toUpperCase()}_${hh}`,
+    `${prefix.toUpperCase()}_${hh}P`,
+    `il_${prefix}_${hh}`,
   );
 }
 const LK = {
@@ -135,8 +157,9 @@ const LK = {
   l80_4: findLimitKey('l80', 4),
   l50_2: findLimitKey('l50', 2),
   l50_4: findLimitKey('l50', 4),
-  l30_2: findLimitKey('l30', 2),
-  l30_4: findLimitKey('l30', 4),
+  // 30% AMI may be named ELI (Extremely Low Income) in newer HUD files.
+  l30_2: findLimitKey('l30', 2) || findKey('ELI_2', 'eli_2', 'L_ELI_2', 'extr_low_2'),
+  l30_4: findLimitKey('l30', 4) || findKey('ELI_4', 'eli_4', 'L_ELI_4', 'extr_low_4'),
 };
 console.log(`  limits: ${JSON.stringify(LK)}`);
 
@@ -202,3 +225,18 @@ for (const row of rows) {
 await mkdir(OUT_DIR, { recursive: true });
 await writeFile(OUT_FILE, JSON.stringify(out, null, 2));
 console.log(`✓ Wrote HUD AMI for ${Object.keys(out).length} counties (skipped ${skipped}) to ${OUT_FILE}`);
+
+// DIAGNOSTIC: print a few sample counties so we can spot-check the join.
+const samples = ['13215', '13293', '13053', '01073', '06037', '36061', '48201'];
+console.log('\n── Sample county AMI values ──');
+for (const fips of samples) {
+  const row = out[fips];
+  if (row) {
+    console.log(`  ${fips}: MFI=$${Math.round(row.mfi_4p).toLocaleString()} ` +
+                `· 80%/4p=$${Math.round(row.ami_80_4p).toLocaleString()} ` +
+                `· area="${row.fmr_area ?? 'null'}"`);
+  } else {
+    console.log(`  ${fips}: NOT FOUND in HUD file`);
+  }
+}
+console.log('──────────────────────────\n');
