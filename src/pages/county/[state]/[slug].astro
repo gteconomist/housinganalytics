@@ -177,6 +177,10 @@ const chartData = {
 const mhi = county.hh_income_median;
 const workforceLow  = mhi ? mhi * 0.80 : null;
 const workforceHigh = mhi ? mhi * 1.20 : null;
+
+// HUD AMI (may be null if the HUD fetch step didn't run / failed). The page
+// guards every reference so the section just collapses gracefully.
+const hud = county.hud_ami;
 ---
 
 <Base title={`${county.county_name}, ${county.state_name}`} county={county}>
@@ -354,24 +358,72 @@ const workforceHigh = mhi ? mhi * 1.20 : null;
       <p class="muted">Affordability, cost burden, and the housing options for households in the workforce income range.</p>
     </header>
 
-    <div class="card workforce">
-      <h3>Workforce income range (80%–120% of median household income)</h3>
-      <div class="workforce__bands">
-        <div><span class="muted">80% MHI</span><strong>{fmtMoney(workforceLow)}</strong></div>
-        <div><span class="muted">100% MHI</span><strong>{fmtMoney(mhi)}</strong></div>
-        <div><span class="muted">120% MHI</span><strong>{fmtMoney(workforceHigh)}</strong></div>
+    <div class="grid grid-2">
+      <div class="card workforce">
+        <h3>Workforce range — ACS median household income</h3>
+        <div class="workforce__bands">
+          <div><span class="muted">80% MHI</span><strong>{fmtMoney(workforceLow)}</strong></div>
+          <div><span class="muted">100% MHI</span><strong>{fmtMoney(mhi)}</strong></div>
+          <div><span class="muted">120% MHI</span><strong>{fmtMoney(workforceHigh)}</strong></div>
+        </div>
+        <p class="muted">
+          County-wide median from ACS 5-year estimates. A household at 100% MHI in {county.county_name}
+          should be able to afford a home up to roughly
+          <strong id="aff-price-mhi">—</strong> (30% housing budget, default mortgage terms).
+        </p>
       </div>
-      <p class="muted">
-        These three income points anchor the affordability calculator below. A household at 100% MHI in
-        {county.county_name} should be able to afford a home up to roughly
-        <strong id="aff-price-mhi">—</strong>, assuming the standard 30% housing budget.
-      </p>
+
+      <div class="card workforce">
+        <h3>Workforce range — HUD Area Median Income</h3>
+        {hud ? (
+          <Fragment>
+            <table class="ami-table">
+              <thead>
+                <tr><th></th><th>2-person</th><th>4-person</th></tr>
+              </thead>
+              <tbody>
+                <tr><th>80% AMI</th>
+                  <td>{fmtMoney(hud.ami_80_2p)}</td>
+                  <td>{fmtMoney(hud.ami_80_4p)}</td></tr>
+                <tr><th>100% AMI</th>
+                  <td>{fmtMoney(hud.ami_100_2p)}</td>
+                  <td>{fmtMoney(hud.ami_100_4p)}</td></tr>
+                <tr><th>120% AMI</th>
+                  <td>{fmtMoney(hud.ami_120_2p)}</td>
+                  <td>{fmtMoney(hud.ami_120_4p)}</td></tr>
+              </tbody>
+            </table>
+            <p class="muted">
+              HUD FMR Area: <strong>{hud.fmr_area ?? '—'}</strong>. 80% AMI uses HUD's published
+              Section 8 Low Income Limits; 100% is HUD MFI; 120% is the standard workforce convention.
+            </p>
+          </Fragment>
+        ) : (
+          <p class="muted">HUD AMI data not available for this county.</p>
+        )}
+      </div>
     </div>
 
     <div class="card affordability">
       <h3>Affordability calculator</h3>
       <p class="muted">Matches the methodology in the Columbus and Thomaston housing studies: housing costs should not exceed 30% of gross income.</p>
       <div class="aff-inputs">
+        <label class="aff-basis">Income basis
+          <select id="aff-basis">
+            <option value="custom">Custom (type below)</option>
+            <option value="mhi" selected>ACS median household income</option>
+            {hud && (
+              <Fragment>
+                <option value="ami_80_2p">HUD AMI · 2-person · 80%</option>
+                <option value="ami_100_2p">HUD AMI · 2-person · 100%</option>
+                <option value="ami_120_2p">HUD AMI · 2-person · 120%</option>
+                <option value="ami_80_4p">HUD AMI · 4-person · 80%</option>
+                <option value="ami_100_4p">HUD AMI · 4-person · 100%</option>
+                <option value="ami_120_4p">HUD AMI · 4-person · 120%</option>
+              </Fragment>
+            )}
+          </select>
+        </label>
         <label>Household income
           <input type="number" id="aff-income" value={Math.round(mhi ?? 50000)} step="1000" min="0" />
         </label>
@@ -621,6 +673,7 @@ const workforceHigh = mhi ? mhi * 1.20 : null;
 
   // ── Affordability calculator ──────────────────────────────────
   const aff = {
+    basis:   document.getElementById('aff-basis'),
     income:  document.getElementById('aff-income'),
     rate:    document.getElementById('aff-rate'),
     down:    document.getElementById('aff-down'),
@@ -629,6 +682,26 @@ const workforceHigh = mhi ? mhi * 1.20 : null;
     price:   document.getElementById('aff-price'),
     priceMhi: document.getElementById('aff-price-mhi'),
   };
+  // Income basis lookup table — populates the income input when the user
+  // changes the dropdown. "custom" leaves whatever they typed alone.
+  const basisValues = {
+    mhi: county.hh_income_median ?? null,
+    ami_80_2p:  county.hud_ami?.ami_80_2p  ?? null,
+    ami_100_2p: county.hud_ami?.ami_100_2p ?? null,
+    ami_120_2p: county.hud_ami?.ami_120_2p ?? null,
+    ami_80_4p:  county.hud_ami?.ami_80_4p  ?? null,
+    ami_100_4p: county.hud_ami?.ami_100_4p ?? null,
+    ami_120_4p: county.hud_ami?.ami_120_4p ?? null,
+  };
+  if (aff.basis) {
+    aff.basis.addEventListener('change', () => {
+      const v = basisValues[aff.basis.value];
+      if (v != null) { aff.income.value = Math.round(v); update(); }
+    });
+    // Typing in the income field switches the dropdown to "custom" so it's clear
+    // what's driving the number.
+    aff.income.addEventListener('input', () => { aff.basis.value = 'custom'; });
+  }
   function recalc(income, rate, downPct, ti) {
     const monthlyBudget = (income * 0.30) / 12;
     const monthlyTaxIns = ti / 12;
@@ -713,6 +786,46 @@ const workforceHigh = mhi ? mhi * 1.20 : null;
   }
   .workforce__bands > div { display: flex; flex-direction: column; gap: var(--space-1); }
   .workforce__bands strong { font-size: var(--fs-xl); color: var(--text-primary); }
+
+  /* HUD AMI table inside the workforce card */
+  .ami-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-3) 0 var(--space-4);
+    font-variant-numeric: tabular-nums;
+  }
+  .ami-table th, .ami-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+  }
+  .ami-table thead th {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-muted);
+  }
+  .ami-table tbody th {
+    text-align: left;
+    font-weight: var(--fw-medium);
+    color: var(--text-muted);
+  }
+  .ami-table tbody td {
+    color: var(--text-primary);
+    font-weight: var(--fw-semibold);
+  }
+  .ami-table tbody tr:last-child th,
+  .ami-table tbody tr:last-child td { border-bottom: none; }
+
+  /* Income-basis dropdown spans both columns of the inputs grid */
+  .aff-basis { grid-column: 1 / -1; }
+  .aff-inputs select {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-muted); border-radius: var(--radius-sm);
+    font-family: inherit; font-size: var(--fs-base);
+    background: var(--bg-page);
+  }
 
   .aff-inputs {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
