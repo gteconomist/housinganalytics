@@ -51,9 +51,12 @@ async function loadGazetteer() {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
-const ROOT       = join(__dirname, '..');
+const ROOT        = join(__dirname, '..');
 const SOURCE_XLSX = join(ROOT, 'Full Housing Data Table.xlsx');
-const OUT_DIR    = join(ROOT, 'src', 'data', 'generated');
+const OUT_DIR     = join(ROOT, 'src', 'data', 'generated');
+// Mirror copy in public/data/ so the Compare page can fetch counties by FIPS
+// at runtime (without Astro module bundling).
+const PUBLIC_DIR  = join(ROOT, 'public', 'data');
 
 // ─────────────────────────────────────────────────────────────────
 // Read the spreadsheet (cell array of arrays)
@@ -398,6 +401,9 @@ if (existsSync(OUT_DIR)) await rm(OUT_DIR, { recursive: true, force: true });
 await mkdir(OUT_DIR, { recursive: true });
 await mkdir(join(OUT_DIR, 'counties'), { recursive: true });
 await mkdir(join(OUT_DIR, 'states'),   { recursive: true });
+// Public mirror (consumed by the client-side Compare page).
+if (existsSync(PUBLIC_DIR)) await rm(PUBLIC_DIR, { recursive: true, force: true });
+await mkdir(join(PUBLIC_DIR, 'counties'), { recursive: true });
 
 // Per-county files
 for (const c of counties) {
@@ -418,10 +424,9 @@ for (const c of counties) {
     c.land_area_sqmi = null;
     c.population_density = null;
   }
-  await writeFile(
-    join(OUT_DIR, 'counties', `${c.geoid}.json`),
-    JSON.stringify(c, null, 2),
-  );
+  const json = JSON.stringify(c, null, 2);
+  await writeFile(join(OUT_DIR,    'counties', `${c.geoid}.json`), json);
+  await writeFile(join(PUBLIC_DIR, 'counties', `${c.geoid}.json`), json);
 }
 
 function lightContext(a) {
@@ -479,6 +484,8 @@ const manifest = {
     homeownership_rate: c.homeownership_rate,
   })).sort((a, b) => a.state.localeCompare(b.state) || a.name.localeCompare(b.name)),
 };
-await writeFile(join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
+await writeFile(join(OUT_DIR,    'manifest.json'), JSON.stringify(manifest, null, 2));
+await writeFile(join(PUBLIC_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
-console.log(`\n✓ Wrote ${counties.length} counties, ${Object.keys(stateAggs).length} states, 1 national to ${OUT_DIR}\n`);
+console.log(`\n✓ Wrote ${counties.length} counties, ${Object.keys(stateAggs).length} states, 1 national to ${OUT_DIR}`);
+console.log(`✓ Mirrored to ${PUBLIC_DIR} for client-side fetch.\n`);
