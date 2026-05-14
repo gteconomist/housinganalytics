@@ -1,0 +1,621 @@
+---
+import Base from '../layouts/Base.astro';
+import manifest from '../data/generated/manifest.json';
+---
+<Base title="Compare counties — housinganalytics.org"
+      description="Compare any 2–5 U.S. counties side-by-side on housing market metrics.">
+
+  <section class="compare-hero">
+    <div class="container">
+      <p class="eyebrow">Compare</p>
+      <h1>Side-by-side comparison</h1>
+      <p class="muted">
+        Pick 2–5 counties to compare on every metric in the profile. Share or bookmark the URL —
+        your selection travels with the link.
+      </p>
+
+      <!-- Chip picker. Counties already selected appear as chips above the search box. -->
+      <div class="picker" data-picker>
+        <ul class="picker__chips" data-chips></ul>
+        <div class="picker__search">
+          <input
+            type="search"
+            data-picker-input
+            placeholder="Add a county — e.g. Muscogee, Cook, Travis…"
+            autocomplete="off"
+            aria-label="Add a county" />
+          <ul class="picker__results" data-results hidden></ul>
+        </div>
+        <p class="picker__hint muted">
+          <span data-count>0</span> selected · max 5 · share this URL to share the comparison
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Empty state -->
+  <section class="container" data-empty hidden>
+    <div class="empty-state">
+      <p>Search for a county above to get started.</p>
+      <p class="muted">Try comparing similar counties — same state, similar population — to spot
+      where housing dynamics diverge.</p>
+    </div>
+  </section>
+
+  <!-- Loading state -->
+  <section class="container" data-loading hidden>
+    <p class="muted">Loading county data…</p>
+  </section>
+
+  <!-- Results: KPI strip + comparison table -->
+  <section class="container" data-results-area hidden>
+    <!-- KPI strip — one card per county, fixed-width, scroll if many. -->
+    <div class="kpi-strip" data-kpi-strip></div>
+
+    <!-- Community Data Summary table — multi-column. -->
+    <div class="card">
+      <h3>Community Data Summary</h3>
+      <table class="compare-table" data-summary-table>
+        <!-- thead and tbody injected by JS -->
+      </table>
+      <small class="source">Source: ACS 5-year 2024; HUD FY2026 Income Limits; Census Gazetteer (land area).</small>
+    </div>
+
+    <!-- Comparison charts placeholder — populated by JS as 2-county multi-series
+         or 3–5-county small multiples. -->
+    <div data-charts></div>
+  </section>
+</Base>
+
+<script type="application/json" id="counties-manifest" set:html={JSON.stringify(manifest.counties)}></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  // ─────────────────────────────────────────────────────────────
+  // Compare page — client-side state + rendering
+  // ─────────────────────────────────────────────────────────────
+  const MAX_COUNTIES = 5;
+  const allCounties = JSON.parse(document.getElementById('counties-manifest').textContent);
+
+  const els = {
+    picker:     document.querySelector('[data-picker]'),
+    chips:      document.querySelector('[data-chips]'),
+    input:      document.querySelector('[data-picker-input]'),
+    results:    document.querySelector('[data-results]'),
+    count:      document.querySelector('[data-count]'),
+    empty:      document.querySelector('[data-empty]'),
+    loading:    document.querySelector('[data-loading]'),
+    resultsArea:document.querySelector('[data-results-area]'),
+    kpiStrip:   document.querySelector('[data-kpi-strip]'),
+    summary:    document.querySelector('[data-summary-table]'),
+    charts:     document.querySelector('[data-charts]'),
+  };
+
+  // ── URL state ─────────────────────────────────────────────────
+  function readSelection() {
+    const url = new URL(window.location.href);
+    const raw = url.searchParams.get('counties') || '';
+    return raw.split(',').map(s => s.trim()).filter(s => /^\d{5}$/.test(s)).slice(0, MAX_COUNTIES);
+  }
+  function writeSelection(fipsList) {
+    const url = new URL(window.location.href);
+    if (fipsList.length) url.searchParams.set('counties', fipsList.join(','));
+    else                 url.searchParams.delete('counties');
+    history.replaceState({}, '', url);
+  }
+
+  // ── Formatters ────────────────────────────────────────────────
+  const fmtMoney = v => (v == null || !isFinite(v)) ? '—' : '$' + Math.round(v).toLocaleString();
+  const fmtInt   = v => (v == null || !isFinite(v)) ? '—' : Math.round(v).toLocaleString();
+  const fmtPct   = v => (v == null || !isFinite(v)) ? '—' : v.toFixed(1) + '%';
+  const fmtRatio = v => (v == null || !isFinite(v)) ? '—' : v.toFixed(2);
+  const pct = (a, b) => (a == null || b == null || !b) ? null : (a / b) * 100;
+
+  // ── Color palette (read from CSS variables) ───────────────────
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    navy:   css.getPropertyValue('--color-navy').trim(),
+    gold:   css.getPropertyValue('--color-gold').trim(),
+    sage:   css.getPropertyValue('--color-sage').trim(),
+    char:   css.getPropertyValue('--color-charcoal').trim(),
+    teal:   css.getPropertyValue('--color-teal').trim(),
+    blue:   css.getPropertyValue('--color-blue').trim(),
+  };
+  // Per-county color order — primary/secondary first, tertiary if needed.
+  const seriesColors = [C.navy, C.gold, C.teal, C.blue, C.char];
+
+  Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
+  Chart.defaults.color = '#000';
+  Chart.defaults.borderColor = '#e6e2d2';
+  Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
+  Chart.defaults.elements.bar.borderRadius = 0;
+
+  // Lightweight datalabels plugin (copied from the County Profile page).
+  const dataLabels = {
+    id: 'datalabels',
+    afterDatasetsDraw(chart, _args, opts) {
+      if (!opts || opts.display === false) return;
+      const ctx = chart.ctx;
+      chart.data.datasets.forEach((dataset, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden || !meta.data || meta.type !== 'bar') return;
+        meta.data.forEach((bar, idx) => {
+          const value = dataset.data[idx];
+          if (value == null || !isFinite(value)) return;
+          const formatted = opts.formatter ? opts.formatter(value) : String(value);
+          if (!formatted) return;
+          ctx.save();
+          ctx.fillStyle = opts.color || C.navy;
+          ctx.font = '500 11px Roboto, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(formatted, bar.x, bar.y - 4);
+          ctx.restore();
+        });
+      });
+    },
+  };
+  Chart.register(dataLabels);
+
+  // ── Chart-option presets (no grid, black text, padding for data labels) ─
+  const CHART_TOP_PADDING = 22;
+  const X_AXIS = (rotation) => ({
+    grid:   { display: false },
+    border: { display: true, color: '#000' },
+    ticks:  { maxRotation: rotation, minRotation: rotation, autoSkip: false, color: '#000' },
+  });
+  const Y_AXIS = (extras = {}) => ({
+    beginAtZero: true,
+    grid:   { display: false },
+    border: { display: true, color: '#000' },
+    ticks:  { color: '#000', ...extras.ticks },
+    ...extras,
+  });
+  function moneyOpts(legend = true, rotation = 0) {
+    return {
+      layout: { padding: { top: CHART_TOP_PADDING } },
+      scales: {
+        y: Y_AXIS({ ticks: { color: '#000', callback: v => '$' + v.toLocaleString() } }),
+        x: X_AXIS(rotation),
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
+        datalabels: { formatter: fmtMoney },
+      },
+    };
+  }
+  function pctOpts(legend = true, rotation = 0, max) {
+    return {
+      layout: { padding: { top: CHART_TOP_PADDING } },
+      scales: {
+        y: Y_AXIS({ max, ticks: { color: '#000', callback: v => v + '%' } }),
+        x: X_AXIS(rotation),
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
+        datalabels: { formatter: fmtPct },
+      },
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Picker UI
+  // ─────────────────────────────────────────────────────────────
+  let selection = readSelection();                  // list of FIPS strings
+  /** @type {Record<string, any>} */
+  let cache = {};                                   // FIPS → county JSON
+
+  function renderChips() {
+    els.chips.innerHTML = '';
+    for (const fips of selection) {
+      const c = allCounties.find(c => c.geoid === fips);
+      const label = c ? `${c.name}, ${c.state}` : fips;
+      const li = document.createElement('li');
+      li.className = 'chip';
+      li.innerHTML = `<span>${label}</span>
+        <button type="button" aria-label="Remove" data-remove="${fips}">×</button>`;
+      els.chips.appendChild(li);
+    }
+    els.count.textContent = String(selection.length);
+    // Disable input if at max.
+    els.input.disabled = selection.length >= MAX_COUNTIES;
+    els.input.placeholder = selection.length >= MAX_COUNTIES
+      ? 'Maximum 5 counties — remove one to add another'
+      : 'Add a county — e.g. Muscogee, Cook, Travis…';
+  }
+
+  function renderResults(matches) {
+    if (!matches.length) { els.results.hidden = true; els.results.innerHTML = ''; return; }
+    els.results.hidden = false;
+    els.results.innerHTML = matches.slice(0, 8).map(c => `
+      <li><button type="button" data-add="${c.geoid}">
+        <span>${c.name}</span>
+        <span class="muted">${c.state}</span>
+      </button></li>
+    `).join('');
+  }
+
+  els.input.addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    if (q.length < 2) return renderResults([]);
+    const matches = allCounties.filter(c =>
+      !selection.includes(c.geoid) && (
+        c.name.toLowerCase().includes(q) ||
+        c.state.toLowerCase().includes(q)
+      )
+    );
+    renderResults(matches);
+  });
+  els.input.addEventListener('blur', () => setTimeout(() => renderResults([]), 200));
+
+  els.results.addEventListener('mousedown', e => {
+    const btn = e.target.closest('[data-add]');
+    if (!btn) return;
+    e.preventDefault();
+    const fips = btn.dataset.add;
+    if (!selection.includes(fips) && selection.length < MAX_COUNTIES) {
+      selection = [...selection, fips];
+      writeSelection(selection);
+      els.input.value = '';
+      renderResults([]);
+      renderChips();
+      refresh();
+    }
+  });
+
+  els.chips.addEventListener('click', e => {
+    const btn = e.target.closest('[data-remove]');
+    if (!btn) return;
+    const fips = btn.dataset.remove;
+    selection = selection.filter(f => f !== fips);
+    writeSelection(selection);
+    renderChips();
+    refresh();
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Data fetch + render
+  // ─────────────────────────────────────────────────────────────
+  async function loadCounty(fips) {
+    if (cache[fips]) return cache[fips];
+    const res = await fetch(`/data/counties/${fips}.json`);
+    if (!res.ok) throw new Error(`Failed to load ${fips}: ${res.status}`);
+    const data = await res.json();
+    cache[fips] = data;
+    return data;
+  }
+
+  /** @type {Chart[]} */
+  let activeCharts = [];
+
+  async function refresh() {
+    activeCharts.forEach(c => c.destroy());
+    activeCharts = [];
+    els.charts.innerHTML = '';
+    els.summary.innerHTML = '';
+    els.kpiStrip.innerHTML = '';
+
+    if (selection.length === 0) {
+      els.empty.hidden = false;
+      els.loading.hidden = true;
+      els.resultsArea.hidden = true;
+      return;
+    }
+
+    els.empty.hidden = true;
+    els.loading.hidden = false;
+    els.resultsArea.hidden = true;
+
+    let counties;
+    try {
+      counties = await Promise.all(selection.map(loadCounty));
+    } catch (err) {
+      els.loading.hidden = true;
+      els.empty.hidden = false;
+      els.empty.innerHTML = `<p class="error">Couldn't load one of the counties: ${err.message}</p>`;
+      return;
+    }
+    els.loading.hidden = true;
+    els.resultsArea.hidden = false;
+
+    renderKpiStrip(counties);
+    renderSummaryTable(counties);
+    renderCharts(counties);
+  }
+
+  // KPI strip — one card per county.
+  function renderKpiStrip(counties) {
+    const cards = counties.map((c, i) => `
+      <div class="kpi-card" style="border-top-color: ${seriesColors[i]}">
+        <h4>${c.county_name}</h4>
+        <p class="kpi-card__sub muted">${c.state_name} · pop ${fmtInt(c.population_total)}</p>
+        <dl class="kpi-card__stats">
+          <div><dt>Median HH income</dt><dd>${fmtMoney(c.hh_income_median)}</dd></div>
+          <div><dt>Median home value</dt><dd>${fmtMoney(c.value_median)}</dd></div>
+          <div><dt>Homeownership</dt><dd>${fmtPct(c.homeownership_rate)}</dd></div>
+          <div><dt>Renter cost burden</dt><dd>${fmtPct(c.renter_cost_burden_rate)}</dd></div>
+          <div><dt>Price-to-income</dt><dd>${fmtRatio(c.price_to_income_ratio)}</dd></div>
+          <div><dt>HUD AMI (4p, 100%)</dt><dd>${c.hud_ami ? fmtMoney(c.hud_ami.ami_100_4p) : '—'}</dd></div>
+        </dl>
+      </div>
+    `).join('');
+    els.kpiStrip.innerHTML = cards;
+  }
+
+  // Community Data Summary — multi-column.
+  function renderSummaryTable(counties) {
+    const rows = [
+      ['Population',                                c => fmtInt(c.population_total)],
+      ['Population density (per sq. mi.)',          c => c.population_density != null ? fmtRatio(c.population_density) : '—'],
+      ['Median household income',                   c => fmtMoney(c.hh_income_median)],
+      ['HUD Area Median Income (4-person, 100%)',   c => c.hud_ami ? fmtMoney(c.hud_ami.ami_100_4p) : '—'],
+      ['Households',                                c => fmtInt(c.hh_total_s1101)],
+      ['Average household size',                    c => `${fmtRatio(c.hh_avg_size)} people`],
+      ['Owner-occupied',                            c => fmtPct(c.homeownership_rate)],
+      ['Renter-occupied',                           c => fmtPct(c.renter_rate)],
+      ['Vacancy rate',                              c => fmtPct(c.vacancy_rate)],
+      ['Aging stock (built pre-1980)',              c => fmtPct(c.aging_stock_share)],
+      ['Bachelor\'s degree or higher',              c => fmtPct(c.bachelors_plus_rate)],
+      ['Race — White / Black',                      c => `${fmtPct(pct(c.race_white, c.population_total))} / ${fmtPct(pct(c.race_black, c.population_total))}`],
+    ];
+    const head = `<thead><tr><th></th>${
+      counties.map(c => `<th>${c.county_name}</th>`).join('')
+    }</tr></thead>`;
+    const body = `<tbody>${
+      rows.map(([label, fn]) => `<tr>
+        <th>${label}</th>
+        ${counties.map(c => `<td>${fn(c)}</td>`).join('')}
+      </tr>`).join('')
+    }</tbody>`;
+    els.summary.innerHTML = head + body;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Comparison charts — v2.0a covers the core 6. More in v2.0b.
+  // ─────────────────────────────────────────────────────────────
+  function mkChart(canvas, cfg) {
+    const ch = new Chart(canvas, cfg);
+    activeCharts.push(ch);
+    return ch;
+  }
+
+  function chartFigure(title, sourceLine) {
+    const fig = document.createElement('figure');
+    fig.className = 'card';
+    fig.innerHTML = `
+      <h3>${title}</h3>
+      <canvas></canvas>
+      <small class="source">${sourceLine}</small>
+    `;
+    return fig;
+  }
+
+  function renderCharts(counties) {
+    const labels = counties.map(c => c.county_name);
+
+    // Single-bar-per-county charts: one bar each.
+    const singleBarSet = [
+      {
+        title: 'Median household income',
+        source: 'Source: ACS 5-year 2024, Table S1901.',
+        values: counties.map(c => c.hh_income_median),
+        type: 'money',
+      },
+      {
+        title: 'Median home value',
+        source: 'Source: ACS 5-year 2024, Table DP04.',
+        values: counties.map(c => c.value_median),
+        type: 'money',
+      },
+      {
+        title: 'Median gross rent',
+        source: 'Source: ACS 5-year 2024, Table B25031.',
+        values: counties.map(c => c.rent_median),
+        type: 'money',
+      },
+      {
+        title: 'Homeownership rate',
+        source: 'Source: ACS 5-year 2024, Table DP04.',
+        values: counties.map(c => c.homeownership_rate),
+        type: 'pct',
+      },
+      {
+        title: 'Renter cost-burden rate (≥30% of income)',
+        source: 'Source: ACS 5-year 2024, Table B25070.',
+        values: counties.map(c => c.renter_cost_burden_rate),
+        type: 'pct',
+      },
+      {
+        title: 'Owner cost-burden rate (≥30% of income)',
+        source: 'Source: ACS 5-year 2024, Table B25106.',
+        values: counties.map(c => c.owner_cost_burden_rate),
+        type: 'pct',
+      },
+      {
+        title: 'HUD Area Median Income — 4-person, 100%',
+        source: 'Source: HUD FY2026 Income Limits.',
+        values: counties.map(c => c.hud_ami?.ami_100_4p ?? null),
+        type: 'money',
+      },
+    ];
+
+    // Render as a 2-col grid of charts.
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-2';
+    els.charts.appendChild(grid);
+
+    for (const item of singleBarSet) {
+      const fig = chartFigure(item.title, item.source);
+      grid.appendChild(fig);
+      const canvas = fig.querySelector('canvas');
+      const opts = item.type === 'money' ? moneyOpts(false, 0) : pctOpts(false, 0);
+      // Set y-max for percentages so all bars use a comparable scale.
+      if (item.type === 'pct') {
+        opts.scales.y.max = Math.max(100, ...item.values.filter(v => v != null)) > 50 ? 100 : 60;
+      }
+      mkChart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: item.values,
+            backgroundColor: counties.map((_, i) => seriesColors[i]),
+          }],
+        },
+        options: opts,
+      });
+    }
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+  renderChips();
+  refresh();
+</script>
+
+<style>
+  .compare-hero {
+    background: var(--bg-section);
+    padding: var(--space-7) 0 var(--space-6);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .compare-hero h1 { margin: var(--space-2) 0 var(--space-3); }
+  .compare-hero .muted { max-width: 60ch; margin-bottom: var(--space-5); }
+
+  .picker { max-width: 720px; }
+  .picker__chips {
+    list-style: none; padding: 0; margin: 0 0 var(--space-3) 0;
+    display: flex; flex-wrap: wrap; gap: var(--space-2);
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    background: var(--color-navy); color: var(--color-white);
+    border-radius: var(--radius-md);
+    padding: 6px 8px 6px 12px;
+    font-size: var(--fs-sm); font-weight: var(--fw-medium);
+  }
+  .chip button {
+    background: transparent; border: 0; color: var(--color-white);
+    width: 22px; height: 22px; line-height: 1; font-size: 18px; cursor: pointer;
+    border-radius: 50%;
+  }
+  .chip button:hover { background: rgba(255,255,255,0.18); }
+
+  .picker__search { position: relative; }
+  .picker__search input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--fs-md);
+    font-family: inherit;
+    border: 2px solid var(--color-navy);
+    border-radius: var(--radius-md);
+    background: var(--bg-page);
+    box-shadow: var(--shadow-soft);
+  }
+  .picker__search input:focus { outline: 3px solid var(--color-gold); outline-offset: 1px; }
+  .picker__search input:disabled { opacity: 0.5; background: var(--bg-muted); }
+  .picker__results {
+    position: absolute; top: 100%; left: 0; right: 0;
+    list-style: none; margin: var(--space-2) 0 0; padding: 0;
+    background: var(--bg-page);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    z-index: 10;
+    max-height: 320px; overflow-y: auto;
+  }
+  .picker__results li { border-bottom: 1px solid var(--border-soft); }
+  .picker__results li:last-child { border-bottom: none; }
+  .picker__results button {
+    display: flex; width: 100%; justify-content: space-between; align-items: baseline;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-page); border: 0; cursor: pointer;
+    text-align: left; font-family: inherit; font-size: var(--fs-base);
+  }
+  .picker__results button:hover { background: var(--bg-section); }
+  .picker__hint { font-size: var(--fs-xs); margin-top: var(--space-2); }
+
+  .empty-state {
+    background: var(--bg-section);
+    border: 1px dashed var(--border-muted);
+    padding: var(--space-7);
+    border-radius: var(--radius-md);
+    text-align: center;
+    margin: var(--space-7) 0;
+  }
+  .empty-state .error { color: var(--color-red); font-weight: var(--fw-semibold); }
+
+  /* ── Results area ─────────────────────────────────────────── */
+  [data-results-area] { padding-top: var(--space-7); }
+
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+  .kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-soft);
+    border-top: 4px solid var(--color-navy);
+    padding: var(--space-4) var(--space-5);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-soft);
+  }
+  .kpi-card h4 { font-size: var(--fs-md); margin: 0; }
+  .kpi-card__sub { font-size: var(--fs-xs); margin: var(--space-1) 0 var(--space-3); }
+  .kpi-card__stats { margin: 0; display: grid; gap: var(--space-2); }
+  .kpi-card__stats > div { display: flex; justify-content: space-between; gap: var(--space-3); }
+  .kpi-card__stats dt { font-size: var(--fs-xs); color: var(--text-muted); }
+  .kpi-card__stats dd { margin: 0; font-weight: var(--fw-semibold); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+  /* Multi-column comparison table */
+  .compare-table {
+    width: 100%; border-collapse: collapse;
+    margin: var(--space-3) 0;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+  }
+  .compare-table th, .compare-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+  }
+  .compare-table thead th {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-muted);
+  }
+  .compare-table tbody th {
+    text-align: left;
+    font-weight: var(--fw-medium);
+    color: var(--text-muted);
+  }
+  .compare-table tbody td {
+    color: var(--text-primary);
+    font-weight: var(--fw-semibold);
+  }
+  .compare-table tbody tr:last-child th,
+  .compare-table tbody tr:last-child td { border-bottom: none; }
+
+  /* Charts grid (reuse profile-page styles inline) */
+  .grid { display: grid; gap: var(--space-4); margin: var(--space-4) 0; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-soft);
+    margin-bottom: var(--space-4);
+  }
+  .card h3 { font-size: var(--fs-lg); margin-bottom: var(--space-3); }
+  .card .source {
+    display: block; margin-top: var(--space-2); padding-top: var(--space-2);
+    border-top: 1px dotted var(--border-soft);
+    font-size: var(--fs-xs); color: var(--text-muted); font-style: italic;
+  }
+  canvas { max-width: 100%; height: 260px !important; }
+</style>
