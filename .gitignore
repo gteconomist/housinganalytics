@@ -3,6 +3,7 @@ node_modules/
 dist/
 .astro/
 src/data/generated/
+public/data/
 .DS_Store
 .vscode/
 .idea/
