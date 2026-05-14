@@ -12,12 +12,12 @@
   --color-gold:        #b3a369;  /* warm accent */
 
   /* Secondary */
-  --color-amber:       #eaa000;  /* KPI / highlight */
   --color-cream:       #f9f6e5;  /* soft section background */
   --color-sage:        #d6dbd4;  /* card / separator */
   --color-charcoal:    #545b5a;  /* muted text */
 
-  /* Tertiary — chart series + accents */
+  /* Tertiary — chart series, KPI highlights, accents */
+  --color-amber:       #eaa000;
   --color-teal:        #008c95;
   --color-blue:        #3a5dae;
   --color-light-teal:  #64ccc9;
