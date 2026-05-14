@@ -69,6 +69,18 @@ export const VARIABLES = [
   { field: 'hh_income_mean',            label: 'Mean Household Income',                  acs: 'S1901_C01_013E', group: 'income' },
   { field: 'per_capita_income',         label: 'Per Capita Income',                      acs: 'DP03_0088E',     group: 'income' },
 
+  // ── Median HH Income by Tenure (B25119) — ADD TO SPREADSHEET ─────
+  // When user adds these columns, the "Median Income by Tenure" chart will populate.
+  { field: 'income_median_owner',       label: 'Median Income — Owner-Occupied',         acs: 'B25119_002E', group: 'income_by_tenure' },
+  { field: 'income_median_renter',      label: 'Median Income — Renter-Occupied',        acs: 'B25119_003E', group: 'income_by_tenure' },
+
+  // ── Median HH Income by Age of Householder (B19049) — ADD TO SPREADSHEET ─
+  // When user adds these columns, the "Median Income by Age" chart will populate.
+  { field: 'income_median_under25',     label: 'Median HH Income — Householder Under 25',   acs: 'B19049_002E', group: 'income_by_age' },
+  { field: 'income_median_25_44',       label: 'Median HH Income — Householder 25–44',      acs: 'B19049_003E', group: 'income_by_age' },
+  { field: 'income_median_45_64',       label: 'Median HH Income — Householder 45–64',      acs: 'B19049_004E', group: 'income_by_age' },
+  { field: 'income_median_65_plus',     label: 'Median HH Income — Householder 65+',        acs: 'B19049_005E', group: 'income_by_age' },
+
   // ── Year built (S2504) ───────────────────────────────────────────
   { field: 'year_built_2020_plus',      label: 'Year Built — 2020 or Later',             acs: 'S2504_C01_009E', group: 'year_built' },
   { field: 'year_built_2010_19',        label: 'Year Built — 2010–19',                   acs: 'S2504_C01_010E', group: 'year_built' },
