@@ -519,9 +519,7 @@ const hud = county.hud_ami;
 <!-- ── Data + Chart.js init ──────────────────────────────────────── -->
 <script type="application/json" id="county-data" set:html={JSON.stringify({ county, chartData })}></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script>
-  Chart.register(ChartDataLabels);
   const { county, chartData } = JSON.parse(document.getElementById('county-data').textContent);
 
   // Color palette pulled from CSS variables on the live element.
@@ -545,15 +543,35 @@ const hud = county.hud_ami;
   Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
   Chart.defaults.color = C.char;
   Chart.defaults.borderColor = '#e6e2d2';
-  // Global data-label defaults — overridden per-chart for $ / % / int formatting.
-  Chart.defaults.plugins.datalabels = {
-    anchor: 'end',
-    align:  'end',
-    offset: 2,
-    color:  C.navy,
-    font:   { size: 11, weight: '500' },
-    clamp:  true,
+
+  // ── Custom plugin: data labels on top of bars ─────────────────
+  // Self-contained replacement for chartjs-plugin-datalabels so we don't
+  // depend on an external CDN that might fail to load.
+  const dataLabels = {
+    id: 'datalabels',
+    afterDatasetsDraw(chart, _args, opts) {
+      if (!opts || opts.display === false) return;
+      const ctx = chart.ctx;
+      chart.data.datasets.forEach((dataset, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden || !meta.data || meta.type !== 'bar') return;
+        meta.data.forEach((bar, idx) => {
+          const value = dataset.data[idx];
+          if (value == null || !isFinite(value)) return;
+          const formatted = opts.formatter ? opts.formatter(value) : String(value);
+          if (!formatted) return;
+          ctx.save();
+          ctx.fillStyle = opts.color || C.navy;
+          ctx.font = (opts.font || '500 11px Roboto, system-ui, sans-serif');
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(formatted, bar.x, bar.y - 4);
+          ctx.restore();
+        });
+      });
+    },
   };
+  Chart.register(dataLabels);
 
   const mk = (sel, cfg) => {
     const el = document.querySelector(`canvas[data-chart="${sel}"]`);
@@ -632,12 +650,9 @@ const hud = county.hud_ami;
     options: {
       plugins: {
         legend: { position: 'bottom' },
-        datalabels: {
-          color: '#fff',
-          anchor: 'center',
-          align: 'center',
-          font: { size: 12, weight: '700' },
-          formatter: (v) => v == null ? '' : v.toFixed(1) + '%',
+        datalabels: { display: false }, // bar-only plugin; skip on donut
+        tooltip: {
+          callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed.toFixed(1)}%` },
         },
       },
     },
