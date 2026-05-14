@@ -389,8 +389,20 @@ import manifest from '../data/generated/manifest.json';
     return fig;
   }
 
+  // Wrap "<Name> County" labels onto two lines so multi-county comparisons
+  // stay readable at 0° rotation. Handles Parish (LA), Borough (AK), etc.
+  function splitCountyLabel(name) {
+    const suffixes = ['County', 'Parish', 'Borough', 'Census Area', 'Municipality', 'Municipio'];
+    for (const suffix of suffixes) {
+      if (name.endsWith(` ${suffix}`)) {
+        return [name.slice(0, -(suffix.length + 1)), suffix];
+      }
+    }
+    return [name];
+  }
+
   function renderCharts(counties) {
-    const labels = counties.map(c => c.county_name);
+    const labels = counties.map(c => splitCountyLabel(c.county_name));
 
     // Single-bar-per-county charts: one bar each.
     const singleBarSet = [
