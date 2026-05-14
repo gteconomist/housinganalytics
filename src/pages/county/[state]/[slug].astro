@@ -245,6 +245,7 @@ const hud = county.hud_ami;
         <figcaption class="muted">
           {county.county_name} compared with {county.state_name}.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table DP05.</small>
       </figure>
 
       <figure class="card">
@@ -254,6 +255,7 @@ const hud = county.hud_ami;
           {fmtPct(county.bachelors_plus_rate)} hold a bachelor's degree or higher
           (state: {fmtPct(state.bachelors_plus_rate)}).
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S1501.</small>
       </figure>
     </div>
 
@@ -292,6 +294,7 @@ const hud = county.hud_ami;
           {fmtPct(county.homeownership_rate)} owner-occupied vs.
           state average {fmtPct(state.homeownership_rate)}.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table DP04.</small>
       </figure>
 
       <figure class="card">
@@ -301,6 +304,7 @@ const hud = county.hud_ami;
           Single-family share {fmtPct(county.single_family_share)} ·
           Missing middle (2–19 units) {fmtPct(county.missing_middle_share)}.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25024.</small>
       </figure>
     </div>
 
@@ -312,6 +316,7 @@ const hud = county.hud_ami;
           {fmtPct(county.aging_stock_share)} built before 1980 ·
           Median structure age {fmtRatio(county.structure_median_age)} yrs.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2504.</small>
       </figure>
 
       <figure class="card">
@@ -321,6 +326,7 @@ const hud = county.hud_ami;
           Compares the share of housing units by bedroom count against the share of households by size —
           a common diagnostic of housing supply/demand alignment.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Tables B25041 (bedrooms) and S2501 (household size).</small>
       </figure>
     </div>
 
@@ -331,6 +337,7 @@ const hud = county.hud_ami;
         <figcaption class="muted">
           Owner-occupied homes by value bracket. Median: {fmtMoney(county.value_median)}.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table DP04.</small>
       </figure>
 
       <figure class="card">
@@ -339,6 +346,7 @@ const hud = county.hud_ami;
         <figcaption class="muted">
           Overall median gross rent: {fmtMoney(county.rent_median)}.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25031.</small>
       </figure>
     </div>
 
@@ -347,11 +355,13 @@ const hud = county.hud_ami;
         <h3>Renters by age</h3>
         <canvas data-chart="renterAge"></canvas>
         <figcaption class="muted">Number of renter householders by age bracket.</figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2502.</small>
       </figure>
       <figure class="card">
         <h3>Owners by age</h3>
         <canvas data-chart="ownerAge"></canvas>
         <figcaption class="muted">Number of owner householders by age bracket.</figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2502.</small>
       </figure>
     </div>
   </section>
@@ -463,6 +473,7 @@ const hud = county.hud_ami;
           {fmtPct(county.renter_cost_burden_rate)} of renter households spend ≥30% of income on rent
           ({fmtPct(county.renter_severe_cost_burden_rate)} spend ≥50%).
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25070.</small>
       </figure>
       <figure class="card">
         <h3>Owner cost burden by income</h3>
@@ -471,6 +482,7 @@ const hud = county.hud_ami;
           {fmtPct(county.owner_cost_burden_rate)} of homeowners spend ≥30% of income on housing.
           Bars show counts of cost-burdened owners by income bracket.
         </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25106.</small>
       </figure>
     </div>
 
@@ -480,6 +492,7 @@ const hud = county.hud_ami;
       <figcaption class="muted">
         Distribution of household income for owner-occupied (navy) and renter-occupied (gold) households.
       </figcaption>
+      <small class="source">Source: ACS 5-year 2024, Table B25118.</small>
     </figure>
   </section>
 
@@ -506,29 +519,41 @@ const hud = county.hud_ami;
 <!-- ── Data + Chart.js init ──────────────────────────────────────── -->
 <script type="application/json" id="county-data" set:html={JSON.stringify({ county, chartData })}></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script>
+  Chart.register(ChartDataLabels);
   const { county, chartData } = JSON.parse(document.getElementById('county-data').textContent);
 
   // Color palette pulled from CSS variables on the live element.
   const css = getComputedStyle(document.documentElement);
   const C = {
-    navy:  css.getPropertyValue('--color-navy').trim(),
-    gold:  css.getPropertyValue('--color-gold').trim(),
-    teal:  css.getPropertyValue('--color-teal').trim(),
-    blue:  css.getPropertyValue('--color-blue').trim(),
-    lteal: css.getPropertyValue('--color-light-teal').trim(),
-    purple: css.getPropertyValue('--color-purple').trim(),
-    lime:  css.getPropertyValue('--color-lime').trim(),
-    red:   css.getPropertyValue('--color-red').trim(),
-    amber: css.getPropertyValue('--color-amber').trim(),
-    sage:  css.getPropertyValue('--color-sage').trim(),
-    char:  css.getPropertyValue('--color-charcoal').trim(),
+    navy:    css.getPropertyValue('--color-navy').trim(),
+    gold:    css.getPropertyValue('--color-gold').trim(),
+    amber:   css.getPropertyValue('--color-amber').trim(),
+    cream:   css.getPropertyValue('--color-cream').trim(),
+    sage:    css.getPropertyValue('--color-sage').trim(),
+    char:    css.getPropertyValue('--color-charcoal').trim(),
+    // Tertiary — used only when a chart has > 4 series.
+    teal:    css.getPropertyValue('--color-teal').trim(),
+    blue:    css.getPropertyValue('--color-blue').trim(),
+    lteal:   css.getPropertyValue('--color-light-teal').trim(),
+    purple:  css.getPropertyValue('--color-purple').trim(),
+    lime:    css.getPropertyValue('--color-lime').trim(),
+    red:     css.getPropertyValue('--color-red').trim(),
   };
-  const palette = [C.navy, C.gold, C.teal, C.blue, C.lteal, C.purple, C.lime, C.red, C.amber, C.char];
 
-  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
   Chart.defaults.color = C.char;
   Chart.defaults.borderColor = '#e6e2d2';
+  // Global data-label defaults — overridden per-chart for $ / % / int formatting.
+  Chart.defaults.plugins.datalabels = {
+    anchor: 'end',
+    align:  'end',
+    offset: 2,
+    color:  C.navy,
+    font:   { size: 11, weight: '500' },
+    clamp:  true,
+  };
 
   const mk = (sel, cfg) => {
     const el = document.querySelector(`canvas[data-chart="${sel}"]`);
@@ -536,21 +561,48 @@ const hud = county.hud_ami;
     new Chart(el, cfg);
   };
 
-  // Helpers
-  const pctOpts = (max = undefined) => ({
-    scales: {
-      y: { beginAtZero: true, max, ticks: { callback: v => v + '%' } },
-    },
-    plugins: { legend: { position: 'top' } },
-  });
-  const countOpts = () => ({
-    scales: { y: { beginAtZero: true } },
-    plugins: { legend: { display: false } },
-  });
-  const moneyOpts = () => ({
-    scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toLocaleString() } } },
-    plugins: { legend: { display: false } },
-  });
+  // ── Format helpers ─────────────────────────────────────────────
+  const fmtPct   = v => (v == null || !isFinite(v)) ? '' : (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + '%';
+  const fmtInt   = v => (v == null || !isFinite(v)) ? '' : Math.round(v).toLocaleString();
+  const fmtMoney = v => (v == null || !isFinite(v)) ? '' : '$' + Math.round(v).toLocaleString();
+
+  // Option presets. `rotation` must be 0 or 45 per house style.
+  function pctOpts({ legend = false, rotation = 0, max } = {}) {
+    return {
+      scales: {
+        y: { beginAtZero: true, max, ticks: { callback: v => v + '%' } },
+        x: { ticks: { maxRotation: rotation, minRotation: rotation, autoSkip: false } },
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom' } : { display: false },
+        datalabels: { formatter: fmtPct },
+      },
+    };
+  }
+  function countOpts({ legend = false, rotation = 0 } = {}) {
+    return {
+      scales: {
+        y: { beginAtZero: true },
+        x: { ticks: { maxRotation: rotation, minRotation: rotation, autoSkip: false } },
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom' } : { display: false },
+        datalabels: { formatter: fmtInt },
+      },
+    };
+  }
+  function moneyOpts({ legend = false, rotation = 0 } = {}) {
+    return {
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => '$' + v.toLocaleString() } },
+        x: { ticks: { maxRotation: rotation, minRotation: rotation, autoSkip: false } },
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom' } : { display: false },
+        datalabels: { formatter: fmtMoney },
+      },
+    };
+  }
 
   // ── Charts ─────────────────────────────────────────────────────
   mk('race', {
@@ -559,10 +611,7 @@ const hud = county.hud_ami;
       labels: chartData.race.labels,
       datasets: [{ data: chartData.race.county, backgroundColor: C.navy, borderRadius: 4 }],
     },
-    options: {
-      scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } },
-      plugins: { legend: { display: false } },
-    },
+    options: pctOpts({ rotation: 45, max: 100 }),
   });
 
   mk('education', {
@@ -571,7 +620,7 @@ const hud = county.hud_ami;
       labels: chartData.education.labels,
       datasets: [{ data: chartData.education.values, backgroundColor: C.gold, borderRadius: 4 }],
     },
-    options: countOpts(),
+    options: countOpts({ rotation: 45 }),
   });
 
   mk('tenure', {
@@ -580,28 +629,36 @@ const hud = county.hud_ami;
       labels: chartData.tenure.labels,
       datasets: [{ data: chartData.tenure.values, backgroundColor: [C.navy, C.gold] }],
     },
-    options: { plugins: { legend: { position: 'bottom' } } },
+    options: {
+      plugins: {
+        legend: { position: 'bottom' },
+        datalabels: {
+          color: '#fff',
+          anchor: 'center',
+          align: 'center',
+          font: { size: 12, weight: '700' },
+          formatter: (v) => v == null ? '' : v.toFixed(1) + '%',
+        },
+      },
+    },
   });
 
   mk('structure', {
     type: 'bar',
     data: {
       labels: chartData.structure.labels,
-      datasets: [{ data: chartData.structure.values, backgroundColor: C.teal, borderRadius: 4 }],
+      datasets: [{ data: chartData.structure.values, backgroundColor: C.navy, borderRadius: 4 }],
     },
-    options: {
-      scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' } } },
-      plugins: { legend: { display: false } },
-    },
+    options: pctOpts({ rotation: 45 }),
   });
 
   mk('yearBuilt', {
     type: 'bar',
     data: {
       labels: chartData.yearBuilt.labels,
-      datasets: [{ data: chartData.yearBuilt.values, backgroundColor: C.blue, borderRadius: 4 }],
+      datasets: [{ data: chartData.yearBuilt.values, backgroundColor: C.navy, borderRadius: 4 }],
     },
-    options: countOpts(),
+    options: countOpts({ rotation: 45 }),
   });
 
   // Housing size mismatch: bedrooms vs household size on a unified percent axis.
@@ -620,25 +677,25 @@ const hud = county.hud_ami;
         { label: 'Households (% by size)',  data: hhPct, backgroundColor: C.gold, borderRadius: 4 },
       ],
     },
-    options: pctOpts(),
+    options: pctOpts({ legend: true, rotation: 0 }),
   });
 
   mk('homeValue', {
     type: 'bar',
     data: {
       labels: chartData.homeValue.labels,
-      datasets: [{ data: chartData.homeValue.values, backgroundColor: C.purple, borderRadius: 4 }],
+      datasets: [{ data: chartData.homeValue.values, backgroundColor: C.navy, borderRadius: 4 }],
     },
-    options: countOpts(),
+    options: countOpts({ rotation: 45 }),
   });
 
   mk('rentByBR', {
     type: 'bar',
     data: {
       labels: chartData.rentByBR.labels,
-      datasets: [{ data: chartData.rentByBR.county, backgroundColor: C.teal, borderRadius: 4 }],
+      datasets: [{ data: chartData.rentByBR.county, backgroundColor: C.navy, borderRadius: 4 }],
     },
-    options: moneyOpts(),
+    options: moneyOpts({ rotation: 0 }),
   });
 
   mk('renterAge', {
@@ -647,7 +704,7 @@ const hud = county.hud_ami;
       labels: chartData.tenureAge.labels,
       datasets: [{ data: chartData.tenureAge.renters, backgroundColor: C.gold, borderRadius: 4 }],
     },
-    options: countOpts(),
+    options: countOpts({ rotation: 0 }),
   });
   mk('ownerAge', {
     type: 'bar',
@@ -655,18 +712,21 @@ const hud = county.hud_ami;
       labels: chartData.tenureAge.labels,
       datasets: [{ data: chartData.tenureAge.owners, backgroundColor: C.navy, borderRadius: 4 }],
     },
-    options: countOpts(),
+    options: countOpts({ rotation: 0 }),
   });
 
+  // Renter cost burden: 2-color split — under 30% (sage) vs. cost-burdened (amber).
   mk('renterBurden', {
     type: 'bar',
     data: {
       labels: chartData.renterBurden.labels,
-      datasets: [{ data: chartData.renterBurden.values,
-        backgroundColor: chartData.renterBurden.labels.map((_, i) => i < 5 ? C.lteal : (i < 8 ? C.amber : C.red)),
-        borderRadius: 4 }],
+      datasets: [{
+        data: chartData.renterBurden.values,
+        backgroundColor: chartData.renterBurden.labels.map((_, i) => i < 5 ? C.sage : C.amber),
+        borderRadius: 4,
+      }],
     },
-    options: countOpts(),
+    options: countOpts({ rotation: 0 }),
   });
   mk('ownerBurden', {
     type: 'bar',
@@ -674,7 +734,7 @@ const hud = county.hud_ami;
       labels: chartData.ownerBurden.labels,
       datasets: [{ data: chartData.ownerBurden.values, backgroundColor: C.amber, borderRadius: 4 }],
     },
-    options: countOpts(),
+    options: countOpts({ rotation: 0 }),
   });
 
   mk('incomeByTenure', {
@@ -682,11 +742,11 @@ const hud = county.hud_ami;
     data: {
       labels: chartData.incomeByTenure.labels,
       datasets: [
-        { label: 'Owners',  data: chartData.incomeByTenure.owners,  backgroundColor: C.navy,  borderRadius: 4 },
-        { label: 'Renters', data: chartData.incomeByTenure.renters, backgroundColor: C.gold,  borderRadius: 4 },
+        { label: 'Owners',  data: chartData.incomeByTenure.owners,  backgroundColor: C.navy, borderRadius: 4 },
+        { label: 'Renters', data: chartData.incomeByTenure.renters, backgroundColor: C.gold, borderRadius: 4 },
       ],
     },
-    options: { ...countOpts(), plugins: { legend: { position: 'top' } } },
+    options: countOpts({ legend: true, rotation: 45 }),
   });
 
   // ── Affordability calculator ──────────────────────────────────
@@ -799,6 +859,15 @@ const hud = county.hud_ami;
   .card h4 { font-size: var(--fs-md); margin-bottom: var(--space-2); }
   .card figcaption,
   .card .muted { font-size: var(--fs-sm); }
+  .card .source {
+    display: block;
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px dotted var(--border-soft);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    font-style: italic;
+  }
   .big-num { font-size: var(--fs-2xl); font-weight: var(--fw-semibold); color: var(--text-primary); margin: 0; font-variant-numeric: tabular-nums; }
 
   .workforce__bands {
