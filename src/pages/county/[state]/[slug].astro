@@ -391,8 +391,10 @@ const hud = county.hud_ami;
       </figure>
     </div>
 
-    <!-- Earners cluster: Figure 22 + Table 7 + Figure 32 (Household Size) -->
-    <div class="grid grid-3">
+    <!-- Earners cluster: Figure 22 + Figure 32 (Household Size) side-by-side,
+         with the affordability table (Table 7) below — keeps the two charts
+         wide enough that their X-axis labels don't collide. -->
+    <div class="grid grid-2">
       <figure class="card">
         <h3>Median Household Income by Number of Earners</h3>
         <canvas data-chart="earnersIncome"></canvas>
@@ -400,45 +402,6 @@ const hud = county.hud_ami;
           Median household income for families with each earner count.
         </figcaption>
         <small class="source">Source: ACS 5-year 2024, Table S1903.</small>
-      </figure>
-
-      <figure class="card">
-        <h3>Income by Number of Earners</h3>
-        <table class="earners-table">
-          <thead>
-            <tr><th>Earners</th><th>Share</th><th>Median income</th><th>Attainable home</th></tr>
-          </thead>
-          <tbody>
-            {chartData.earnersTable.rows.map(([label, count, income]) => {
-              const share = chartData.earnersTable.total_families
-                ? (count ?? 0) / chartData.earnersTable.total_families * 100
-                : null;
-              // Attainable home: 30% of income, 30-yr mortgage at 7%, 5% down, $2500 t&i, 0.5% PMI
-              let attainable = null;
-              if (income != null && income > 0) {
-                const monthlyBudget = (income * 0.30) / 12;
-                const monthlyTaxIns = 2500 / 12;
-                const monthlyRate = 0.07 / 12;
-                const n = 360;
-                const piFactor = (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
-                const principal = (monthlyBudget - monthlyTaxIns) / (piFactor + 0.005 / 12);
-                attainable = principal > 0 ? principal / 0.95 : 0;
-              }
-              return (
-                <tr>
-                  <th>{label}</th>
-                  <td>{share != null ? fmtPct(share) : '—'}</td>
-                  <td>{income != null ? fmtMoney(income) : '—'}</td>
-                  <td>{attainable != null ? fmtMoney(attainable) : '—'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <figcaption class="muted">
-          Attainable home price assumes 30% housing budget, 30-yr mortgage at 7%, 5% down.
-        </figcaption>
-        <small class="source">Source: ACS 5-year 2024, Table S1903; affordability formula derived.</small>
       </figure>
 
       <figure class="card">
@@ -450,6 +413,45 @@ const hud = county.hud_ami;
         <small class="source">Source: ACS 5-year 2024, Table S2501.</small>
       </figure>
     </div>
+
+    <figure class="card">
+      <h3>Income by Number of Earners</h3>
+      <table class="earners-table">
+        <thead>
+          <tr><th>Earners</th><th>Share</th><th>Median income</th><th>Attainable home</th></tr>
+        </thead>
+        <tbody>
+          {chartData.earnersTable.rows.map(([label, count, income]) => {
+            const share = chartData.earnersTable.total_families
+              ? (count ?? 0) / chartData.earnersTable.total_families * 100
+              : null;
+            // Attainable home: 30% of income, 30-yr mortgage at 7%, 5% down, $2500 t&i, 0.5% PMI
+            let attainable = null;
+            if (income != null && income > 0) {
+              const monthlyBudget = (income * 0.30) / 12;
+              const monthlyTaxIns = 2500 / 12;
+              const monthlyRate = 0.07 / 12;
+              const n = 360;
+              const piFactor = (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+              const principal = (monthlyBudget - monthlyTaxIns) / (piFactor + 0.005 / 12);
+              attainable = principal > 0 ? principal / 0.95 : 0;
+            }
+            return (
+              <tr>
+                <th>{label}</th>
+                <td>{share != null ? fmtPct(share) : '—'}</td>
+                <td>{income != null ? fmtMoney(income) : '—'}</td>
+                <td>{attainable != null ? fmtMoney(attainable) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <figcaption class="muted">
+        Attainable home price assumes 30% housing budget, 30-yr mortgage at 7%, 5% down.
+      </figcaption>
+      <small class="source">Source: ACS 5-year 2024, Table S1903; affordability formula derived.</small>
+    </figure>
 
     <div class="grid grid-3">
       <div class="card">
@@ -753,8 +755,12 @@ const hud = county.hud_ami;
   };
 
   Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
-  Chart.defaults.color = C.char;
+  // House style: all axis ticks, tick labels, and legend text in black.
+  Chart.defaults.color = '#000';
   Chart.defaults.borderColor = '#e6e2d2';
+  // Square corners on bar elements (house style).
+  Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
+  Chart.defaults.elements.bar.borderRadius = 0;
 
   // ── Custom plugin: data labels on top of bars ─────────────────
   // Self-contained replacement for chartjs-plugin-datalabels so we don't
@@ -799,16 +805,30 @@ const hud = county.hud_ami;
   // Top padding so data labels above the tallest bar aren't clipped.
   const CHART_TOP_PADDING = 22;
 
+  // Common axis shape: no grid lines, axis line kept, black tick labels.
+  const X_AXIS = (rotation) => ({
+    grid:   { display: false },
+    border: { display: true, color: '#000' },
+    ticks:  { maxRotation: rotation, minRotation: rotation, autoSkip: false, color: '#000' },
+  });
+  const Y_AXIS = (extras = {}) => ({
+    beginAtZero: true,
+    grid:   { display: false },
+    border: { display: true, color: '#000' },
+    ticks:  { color: '#000', ...extras.ticks },
+    ...extras,
+  });
+
   // Option presets. `rotation` must be 0 or 45 per house style.
   function pctOpts({ legend = false, rotation = 0, max } = {}) {
     return {
       layout: { padding: { top: CHART_TOP_PADDING } },
       scales: {
-        y: { beginAtZero: true, max, ticks: { callback: v => v + '%' } },
-        x: { ticks: { maxRotation: rotation, minRotation: rotation, autoSkip: false } },
+        y: Y_AXIS({ max, ticks: { color: '#000', callback: v => v + '%' } }),
+        x: X_AXIS(rotation),
       },
       plugins: {
-        legend: legend ? { position: 'bottom' } : { display: false },
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
         datalabels: { formatter: fmtPct },
       },
     };
@@ -817,11 +837,11 @@ const hud = county.hud_ami;
     return {
       layout: { padding: { top: CHART_TOP_PADDING } },
       scales: {
-        y: { beginAtZero: true },
-        x: { ticks: { maxRotation: rotation, minRotation: rotation, autoSkip: false } },
+        y: Y_AXIS(),
+        x: X_AXIS(rotation),
       },
       plugins: {
-        legend: legend ? { position: 'bottom' } : { display: false },
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
         datalabels: { formatter: fmtInt },
       },
     };
@@ -830,11 +850,11 @@ const hud = county.hud_ami;
     return {
       layout: { padding: { top: CHART_TOP_PADDING } },
       scales: {
-        y: { beginAtZero: true, ticks: { callback: v => '$' + v.toLocaleString() } },
-        x: { ticks: { maxRotation: rotation, minRotation: rotation, autoSkip: false } },
+        y: Y_AXIS({ ticks: { color: '#000', callback: v => '$' + v.toLocaleString() } }),
+        x: X_AXIS(rotation),
       },
       plugins: {
-        legend: legend ? { position: 'bottom' } : { display: false },
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
         datalabels: { formatter: fmtMoney },
       },
     };
@@ -845,7 +865,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.race.labels,
-      datasets: [{ data: chartData.race.county, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.race.county, backgroundColor: C.navy }],
     },
     options: pctOpts({ rotation: 45, max: 100 }),
   });
@@ -854,7 +874,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.education.labels,
-      datasets: [{ data: chartData.education.values, backgroundColor: C.gold, borderRadius: 4 }],
+      datasets: [{ data: chartData.education.values, backgroundColor: C.gold }],
     },
     options: countOpts({ rotation: 45 }),
   });
@@ -880,7 +900,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.structure.labels,
-      datasets: [{ data: chartData.structure.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.structure.values, backgroundColor: C.navy }],
     },
     options: pctOpts({ rotation: 45 }),
   });
@@ -889,7 +909,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.yearBuilt.labels,
-      datasets: [{ data: chartData.yearBuilt.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.yearBuilt.values, backgroundColor: C.navy }],
     },
     options: countOpts({ rotation: 45 }),
   });
@@ -906,8 +926,8 @@ const hud = county.hud_ami;
     data: {
       labels: ['Studio / 1 person', '1 BR / 2 person', '2 BR / 3 person', '3+ BR / 4+ person'],
       datasets: [
-        { label: 'Housing units (% by BR)', data: [brPct[0]+brPct[1], brPct[2], brPct[3], brPct[4]+brPct[5]], backgroundColor: C.navy, borderRadius: 4 },
-        { label: 'Households (% by size)',  data: hhPct, backgroundColor: C.gold, borderRadius: 4 },
+        { label: 'Housing units (% by BR)', data: [brPct[0]+brPct[1], brPct[2], brPct[3], brPct[4]+brPct[5]], backgroundColor: C.navy },
+        { label: 'Households (% by size)',  data: hhPct, backgroundColor: C.gold },
       ],
     },
     options: pctOpts({ legend: true, rotation: 0 }),
@@ -917,7 +937,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.homeValue.labels,
-      datasets: [{ data: chartData.homeValue.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.homeValue.values, backgroundColor: C.navy }],
     },
     options: countOpts({ rotation: 45 }),
   });
@@ -926,7 +946,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.rentByBR.labels,
-      datasets: [{ data: chartData.rentByBR.county, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.rentByBR.county, backgroundColor: C.navy }],
     },
     options: moneyOpts({ rotation: 0 }),
   });
@@ -935,7 +955,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.tenureAge.labels,
-      datasets: [{ data: chartData.tenureAge.renters, backgroundColor: C.gold, borderRadius: 4 }],
+      datasets: [{ data: chartData.tenureAge.renters, backgroundColor: C.gold }],
     },
     options: countOpts({ rotation: 0 }),
   });
@@ -943,7 +963,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.tenureAge.labels,
-      datasets: [{ data: chartData.tenureAge.owners, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.tenureAge.owners, backgroundColor: C.navy }],
     },
     options: countOpts({ rotation: 0 }),
   });
@@ -975,7 +995,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.ownerBurden.labels,
-      datasets: [{ data: chartData.ownerBurden.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.ownerBurden.values, backgroundColor: C.navy }],
     },
     options: countOpts({ rotation: 0 }),
   });
@@ -985,8 +1005,8 @@ const hud = county.hud_ami;
     data: {
       labels: chartData.incomeByTenure.labels,
       datasets: [
-        { label: 'Owners',  data: chartData.incomeByTenure.owners,  backgroundColor: C.navy, borderRadius: 4 },
-        { label: 'Renters', data: chartData.incomeByTenure.renters, backgroundColor: C.gold, borderRadius: 4 },
+        { label: 'Owners',  data: chartData.incomeByTenure.owners,  backgroundColor: C.navy },
+        { label: 'Renters', data: chartData.incomeByTenure.renters, backgroundColor: C.gold },
       ],
     },
     options: countOpts({ legend: true, rotation: 45 }),
@@ -999,8 +1019,8 @@ const hud = county.hud_ami;
     data: {
       labels: chartData.incomeByTenureMedians.labels,
       datasets: [
-        { label: 'County', data: chartData.incomeByTenureMedians.county, backgroundColor: C.navy, borderRadius: 4 },
-        { label: 'State',  data: chartData.incomeByTenureMedians.state,  backgroundColor: C.gold, borderRadius: 4 },
+        { label: 'County', data: chartData.incomeByTenureMedians.county, backgroundColor: C.navy },
+        { label: 'State',  data: chartData.incomeByTenureMedians.state,  backgroundColor: C.gold },
       ],
     },
     options: moneyOpts({ legend: true, rotation: 0 }),
@@ -1011,7 +1031,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.incomeByAge.labels,
-      datasets: [{ data: chartData.incomeByAge.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.incomeByAge.values, backgroundColor: C.navy }],
     },
     options: moneyOpts({ rotation: 0 }),
   });
@@ -1021,7 +1041,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.earnersIncome.labels,
-      datasets: [{ data: chartData.earnersIncome.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.earnersIncome.values, backgroundColor: C.navy }],
     },
     options: moneyOpts({ rotation: 0 }),
   });
@@ -1031,7 +1051,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.householdSize.labels,
-      datasets: [{ data: chartData.householdSize.values, backgroundColor: C.gold, borderRadius: 4 }],
+      datasets: [{ data: chartData.householdSize.values, backgroundColor: C.gold }],
     },
     options: countOpts({ rotation: 0 }),
   });
@@ -1041,7 +1061,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.bedroomsDistribution.labels,
-      datasets: [{ data: chartData.bedroomsDistribution.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.bedroomsDistribution.values, backgroundColor: C.navy }],
     },
     options: countOpts({ rotation: 0 }),
   });
@@ -1051,7 +1071,7 @@ const hud = county.hud_ami;
     type: 'bar',
     data: {
       labels: chartData.monthlyHousingCost.labels,
-      datasets: [{ data: chartData.monthlyHousingCost.values, backgroundColor: C.navy, borderRadius: 4 }],
+      datasets: [{ data: chartData.monthlyHousingCost.values, backgroundColor: C.navy }],
     },
     options: countOpts({ rotation: 45 }),
   });
