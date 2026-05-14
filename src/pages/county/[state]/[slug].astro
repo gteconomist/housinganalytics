@@ -418,17 +418,25 @@ const hud = county.hud_ami;
       <h3>Income by Number of Earners</h3>
       <table class="earners-table">
         <thead>
-          <tr><th>Earners</th><th>Share</th><th>Median income</th><th>Attainable home</th></tr>
+          <tr>
+            <th>Earners</th>
+            <th>Share</th>
+            <th>Median income</th>
+            <th>Attainable monthly housing cost</th>
+            <th>Attainable home</th>
+          </tr>
         </thead>
         <tbody>
           {chartData.earnersTable.rows.map(([label, count, income]) => {
             const share = chartData.earnersTable.total_families
               ? (count ?? 0) / chartData.earnersTable.total_families * 100
               : null;
+            // Attainable monthly housing cost = 30% of gross income / 12.
+            const monthlyCost = (income != null && income > 0) ? (income * 0.30) / 12 : null;
             // Attainable home: 30% of income, 30-yr mortgage at 7%, 5% down, $2500 t&i, 0.5% PMI
             let attainable = null;
             if (income != null && income > 0) {
-              const monthlyBudget = (income * 0.30) / 12;
+              const monthlyBudget = monthlyCost;
               const monthlyTaxIns = 2500 / 12;
               const monthlyRate = 0.07 / 12;
               const n = 360;
@@ -441,6 +449,7 @@ const hud = county.hud_ami;
                 <th>{label}</th>
                 <td>{share != null ? fmtPct(share) : '—'}</td>
                 <td>{income != null ? fmtMoney(income) : '—'}</td>
+                <td>{monthlyCost != null ? fmtMoney(monthlyCost) : '—'}</td>
                 <td>{attainable != null ? fmtMoney(attainable) : '—'}</td>
               </tr>
             );
@@ -448,6 +457,7 @@ const hud = county.hud_ami;
         </tbody>
       </table>
       <figcaption class="muted">
+        Attainable monthly housing cost = 30% of gross income ÷ 12.
         Attainable home price assumes 30% housing budget, 30-yr mortgage at 7%, 5% down.
       </figcaption>
       <small class="source">Source: ACS 5-year 2024, Table S1903; affordability formula derived.</small>
@@ -700,7 +710,7 @@ const hud = county.hud_ami;
       </figure>
     </div>
 
-    <figure class="card">
+    <figure class="card card--medium">
       <h3>Household income — owners vs renters</h3>
       <canvas data-chart="incomeByTenure"></canvas>
       <figcaption class="muted">
@@ -969,10 +979,9 @@ const hud = county.hud_ami;
   });
 
   // Renter cost burden: deliberate 3-stop visual signal —
-  //   <30% income to housing  = sage   (#d6dbd4)  — healthy
-  //   30%–49.9%               = cream  (#f9f6e5)  — cost burdened
-  //   50%+                    = red    (#e04f39)  — severely cost burdened
-  // Cream is intentionally near-white; charcoal border keeps those bars visible.
+  //   <30% income to housing  = sage  (#d6dbd4)  — healthy
+  //   30%–49.9%               = navy  (#003057)  — cost burdened
+  //   50%+                    = red   (#e04f39)  — severely cost burdened
   mk('renterBurden', {
     type: 'bar',
     data: {
@@ -980,13 +989,8 @@ const hud = county.hud_ami;
       datasets: [{
         data: chartData.renterBurden.values,
         backgroundColor: chartData.renterBurden.labels.map((_, i) =>
-          i < 5 ? C.sage : (i < 8 ? C.cream : C.red)
+          i < 5 ? C.sage : (i < 8 ? C.navy : C.red)
         ),
-        borderColor: chartData.renterBurden.labels.map((_, i) =>
-          (i >= 5 && i < 8) ? C.char : 'transparent'
-        ),
-        borderWidth: 1,
-        borderRadius: 4,
       }],
     },
     options: countOpts({ rotation: 0 }),
@@ -1182,6 +1186,12 @@ const hud = county.hud_ami;
     padding: var(--space-5);
     box-shadow: var(--shadow-soft);
   }
+  /* Constrain a full-width card so it doesn't visually outsize its chart. */
+  .card--medium {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
   .card h3 { font-size: var(--fs-lg); margin-bottom: var(--space-3); }
   .card h4 { font-size: var(--fs-md); margin-bottom: var(--space-2); }
   .card figcaption,
@@ -1256,6 +1266,8 @@ const hud = county.hud_ami;
     color: var(--text-muted);
     border-bottom: 2px solid var(--border-muted);
   }
+  /* "Earners" header sits over a left-aligned column; align the header to match. */
+  .earners-table thead th:first-child { text-align: left; }
   .earners-table tbody th {
     text-align: left;
     font-weight: var(--fw-medium);
