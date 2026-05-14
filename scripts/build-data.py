@@ -67,6 +67,14 @@ VARIABLES = [
     ('hh_income_median',          'S1901_C01_012E'),
     ('hh_income_mean',            'S1901_C01_013E'),
     ('per_capita_income',         'DP03_0088E'),
+    # income by tenure (B25119) — add these to spreadsheet
+    ('income_median_owner',       'B25119_002E'),
+    ('income_median_renter',      'B25119_003E'),
+    # income by age of householder (B19049) — add these to spreadsheet
+    ('income_median_under25',     'B19049_002E'),
+    ('income_median_25_44',       'B19049_003E'),
+    ('income_median_45_64',       'B19049_004E'),
+    ('income_median_65_plus',     'B19049_005E'),
     # year built
     ('year_built_2020_plus',      'S2504_C01_009E'),
     ('year_built_2010_19',        'S2504_C01_010E'),

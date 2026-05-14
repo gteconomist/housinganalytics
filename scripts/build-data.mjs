@@ -39,6 +39,16 @@ async function loadHudAmi() {
   }
 }
 
+// Optional Gazetteer data (land area for population density).
+async function loadGazetteer() {
+  const f = join(__dirname, '..', 'src', 'data', 'generated', 'gazetteer.json');
+  try {
+    return JSON.parse(await readFile(f, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const ROOT       = join(__dirname, '..');
@@ -377,10 +387,12 @@ counties.forEach(c => {
 // Write outputs
 // ─────────────────────────────────────────────────────────────────
 
-// HUD AMI lookup MUST happen before we wipe the output directory, since
-// hud-ami.json lives there (written by the preceding `npm run hud` step).
-const hudAmi = await loadHudAmi();
+// Load external data BEFORE we wipe the output directory — these JSON files
+// live in src/data/generated/ alongside what we're about to overwrite.
+const hudAmi    = await loadHudAmi();
+const gazetteer = await loadGazetteer();
 console.log(`HUD AMI loaded for ${Object.keys(hudAmi).length} counties.`);
+console.log(`Gazetteer loaded for ${Object.keys(gazetteer).length} counties.`);
 
 if (existsSync(OUT_DIR)) await rm(OUT_DIR, { recursive: true, force: true });
 await mkdir(OUT_DIR, { recursive: true });
@@ -397,6 +409,15 @@ for (const c of counties) {
   };
   // Attach HUD AMI block if available for this FIPS.
   c.hud_ami = hudAmi[c.geoid] ?? null;
+  // Attach land area + compute population density if Gazetteer is available.
+  const gaz = gazetteer[c.geoid];
+  if (gaz?.land_area_sqmi && c.population_total != null) {
+    c.land_area_sqmi = gaz.land_area_sqmi;
+    c.population_density = c.population_total / gaz.land_area_sqmi;
+  } else {
+    c.land_area_sqmi = null;
+    c.population_density = null;
+  }
   await writeFile(
     join(OUT_DIR, 'counties', `${c.geoid}.json`),
     JSON.stringify(c, null, 2),
