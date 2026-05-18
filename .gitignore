@@ -1,16 +1,28 @@
+# Dependencies
 node_modules/
 .pnpm-store/
+
+# Build outputs
 dist/
 .astro/
+
+# Generated data (rebuilt from spreadsheet on every build)
 src/data/generated/
 public/data/
+
+# Editor / OS
 .DS_Store
 .vscode/
 .idea/
 *.swp
 *.swo
+*.textClipping
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Env
 .env
 .env.*
