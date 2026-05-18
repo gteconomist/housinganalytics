@@ -196,6 +196,27 @@ import manifest from '../data/generated/manifest.json';
       },
     };
   }
+  function countOpts(legend = true, rotation = 0) {
+    return {
+      layout: { padding: { top: CHART_TOP_PADDING } },
+      scales: { y: Y_AXIS(), x: X_AXIS(rotation) },
+      plugins: {
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
+        datalabels: { formatter: fmtInt },
+      },
+    };
+  }
+  function optionsFor(format, legend, rotation) {
+    if (format === 'money') return moneyOpts(legend, rotation);
+    if (format === 'pct')   return pctOpts(legend, rotation);
+    return countOpts(legend, rotation);
+  }
+
+  // Compute a normalized share series from a list of raw values + total.
+  function shareOf(values, total) {
+    if (!total) return values.map(() => null);
+    return values.map(v => v == null ? null : (v / total) * 100);
+  }
 
   // ─────────────────────────────────────────────────────────────
   // Picker UI
@@ -476,6 +497,267 @@ import manifest from '../data/generated/manifest.json';
         options: opts,
       });
     }
+
+    // ── Distribution charts (multi-series for 2 counties, small multiples for 3–5) ─
+    renderDistributions(counties);
+  }
+
+  /**
+   * Distribution chart pipeline. Each config defines its labels, the
+   * per-county value extractor, the chart format ('pct' | 'money' | 'count'),
+   * and an optional X-axis rotation. When 2 counties are selected, charts
+   * render as grouped bars (one bar per county per category). When 3+ are
+   * selected, each chart switches to small-multiples mode: one mini-chart
+   * per county in a horizontal row, sharing the same X-axis labels.
+   */
+  function renderDistributions(counties) {
+    // Headline for this section
+    const heading = document.createElement('h2');
+    heading.className = 'compare-section-heading';
+    heading.textContent = 'Distribution comparisons';
+    els.charts.appendChild(heading);
+
+    const distCharts = [
+      {
+        title: 'Racial composition (% of population)',
+        source: 'Source: ACS 5-year 2024, Table DP05.',
+        labels: ['White', 'Black', 'Asian', 'Two or more', 'Other / NHPI / AIAN'],
+        rotation: 45,
+        format: 'pct',
+        values: c => shareOf([
+          c.race_white, c.race_black, c.race_asian, c.race_two_plus,
+          (c.race_other ?? 0) + (c.race_aian ?? 0) + (c.race_nhpi ?? 0),
+        ], c.population_total),
+      },
+      {
+        title: 'Educational attainment (% of population 25+)',
+        source: 'Source: ACS 5-year 2024, Table S1501.',
+        labels: ['<9th', '9–12 no dipl.', 'HS grad', 'Some college', "Assoc.", "Bachelor's", 'Graduate'],
+        rotation: 45,
+        format: 'pct',
+        values: c => {
+          const total = (c.edu_lt_9th ?? 0) + (c.edu_9_12_no_diploma ?? 0) + (c.edu_hs_grad ?? 0) +
+                        (c.edu_some_college ?? 0) + (c.edu_associates ?? 0) + (c.edu_bachelors ?? 0) +
+                        (c.edu_graduate ?? 0);
+          return shareOf([
+            c.edu_lt_9th, c.edu_9_12_no_diploma, c.edu_hs_grad, c.edu_some_college,
+            c.edu_associates, c.edu_bachelors, c.edu_graduate,
+          ], total);
+        },
+      },
+      {
+        title: 'Median household income by number of earners',
+        source: 'Source: ACS 5-year 2024, Table S1903.',
+        labels: ['0 earners', '1 earner', '2 earners', '3+ earners'],
+        rotation: 0,
+        format: 'money',
+        values: c => [c.earners_0_income, c.earners_1_income, c.earners_2_income, c.earners_3_plus_income],
+      },
+      {
+        title: 'Household size (% of households)',
+        source: 'Source: ACS 5-year 2024, Table S2501.',
+        labels: ['1 person', '2 person', '3 person', '4+ person'],
+        rotation: 0,
+        format: 'pct',
+        values: c => shareOf([c.hh_size_1, c.hh_size_2, c.hh_size_3, c.hh_size_4_plus], c.hh_total_s2501),
+      },
+      {
+        title: 'Structure type (% of housing units)',
+        source: 'Source: ACS 5-year 2024, Table B25024.',
+        labels: ['SFD', 'SFA', '2 units', '3–4', '5–9', '10–19', '20–49', '50+', 'Mobile', 'Other'],
+        rotation: 45,
+        format: 'pct',
+        values: c => shareOf([
+          c.structure_1_detached, c.structure_1_attached, c.structure_2, c.structure_3_4,
+          c.structure_5_9, c.structure_10_19, c.structure_20_49, c.structure_50_plus,
+          c.structure_mobile, c.structure_other,
+        ], c.units_total),
+      },
+      {
+        title: 'Housing stock by decade (% of units)',
+        source: 'Source: ACS 5-year 2024, Table S2504.',
+        labels: ['Pre-1940', '1940–59', '1960–79', '1980–99', '2000–09', '2010–19', '2020+'],
+        rotation: 45,
+        format: 'pct',
+        values: c => {
+          const total = (c.year_built_2020_plus ?? 0) + (c.year_built_2010_19 ?? 0) +
+                        (c.year_built_2000_09 ?? 0) + (c.year_built_1980_99 ?? 0) +
+                        (c.year_built_1960_79 ?? 0) + (c.year_built_1940_59 ?? 0) +
+                        (c.year_built_1939_earlier ?? 0);
+          return shareOf([
+            c.year_built_1939_earlier, c.year_built_1940_59, c.year_built_1960_79,
+            c.year_built_1980_99, c.year_built_2000_09, c.year_built_2010_19, c.year_built_2020_plus,
+          ], total);
+        },
+      },
+      {
+        title: 'Number of bedrooms (% of housing units)',
+        source: 'Source: ACS 5-year 2024, Table B25041.',
+        labels: ['Studio', '1 BR', '2 BR', '3 BR', '4 BR', '5+ BR'],
+        rotation: 0,
+        format: 'pct',
+        values: c => shareOf([c.br_0, c.br_1, c.br_2, c.br_3, c.br_4, c.br_5_plus], c.units_total),
+      },
+      {
+        title: 'Home value distribution (% of owner-occupied units)',
+        source: 'Source: ACS 5-year 2024, Table DP04.',
+        labels: ['<$50K', '$50–99K', '$100–150K', '$150–200K', '$200–300K', '$300–500K', '$500K–1M', '$1M+'],
+        rotation: 45,
+        format: 'pct',
+        values: c => {
+          const total = (c.value_lt_50k ?? 0) + (c.value_50_99k ?? 0) + (c.value_100_150k ?? 0) +
+                        (c.value_150_200k ?? 0) + (c.value_200_300k ?? 0) + (c.value_300_500k ?? 0) +
+                        (c.value_500_1m ?? 0) + (c.value_1m_plus ?? 0);
+          return shareOf([
+            c.value_lt_50k, c.value_50_99k, c.value_100_150k, c.value_150_200k,
+            c.value_200_300k, c.value_300_500k, c.value_500_1m, c.value_1m_plus,
+          ], total);
+        },
+      },
+      {
+        title: 'Median rent by bedroom',
+        source: 'Source: ACS 5-year 2024, Table B25031.',
+        labels: ['Studio', '1 BR', '2 BR', '3 BR', '4 BR', '5+ BR'],
+        rotation: 0,
+        format: 'money',
+        values: c => [
+          c.rent_median_0br, c.rent_median_1br, c.rent_median_2br,
+          c.rent_median_3br, c.rent_median_4br, c.rent_median_5br,
+        ],
+      },
+      {
+        title: 'Monthly housing costs (% of occupied units)',
+        source: 'Source: ACS 5-year 2024, Table B25104.',
+        labels: ['<$500', '$500–999', '$1,000–1,499', '$1,500–1,999', '$2,000–2,499', '$2,500–2,999', '$3,000+'],
+        rotation: 45,
+        format: 'pct',
+        values: c => {
+          const total = (c.mhc_lt_500 ?? 0) + (c.mhc_500_999 ?? 0) + (c.mhc_1000_1499 ?? 0) +
+                        (c.mhc_1500_1999 ?? 0) + (c.mhc_2000_2499 ?? 0) + (c.mhc_2500_2999 ?? 0) +
+                        (c.mhc_3000_plus ?? 0);
+          return shareOf([
+            c.mhc_lt_500, c.mhc_500_999, c.mhc_1000_1499, c.mhc_1500_1999,
+            c.mhc_2000_2499, c.mhc_2500_2999, c.mhc_3000_plus,
+          ], total);
+        },
+      },
+      {
+        title: 'Renter cost burden distribution (% of renters)',
+        source: 'Source: ACS 5-year 2024, Table B25070.',
+        labels: ['<10%', '10–14%', '15–19%', '20–24%', '25–29%', '30–34%', '35–39%', '40–49%', '50%+'],
+        rotation: 0,
+        format: 'pct',
+        values: c => {
+          const total = (c.rent_burden_total ?? 0) - (c.rent_burden_not_computed ?? 0);
+          return shareOf([
+            c.rent_burden_lt_10, c.rent_burden_10_14, c.rent_burden_15_19,
+            c.rent_burden_20_24, c.rent_burden_25_29, c.rent_burden_30_34,
+            c.rent_burden_35_39, c.rent_burden_40_49, c.rent_burden_50_plus,
+          ], total);
+        },
+      },
+      {
+        title: 'Renters by age (% of renter households)',
+        source: 'Source: ACS 5-year 2024, Table S2502.',
+        labels: ['<35', '35–44', '45–54', '55–64', '65–74', '75–84', '85+'],
+        rotation: 0,
+        format: 'pct',
+        values: c => {
+          const total = (c.renter_age_under35 ?? 0) + (c.renter_age_35_44 ?? 0) +
+                        (c.renter_age_45_54 ?? 0) + (c.renter_age_55_64 ?? 0) +
+                        (c.renter_age_65_74 ?? 0) + (c.renter_age_75_84 ?? 0) +
+                        (c.renter_age_85_plus ?? 0);
+          return shareOf([
+            c.renter_age_under35, c.renter_age_35_44, c.renter_age_45_54, c.renter_age_55_64,
+            c.renter_age_65_74, c.renter_age_75_84, c.renter_age_85_plus,
+          ], total);
+        },
+      },
+      {
+        title: 'Owners by age (% of owner households)',
+        source: 'Source: ACS 5-year 2024, Table S2502.',
+        labels: ['<35', '35–44', '45–54', '55–64', '65–74', '75–84', '85+'],
+        rotation: 0,
+        format: 'pct',
+        values: c => {
+          const total = (c.owner_age_under35 ?? 0) + (c.owner_age_35_44 ?? 0) +
+                        (c.owner_age_45_54 ?? 0) + (c.owner_age_55_64 ?? 0) +
+                        (c.owner_age_65_74 ?? 0) + (c.owner_age_75_84 ?? 0) +
+                        (c.owner_age_85_plus ?? 0);
+          return shareOf([
+            c.owner_age_under35, c.owner_age_35_44, c.owner_age_45_54, c.owner_age_55_64,
+            c.owner_age_65_74, c.owner_age_75_84, c.owner_age_85_plus,
+          ], total);
+        },
+      },
+    ];
+
+    for (const cfg of distCharts) renderDistribution(counties, cfg);
+  }
+
+  /**
+   * Render a single distribution chart. Multi-series at 2 counties,
+   * small multiples at 3–5.
+   */
+  function renderDistribution(counties, cfg) {
+    const labels = cfg.labels;
+    const series = counties.map(c => cfg.values(c));
+    const allValues = series.flat().filter(v => v != null && isFinite(v));
+    const yMax = cfg.format === 'pct'
+      ? Math.min(100, Math.ceil(Math.max(...allValues, 0) / 10) * 10 + 10)
+      : undefined;
+
+    if (counties.length <= 2) {
+      // ── Multi-series mode ─────────────────────────────────────
+      const fig = chartFigure(cfg.title, cfg.source);
+      els.charts.appendChild(fig);
+      const canvas = fig.querySelector('canvas');
+      const opts = optionsFor(cfg.format, true, cfg.rotation || 0);
+      if (yMax != null && opts.scales?.y) opts.scales.y.max = yMax;
+      mkChart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: counties.map((c, i) => ({
+            label: c.county_name,
+            data: series[i],
+            backgroundColor: seriesColors[i],
+          })),
+        },
+        options: opts,
+      });
+    } else {
+      // ── Small multiples mode ──────────────────────────────────
+      const wrap = document.createElement('figure');
+      wrap.className = 'card small-multiples';
+      wrap.innerHTML = `
+        <h3>${cfg.title}</h3>
+        <div class="sm-grid" data-cols="${counties.length}"></div>
+        <small class="source">${cfg.source}</small>
+      `;
+      els.charts.appendChild(wrap);
+      const smGrid = wrap.querySelector('.sm-grid');
+      counties.forEach((c, i) => {
+        const cell = document.createElement('div');
+        cell.className = 'sm-cell';
+        cell.innerHTML = `<h4>${c.county_name}</h4><canvas></canvas>`;
+        smGrid.appendChild(cell);
+        const canvas = cell.querySelector('canvas');
+        const opts = optionsFor(cfg.format, false, cfg.rotation || 0);
+        if (yMax != null && opts.scales?.y) opts.scales.y.max = yMax;
+        // Smaller data labels for small multiples — they get crowded.
+        opts.plugins = opts.plugins || {};
+        opts.plugins.datalabels = { ...opts.plugins.datalabels, display: counties.length <= 3 };
+        mkChart(canvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{ data: series[i], backgroundColor: seriesColors[i] }],
+          },
+          options: opts,
+        });
+      });
+    }
   }
 
   // ── Init ─────────────────────────────────────────────────────
@@ -661,4 +943,44 @@ import manifest from '../data/generated/manifest.json';
     font-size: var(--fs-xs); color: var(--text-muted); font-style: italic;
   }
   canvas { max-width: 100%; height: 260px !important; }
+
+  /* ── Distribution charts ─────────────────────────────────── */
+  .compare-section-heading {
+    font-size: var(--fs-xl);
+    color: var(--color-navy);
+    margin: var(--space-7) 0 var(--space-4);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border-soft);
+  }
+
+  /* Small multiples: a row of mini charts, one per county. */
+  .small-multiples h3 { margin-bottom: var(--space-4); }
+  .small-multiples .sm-grid {
+    display: grid;
+    gap: var(--space-4);
+  }
+  .small-multiples .sm-grid[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
+  .small-multiples .sm-grid[data-cols="4"] { grid-template-columns: repeat(4, 1fr); }
+  .small-multiples .sm-grid[data-cols="5"] { grid-template-columns: repeat(5, 1fr); }
+  @media (max-width: 900px) {
+    .small-multiples .sm-grid[data-cols="3"],
+    .small-multiples .sm-grid[data-cols="4"],
+    .small-multiples .sm-grid[data-cols="5"] { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .small-multiples .sm-grid { grid-template-columns: 1fr !important; }
+  }
+  .small-multiples .sm-cell {
+    background: var(--bg-section);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+  }
+  .small-multiples .sm-cell h4 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-sm);
+    color: var(--color-navy);
+    text-align: center;
+  }
+  .small-multiples .sm-cell canvas { height: 200px !important; }
 </style>
