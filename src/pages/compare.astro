@@ -3,14 +3,14 @@ import Base from '../layouts/Base.astro';
 import manifest from '../data/generated/manifest.json';
 ---
 <Base title="Compare counties — housinganalytics.org"
-      description="Compare any 2–5 U.S. counties side-by-side on housing market metrics.">
+      description="Compare any 2–6 U.S. counties side-by-side on housing market metrics.">
 
   <section class="compare-hero">
     <div class="container">
       <p class="eyebrow">Compare</p>
       <h1>Side-by-side comparison</h1>
       <p class="muted">
-        Pick 2–5 counties to compare on every metric in the profile. Share or bookmark the URL —
+        Pick 2–6 counties to compare on every metric in the profile. Share or bookmark the URL —
         your selection travels with the link.
       </p>
 
@@ -27,7 +27,7 @@ import manifest from '../data/generated/manifest.json';
           <ul class="picker__results" data-results hidden></ul>
         </div>
         <p class="picker__hint muted">
-          <span data-count>0</span> selected · max 5 · share this URL to share the comparison
+          <span data-count>0</span> selected · max 6 · share this URL to share the comparison
         </p>
       </div>
     </div>
@@ -73,7 +73,7 @@ import manifest from '../data/generated/manifest.json';
   // ─────────────────────────────────────────────────────────────
   // Compare page — client-side state + rendering
   // ─────────────────────────────────────────────────────────────
-  const MAX_COUNTIES = 5;
+  const MAX_COUNTIES = 6;
   const allCounties = JSON.parse(document.getElementById('counties-manifest').textContent);
 
   const els = {
@@ -119,9 +119,12 @@ import manifest from '../data/generated/manifest.json';
     char:   css.getPropertyValue('--color-charcoal').trim(),
     teal:   css.getPropertyValue('--color-teal').trim(),
     blue:   css.getPropertyValue('--color-blue').trim(),
+    purple: css.getPropertyValue('--color-purple').trim(),
   };
-  // Per-county color order — primary/secondary first, tertiary if needed.
-  const seriesColors = [C.navy, C.gold, C.teal, C.blue, C.char];
+  // Per-county color order — primary/secondary first, tertiary as needed.
+  // We support up to 6 counties; 6th color (purple) is distinct enough from
+  // navy/blue/teal to remain readable.
+  const seriesColors = [C.navy, C.gold, C.teal, C.blue, C.char, C.purple];
 
   Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
   Chart.defaults.color = '#000';
@@ -240,7 +243,7 @@ import manifest from '../data/generated/manifest.json';
     // Disable input if at max.
     els.input.disabled = selection.length >= MAX_COUNTIES;
     els.input.placeholder = selection.length >= MAX_COUNTIES
-      ? 'Maximum 5 counties — remove one to add another'
+      ? 'Maximum 6 counties — remove one to add another'
       : 'Add a county — e.g. Muscogee, Cook, Travis…';
   }
 
@@ -745,9 +748,9 @@ import manifest from '../data/generated/manifest.json';
         const canvas = cell.querySelector('canvas');
         const opts = optionsFor(cfg.format, false, cfg.rotation || 0);
         if (yMax != null && opts.scales?.y) opts.scales.y.max = yMax;
-        // Smaller data labels for small multiples — they get crowded.
-        opts.plugins = opts.plugins || {};
-        opts.plugins.datalabels = { ...opts.plugins.datalabels, display: counties.length <= 3 };
+        // Cells are at least ~33% wide at all county counts (4 = 50%,
+        // 3/5/6 = 33%, with media queries collapsing to 2 cols below 900px).
+        // That's plenty of room for data labels — no need to suppress.
         mkChart(canvas, {
           type: 'bar',
           data: {
@@ -953,19 +956,23 @@ import manifest from '../data/generated/manifest.json';
     border-top: 1px solid var(--border-soft);
   }
 
-  /* Small multiples: a row of mini charts, one per county. */
+  /* Small multiples: mini charts, one per county. Wider cells = readable
+     X-axis labels. So as we add counties we wrap into 2 rows rather than
+     packing them all into one. */
   .small-multiples h3 { margin-bottom: var(--space-4); }
   .small-multiples .sm-grid {
     display: grid;
     gap: var(--space-4);
   }
-  .small-multiples .sm-grid[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
-  .small-multiples .sm-grid[data-cols="4"] { grid-template-columns: repeat(4, 1fr); }
-  .small-multiples .sm-grid[data-cols="5"] { grid-template-columns: repeat(5, 1fr); }
+  .small-multiples .sm-grid[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }  /* 1 row x 3 */
+  .small-multiples .sm-grid[data-cols="4"] { grid-template-columns: repeat(2, 1fr); }  /* 2 rows x 2 */
+  .small-multiples .sm-grid[data-cols="5"] { grid-template-columns: repeat(3, 1fr); }  /* 3 + 2 */
+  .small-multiples .sm-grid[data-cols="6"] { grid-template-columns: repeat(3, 1fr); }  /* 3 + 3 */
   @media (max-width: 900px) {
     .small-multiples .sm-grid[data-cols="3"],
     .small-multiples .sm-grid[data-cols="4"],
-    .small-multiples .sm-grid[data-cols="5"] { grid-template-columns: repeat(2, 1fr); }
+    .small-multiples .sm-grid[data-cols="5"],
+    .small-multiples .sm-grid[data-cols="6"] { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 600px) {
     .small-multiples .sm-grid { grid-template-columns: 1fr !important; }
