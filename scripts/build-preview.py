@@ -13,18 +13,24 @@ on GitHub Pages.
 import json
 from pathlib import Path
 
+import os
+
 ROOT       = Path(__file__).resolve().parents[1]
-COUNTY     = '13215'  # Muscogee County, GA
+# County FIPS can be set via PREVIEW_COUNTY env var; defaults to Muscogee.
+COUNTY     = os.environ.get('PREVIEW_COUNTY', '13215')
 SRC_TOKENS = ROOT / 'src' / 'styles' / 'tokens.css'
 SRC_FORMAT = ROOT / 'src' / 'lib' / 'format.js'
 COUNTY_FILE = ROOT / 'src' / 'data' / 'generated' / 'counties' / f'{COUNTY}.json'
 OUT_DIR    = ROOT / 'preview'
-OUT_FILE   = OUT_DIR / f'{COUNTY}-muscogee-county.html'
 
 tokens_css   = SRC_TOKENS.read_text()
 county       = json.loads(COUNTY_FILE.read_text())
 state        = county['_context']['state']
 national     = county['_context']['national']
+
+# Build a filename like "13215-muscogee-county.html"
+_slug      = county['county_name'].lower().replace(' ', '-').replace(',', '')
+OUT_FILE   = OUT_DIR / f'{COUNTY}-{_slug}.html'
 
 
 def fmt_money(v):
@@ -447,7 +453,7 @@ canvas {{ max-width: 100%; height: 280px !important; }}
           <h3>Housing size mismatch</h3>
           <canvas data-chart="sizeMismatch"></canvas>
           <figcaption class="muted">
-            Bedroom distribution vs. household size — the "housing size mismatch" chart from CEDR housing studies.
+            Bedroom distribution vs. household size — a common diagnostic of housing supply/demand alignment.
           </figcaption>
         </figure>
       </div>
@@ -505,7 +511,7 @@ canvas {{ max-width: 100%; height: 280px !important; }}
 
       <div class="card">
         <h3>Affordability calculator</h3>
-        <p class="muted">Matches the methodology used in the Columbus and Thomaston housing studies.</p>
+        <p class="muted">Follows the standard 30%-of-gross-income affordability rule.</p>
         <div class="aff-inputs">
           <label>Household income
             <input type="number" id="aff-income" value="{int(mhi or 50000)}" step="1000" min="0" />
@@ -568,7 +574,7 @@ canvas {{ max-width: 100%; height: 280px !important; }}
   <footer class="site-footer">
     <div class="container">
       <p class="muted">Data: American Community Survey, 2024 5-year estimates.
-      Methodology based on housing studies by Georgia Tech CEDR and similar regional research.</p>
+      </p>
       <p class="muted"><small>housinganalytics.org · preview build</small></p>
     </div>
   </footer>
