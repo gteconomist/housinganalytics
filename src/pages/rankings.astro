@@ -1,0 +1,837 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="Rankings — housinganalytics.org"
+      description="Sort and filter all 3,222 U.S. counties on every housing metric. Pick a metric, filter by state and population tier, export to CSV.">
+
+  <section class="rank-hero">
+    <div class="container">
+      <p class="eyebrow">Rankings</p>
+      <h1>County rankings &amp; explorer</h1>
+      <p class="muted">
+        Sort every U.S. county on any metric in the data set. Filter by state, population tier,
+        or county name. Export the current view to CSV — the URL preserves your filters.
+      </p>
+    </div>
+  </section>
+
+  <section class="container" data-loading hidden>
+    <p class="muted">Loading rankings…</p>
+  </section>
+
+  <section class="container rank-error" data-error hidden>
+    <p>Couldn't load the rankings data. Try a hard refresh.</p>
+  </section>
+
+  <section class="container rank-shell" data-shell hidden>
+
+    <!-- Controls -->
+    <div class="rank-controls card">
+      <div class="ctrl ctrl--metric">
+        <label for="metric-select">Sort by</label>
+        <select id="metric-select" data-metric></select>
+      </div>
+
+      <div class="ctrl ctrl--order">
+        <label for="order-select">Order</label>
+        <select id="order-select" data-order>
+          <option value="desc">Highest first</option>
+          <option value="asc">Lowest first</option>
+        </select>
+      </div>
+
+      <div class="ctrl ctrl--search">
+        <label for="county-search">County name</label>
+        <input type="search" id="county-search" data-search placeholder="Filter — e.g. Travis" autocomplete="off" />
+      </div>
+
+      <div class="ctrl ctrl--state">
+        <label>States</label>
+        <div class="state-picker" data-state-picker>
+          <button type="button" class="state-toggle" data-state-toggle aria-haspopup="true" aria-expanded="false">
+            <span data-state-summary>All states</span>
+            <span class="caret">▾</span>
+          </button>
+          <div class="state-menu" data-state-menu hidden>
+            <div class="state-menu__top">
+              <button type="button" data-state-all>Select all</button>
+              <button type="button" data-state-none>Clear</button>
+            </div>
+            <ul data-state-list></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="ctrl ctrl--tier">
+        <label>Population tier</label>
+        <div class="tier-row" data-tier-row></div>
+      </div>
+
+      <div class="ctrl ctrl--actions">
+        <button type="button" class="btn btn--ghost" data-reset>Reset filters</button>
+        <button type="button" class="btn btn--primary" data-csv>Download CSV</button>
+      </div>
+    </div>
+
+    <!-- Summary line + top-10 chart -->
+    <div class="rank-summary muted" data-summary></div>
+
+    <figure class="card chart-card">
+      <h3 data-chart-title>Top 10 by metric</h3>
+      <canvas data-chart></canvas>
+      <small class="source" data-chart-source>Source: ACS 5-year 2024.</small>
+    </figure>
+
+    <!-- Rankings table -->
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table class="rank-table" data-table>
+          <thead><tr data-head></tr></thead>
+          <tbody data-body></tbody>
+        </table>
+      </div>
+      <div class="rank-pager">
+        <button type="button" data-prev>‹ Prev</button>
+        <span data-page-info class="muted"></span>
+        <button type="button" data-next>Next ›</button>
+      </div>
+      <small class="source" data-table-source>Source: see metric definitions above.</small>
+    </div>
+  </section>
+</Base>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script type="module">
+  // ─────────────────────────────────────────────────────────────
+  // Rankings page — client-side data table + chart over all 3,222
+  // counties. Fetches a single compact rankings.json built at build
+  // time by scripts/build-rankings.mjs.
+  // ─────────────────────────────────────────────────────────────
+
+  const PAGE_SIZE = 50;
+  const KPI_COLS = [
+    // Always-visible context columns. The currently-sorted metric is added
+    // dynamically (and skipped here if already in this list).
+    'population_total',
+    'hh_income_median',
+    'value_median',
+    'rent_median',
+    'homeownership_rate',
+    'renter_cost_burden_rate',
+    'price_to_income_ratio',
+  ];
+
+  const els = {
+    loading:    document.querySelector('[data-loading]'),
+    error:      document.querySelector('[data-error]'),
+    shell:      document.querySelector('[data-shell]'),
+    metric:     document.querySelector('[data-metric]'),
+    order:      document.querySelector('[data-order]'),
+    search:     document.querySelector('[data-search]'),
+    statePicker:document.querySelector('[data-state-picker]'),
+    stateToggle:document.querySelector('[data-state-toggle]'),
+    stateMenu:  document.querySelector('[data-state-menu]'),
+    stateList:  document.querySelector('[data-state-list]'),
+    stateAll:   document.querySelector('[data-state-all]'),
+    stateNone:  document.querySelector('[data-state-none]'),
+    stateSummary: document.querySelector('[data-state-summary]'),
+    tierRow:    document.querySelector('[data-tier-row]'),
+    reset:      document.querySelector('[data-reset]'),
+    csv:        document.querySelector('[data-csv]'),
+    summary:    document.querySelector('[data-summary]'),
+    chartTitle: document.querySelector('[data-chart-title]'),
+    chart:      document.querySelector('[data-chart]'),
+    chartSrc:   document.querySelector('[data-chart-source]'),
+    head:       document.querySelector('[data-head]'),
+    body:       document.querySelector('[data-body]'),
+    pageInfo:   document.querySelector('[data-page-info]'),
+    prev:       document.querySelector('[data-prev]'),
+    next:       document.querySelector('[data-next]'),
+    tableSrc:   document.querySelector('[data-table-source]'),
+  };
+
+  // ── Boot ─────────────────────────────────────────────────────
+  els.loading.hidden = false;
+  let DATA;
+  try {
+    const res = await fetch('/data/rankings.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    DATA = await res.json();
+  } catch (err) {
+    console.error(err);
+    els.loading.hidden = true;
+    els.error.hidden = false;
+    throw err;
+  }
+  els.loading.hidden = true;
+  els.shell.hidden = false;
+
+  // Build a flat column→index map from headers.
+  const COL = {};
+  DATA.headers.forEach((h, i) => COL[h] = i);
+
+  // METRIC_BY_FIELD for fast lookup
+  const METRIC_BY_FIELD = {};
+  DATA.metrics.forEach(m => METRIC_BY_FIELD[m.field] = m);
+
+  // States, derived from rows for the picker.
+  const STATES = Array.from(new Set(DATA.rows.map(r => r[COL.state_name])))
+    .filter(Boolean).sort();
+
+  // ── State (URL-backed) ──────────────────────────────────────
+  function readState() {
+    const u = new URL(window.location.href);
+    const states = (u.searchParams.get('states') || '').split(',').filter(Boolean);
+    const tiers  = (u.searchParams.get('tier')   || '').split(',').filter(Boolean);
+    return {
+      metric: u.searchParams.get('metric') || 'hh_income_median',
+      order:  u.searchParams.get('order')  === 'asc' ? 'asc' : 'desc',
+      q:      u.searchParams.get('q')      || '',
+      states: new Set(states),
+      tiers:  new Set(tiers),
+      page:   Math.max(1, parseInt(u.searchParams.get('page') || '1', 10) || 1),
+    };
+  }
+  function writeState() {
+    const u = new URL(window.location.href);
+    u.searchParams.set('metric', state.metric);
+    if (state.order === 'asc') u.searchParams.set('order', 'asc'); else u.searchParams.delete('order');
+    if (state.q) u.searchParams.set('q', state.q); else u.searchParams.delete('q');
+    if (state.states.size) u.searchParams.set('states', [...state.states].join(',')); else u.searchParams.delete('states');
+    if (state.tiers.size)  u.searchParams.set('tier',   [...state.tiers].join(',')); else u.searchParams.delete('tier');
+    if (state.page > 1)    u.searchParams.set('page',   String(state.page)); else u.searchParams.delete('page');
+    history.replaceState({}, '', u);
+  }
+  const state = readState();
+  // Validate metric exists — fall back to default if URL had a stale name.
+  if (!METRIC_BY_FIELD[state.metric]) state.metric = 'hh_income_median';
+
+  // ── Formatters ──────────────────────────────────────────────
+  const fmtMoney = v => (v == null || !isFinite(v)) ? '—' : '$' + Math.round(v).toLocaleString();
+  const fmtInt   = v => (v == null || !isFinite(v)) ? '—' : Math.round(v).toLocaleString();
+  const fmtPct   = v => (v == null || !isFinite(v)) ? '—' : v.toFixed(1) + '%';
+  const fmtRatio = v => (v == null || !isFinite(v)) ? '—' : v.toFixed(2);
+  const fmtYear  = v => (v == null || !isFinite(v)) ? '—' : String(Math.round(v));
+  const FMT = { money: fmtMoney, count: fmtInt, pct: fmtPct, ratio: fmtRatio, year: fmtYear };
+  function fmt(field, v) {
+    const m = METRIC_BY_FIELD[field];
+    if (!m) return fmtInt(v);
+    return (FMT[m.format] || fmtInt)(v);
+  }
+
+  // ── Chart.js defaults to match the site house style ─────────
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    navy: css.getPropertyValue('--color-navy').trim(),
+    gold: css.getPropertyValue('--color-gold').trim(),
+  };
+  Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
+  Chart.defaults.color = '#000';
+  Chart.defaults.borderColor = '#e6e2d2';
+  Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
+  Chart.defaults.elements.bar.borderRadius = 0;
+
+  const dataLabels = {
+    id: 'datalabels',
+    afterDatasetsDraw(chart, _args, opts) {
+      if (!opts || opts.display === false) return;
+      const ctx = chart.ctx;
+      chart.data.datasets.forEach((dataset, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden || !meta.data) return;
+        meta.data.forEach((bar, idx) => {
+          const value = dataset.data[idx];
+          if (value == null || !isFinite(value)) return;
+          const formatted = opts.formatter ? opts.formatter(value) : String(value);
+          if (!formatted) return;
+          ctx.save();
+          ctx.fillStyle = opts.color || C.navy;
+          ctx.font = '500 11px Roboto, system-ui, sans-serif';
+          // Horizontal bars → labels at bar end. Vertical bars → above bar.
+          if (chart.options.indexAxis === 'y') {
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(formatted, bar.x + 6, bar.y);
+          } else {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(formatted, bar.x, bar.y - 4);
+          }
+          ctx.restore();
+        });
+      });
+    },
+  };
+  Chart.register(dataLabels);
+
+  // ── Build the metric <select> with optgroups ────────────────
+  function buildMetricPicker() {
+    const byGroup = new Map();
+    for (const m of DATA.metrics) {
+      if (!byGroup.has(m.group)) byGroup.set(m.group, []);
+      byGroup.get(m.group).push(m);
+    }
+    const frag = document.createDocumentFragment();
+    for (const [group, metrics] of byGroup) {
+      const og = document.createElement('optgroup');
+      og.label = group;
+      for (const m of metrics) {
+        const opt = document.createElement('option');
+        opt.value = m.field;
+        opt.textContent = m.label;
+        if (m.field === state.metric) opt.selected = true;
+        og.appendChild(opt);
+      }
+      frag.appendChild(og);
+    }
+    els.metric.appendChild(frag);
+    els.order.value = state.order;
+  }
+
+  // ── Build state-picker checkbox list ────────────────────────
+  function buildStatePicker() {
+    els.stateList.innerHTML = STATES.map(s => `
+      <li>
+        <label>
+          <input type="checkbox" data-state-cb value="${s}" ${state.states.has(s) ? 'checked' : ''} />
+          <span>${s}</span>
+        </label>
+      </li>
+    `).join('');
+    updateStateSummary();
+  }
+  function updateStateSummary() {
+    const n = state.states.size;
+    els.stateSummary.textContent = n === 0 ? 'All states' : (n === 1 ? [...state.states][0] : `${n} states`);
+  }
+
+  // ── Build tier toggles ──────────────────────────────────────
+  function buildTierRow() {
+    els.tierRow.innerHTML = DATA.pop_tiers.map(t => `
+      <button type="button" class="tier-chip ${state.tiers.has(t.key) ? 'is-on' : ''}" data-tier="${t.key}">
+        ${t.label}
+      </button>
+    `).join('');
+  }
+
+  // ── Filter + sort the row set ───────────────────────────────
+  function compute() {
+    const sortIdx = COL[state.metric];
+    const sign = state.order === 'asc' ? 1 : -1;
+    const q = state.q.trim().toLowerCase();
+    const stateFilter = state.states.size ? state.states : null;
+    const tierFilter  = state.tiers.size  ? state.tiers  : null;
+
+    const filtered = [];
+    for (const r of DATA.rows) {
+      if (stateFilter && !stateFilter.has(r[COL.state_name])) continue;
+      if (tierFilter  && !tierFilter.has(r[COL.pop_tier]))    continue;
+      if (q && !r[COL.county_name].toLowerCase().includes(q)) continue;
+      filtered.push(r);
+    }
+    filtered.sort((a, b) => {
+      const va = a[sortIdx], vb = b[sortIdx];
+      // Nulls always at the bottom regardless of sort direction.
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (va === vb) return 0;
+      return va > vb ? sign : -sign;
+    });
+    return filtered;
+  }
+
+  // ── Render: summary line, chart, table ──────────────────────
+  let chart = null;
+  function render() {
+    const metric = METRIC_BY_FIELD[state.metric];
+    const filtered = compute();
+    const total = filtered.length;
+    const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (state.page > maxPage) state.page = maxPage;
+
+    // ── Summary line ─────────────────────────────────────────
+    const pieces = [`<strong>${total.toLocaleString()}</strong> counties`];
+    if (state.states.size) pieces.push(`<strong>${state.states.size}</strong> state${state.states.size > 1 ? 's' : ''}`);
+    if (state.tiers.size)  pieces.push(`<strong>${state.tiers.size}</strong> pop tier${state.tiers.size > 1 ? 's' : ''}`);
+    if (state.q)           pieces.push(`name contains "<strong>${state.q}</strong>"`);
+    pieces.push(`sorted by <strong>${metric.label}</strong> (${state.order === 'asc' ? 'lowest' : 'highest'} first)`);
+    els.summary.innerHTML = pieces.join(' · ');
+
+    // ── Top-10 horizontal bar chart ──────────────────────────
+    const top10 = filtered.slice(0, 10);
+    els.chartTitle.textContent = `${state.order === 'asc' ? 'Bottom' : 'Top'} 10 by ${metric.label}`;
+    els.chartSrc.textContent = `Source: ${metric.source}.`;
+    drawChart(top10, metric);
+
+    // ── Table head ───────────────────────────────────────────
+    const sortedColIsKpi = KPI_COLS.includes(state.metric);
+    const columns = sortedColIsKpi ? KPI_COLS : [state.metric, ...KPI_COLS];
+    const headHtml = [
+      '<th class="rank-th rank-th--num">#</th>',
+      '<th class="rank-th rank-th--county">County</th>',
+      '<th class="rank-th">State</th>',
+    ].concat(columns.map(f => {
+      const m = METRIC_BY_FIELD[f];
+      const isSorted = f === state.metric;
+      return `<th class="rank-th rank-th--num${isSorted ? ' is-sorted' : ''}" data-col="${f}" title="Click to sort">${m ? m.label : f}${isSorted ? ` <span class="sort-arrow">${state.order === 'asc' ? '▲' : '▼'}</span>` : ''}</th>`;
+    }));
+    els.head.innerHTML = headHtml.join('');
+
+    // ── Table body (current page only) ──────────────────────
+    const startIdx = (state.page - 1) * PAGE_SIZE;
+    const pageRows = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+    els.body.innerHTML = pageRows.map((r, i) => {
+      const rank = startIdx + i + 1;
+      const countyCell = `<a href="/county/${r[COL.state_slug]}/${r[COL.slug]}/">${r[COL.county_name]}</a>`;
+      const cells = columns.map(f => {
+        const v = r[COL[f]];
+        const cls = f === state.metric ? ' class="is-sorted"' : '';
+        return `<td${cls}>${fmt(f, v)}</td>`;
+      }).join('');
+      return `<tr>
+        <td class="rank-num">${rank}</td>
+        <td class="rank-county">${countyCell}</td>
+        <td>${r[COL.state_name]}</td>
+        ${cells}
+      </tr>`;
+    }).join('') || `<tr><td colspan="${3 + columns.length}" class="rank-empty">No counties match these filters.</td></tr>`;
+
+    // ── Pager ────────────────────────────────────────────────
+    const lastShown = Math.min(state.page * PAGE_SIZE, total);
+    els.pageInfo.textContent = total === 0
+      ? '0 results'
+      : `${(startIdx + 1).toLocaleString()}–${lastShown.toLocaleString()} of ${total.toLocaleString()}`;
+    els.prev.disabled = state.page <= 1;
+    els.next.disabled = state.page >= maxPage;
+
+    els.tableSrc.innerHTML = `Source: ${metric.source}. Click a county name to open its profile.`;
+
+    writeState();
+  }
+
+  function drawChart(top10, metric) {
+    if (chart) { chart.destroy(); chart = null; }
+    if (!top10.length) return;
+    const labels = top10.map(r => r[COL.county_name] + ', ' + abbrevState(r[COL.state_name]));
+    const values = top10.map(r => r[COL[state.metric]]);
+    const fmtFn = FMT[metric.format] || fmtInt;
+    chart = new Chart(els.chart, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: metric.label,
+          data: values,
+          backgroundColor: C.navy,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        layout: { padding: { right: 80 } },
+        scales: {
+          x: {
+            // Year-valued charts (e.g. median structure year built) shouldn't
+            // anchor at zero — that compresses all bars into an unreadable strip
+            // near the right edge. Other formats keep the standard zero anchor.
+            beginAtZero: metric.format !== 'year',
+            grid:   { display: false },
+            border: { display: true, color: '#000' },
+            ticks:  {
+              color: '#000',
+              callback: v => {
+                if (metric.format === 'money') return '$' + v.toLocaleString();
+                if (metric.format === 'pct')   return v + '%';
+                if (metric.format === 'year')  return String(Math.round(v));
+                if (metric.format === 'ratio') return Number(v).toFixed(2);
+                return v.toLocaleString();
+              },
+            },
+          },
+          y: {
+            grid:   { display: false },
+            border: { display: true, color: '#000' },
+            ticks:  { color: '#000' },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          datalabels: { formatter: fmtFn },
+          tooltip: { callbacks: { label: ctx => fmtFn(ctx.parsed.x) } },
+        },
+      },
+    });
+  }
+
+  function abbrevState(s) {
+    // Compress long state names for the chart so labels don't crowd the bars.
+    return s.length > 12 ? s.slice(0, 3).toUpperCase() : s;
+  }
+
+  // ── CSV export ──────────────────────────────────────────────
+  function exportCsv() {
+    const filtered = compute();
+    const metric = METRIC_BY_FIELD[state.metric];
+    const sortedColIsKpi = KPI_COLS.includes(state.metric);
+    const cols = sortedColIsKpi ? KPI_COLS : [state.metric, ...KPI_COLS];
+    const head = ['Rank', 'GeoID', 'County', 'State', ...cols.map(f => (METRIC_BY_FIELD[f]?.label || f))];
+    const lines = [head];
+    filtered.forEach((r, i) => {
+      lines.push([
+        i + 1,
+        r[COL.geoid],
+        r[COL.county_name],
+        r[COL.state_name],
+        ...cols.map(f => r[COL[f]] ?? ''),
+      ]);
+    });
+    const csv = lines.map(row =>
+      row.map(v => {
+        const s = String(v ?? '');
+        return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(',')
+    ).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const slug = (metric.label || state.metric).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    a.href = url;
+    a.download = `housinganalytics-rankings-${slug}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Wire up events ──────────────────────────────────────────
+  els.metric.addEventListener('change', () => {
+    state.metric = els.metric.value;
+    state.page = 1;
+    render();
+  });
+  els.order.addEventListener('change', () => {
+    state.order = els.order.value;
+    render();
+  });
+  els.search.addEventListener('input', () => {
+    state.q = els.search.value;
+    state.page = 1;
+    render();
+  });
+  els.search.value = state.q;
+
+  els.stateToggle.addEventListener('click', () => {
+    const open = els.stateMenu.hidden;
+    els.stateMenu.hidden = !open;
+    els.stateToggle.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', (e) => {
+    if (!els.statePicker.contains(e.target)) {
+      els.stateMenu.hidden = true;
+      els.stateToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+  els.stateList.addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-state-cb]');
+    if (!cb) return;
+    if (cb.checked) state.states.add(cb.value);
+    else            state.states.delete(cb.value);
+    state.page = 1;
+    updateStateSummary();
+    render();
+  });
+  els.stateAll.addEventListener('click', () => {
+    state.states = new Set(STATES);
+    state.page = 1;
+    buildStatePicker();
+    render();
+  });
+  els.stateNone.addEventListener('click', () => {
+    state.states.clear();
+    state.page = 1;
+    buildStatePicker();
+    render();
+  });
+
+  els.tierRow.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-tier]');
+    if (!btn) return;
+    const key = btn.dataset.tier;
+    if (state.tiers.has(key)) state.tiers.delete(key);
+    else                      state.tiers.add(key);
+    btn.classList.toggle('is-on');
+    state.page = 1;
+    render();
+  });
+
+  els.head.addEventListener('click', (e) => {
+    const th = e.target.closest('[data-col]');
+    if (!th) return;
+    const field = th.dataset.col;
+    if (field === state.metric) {
+      state.order = state.order === 'desc' ? 'asc' : 'desc';
+      els.order.value = state.order;
+    } else {
+      state.metric = field;
+      els.metric.value = field;
+      state.order = 'desc';
+      els.order.value = 'desc';
+    }
+    state.page = 1;
+    render();
+  });
+
+  els.prev.addEventListener('click', () => { if (state.page > 1) { state.page--; render(); } });
+  els.next.addEventListener('click', () => { state.page++; render(); });
+
+  els.reset.addEventListener('click', () => {
+    state.metric = 'hh_income_median';
+    state.order = 'desc';
+    state.q = '';
+    state.states = new Set();
+    state.tiers  = new Set();
+    state.page = 1;
+    els.metric.value = state.metric;
+    els.order.value = state.order;
+    els.search.value = '';
+    buildStatePicker();
+    buildTierRow();
+    render();
+  });
+
+  els.csv.addEventListener('click', exportCsv);
+
+  // ── Init ────────────────────────────────────────────────────
+  buildMetricPicker();
+  buildStatePicker();
+  buildTierRow();
+  render();
+</script>
+
+<style is:global>
+  .rank-hero {
+    background: var(--bg-section);
+    padding: var(--space-7) 0 var(--space-6);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .rank-hero h1 { margin: var(--space-2) 0 var(--space-3); }
+  .rank-hero .muted { max-width: 64ch; }
+
+  .rank-error { padding: var(--space-7) 0; color: var(--color-red); }
+  .rank-shell { padding-top: var(--space-6); padding-bottom: var(--space-9); }
+
+  /* ── Controls ─────────────────────────────────────────────── */
+  .rank-controls {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 2.5fr 1fr;
+    gap: var(--space-4);
+    align-items: end;
+  }
+  @media (max-width: 1100px) {
+    .rank-controls { grid-template-columns: 1fr 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .rank-controls { grid-template-columns: 1fr; }
+  }
+  .ctrl { display: flex; flex-direction: column; gap: 6px; }
+  .ctrl label {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+  .ctrl select,
+  .ctrl input[type="search"] {
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    padding: 8px 10px;
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    background: var(--bg-page);
+    color: var(--text-body);
+  }
+  .ctrl select:focus,
+  .ctrl input:focus { outline: 2px solid var(--color-gold); outline-offset: 1px; }
+
+  .ctrl--actions { flex-direction: column; gap: var(--space-2); align-items: stretch; justify-content: end; }
+  .btn {
+    font-family: inherit; font-size: var(--fs-sm); font-weight: var(--fw-medium);
+    padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid var(--color-navy);
+    line-height: 1.2;
+  }
+  .btn--primary { background: var(--color-navy); color: var(--color-white); }
+  .btn--primary:hover { background: #001f3a; }
+  .btn--ghost   { background: var(--bg-page); color: var(--color-navy); }
+  .btn--ghost:hover { background: var(--bg-section); }
+
+  /* State picker — popover ──────────────────────────────────── */
+  .state-picker { position: relative; }
+  .state-toggle {
+    width: 100%;
+    text-align: left;
+    background: var(--bg-page);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-family: inherit; font-size: var(--fs-sm);
+    color: var(--text-body);
+    cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .state-toggle:hover { border-color: var(--color-navy); }
+  .state-toggle .caret { color: var(--text-muted); font-size: 12px; }
+  .state-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--bg-page);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-card);
+    z-index: 20;
+    max-height: 320px; overflow-y: auto;
+  }
+  .state-menu__top {
+    display: flex; gap: var(--space-2);
+    padding: 8px;
+    border-bottom: 1px solid var(--border-soft);
+    position: sticky; top: 0; background: var(--bg-page);
+  }
+  .state-menu__top button {
+    background: transparent; border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-family: inherit; font-size: var(--fs-xs);
+    cursor: pointer;
+    color: var(--color-navy);
+  }
+  .state-menu__top button:hover { background: var(--bg-section); }
+  .state-menu ul { list-style: none; margin: 0; padding: 4px 0; }
+  .state-menu li label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 10px;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    color: var(--text-body);
+    text-transform: none; letter-spacing: 0;
+    font-weight: var(--fw-regular);
+  }
+  .state-menu li label:hover { background: var(--bg-section); }
+
+  /* Tier chips ─────────────────────────────────────────────── */
+  .tier-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tier-chip {
+    background: var(--bg-page);
+    border: 1px solid var(--border-muted);
+    color: var(--text-body);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-family: inherit;
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  .tier-chip:hover { border-color: var(--color-navy); }
+  .tier-chip.is-on {
+    background: var(--color-navy);
+    color: var(--color-white);
+    border-color: var(--color-navy);
+  }
+
+  /* Summary line ───────────────────────────────────────────── */
+  .rank-summary {
+    margin: var(--space-4) 0 var(--space-4);
+    font-size: var(--fs-sm);
+  }
+  .rank-summary strong { color: var(--text-primary); font-weight: var(--fw-semibold); }
+
+  /* Chart card ─────────────────────────────────────────────── */
+  .chart-card canvas { height: 360px !important; max-width: 100%; }
+  .chart-card .source {
+    display: block; margin-top: var(--space-2); padding-top: var(--space-2);
+    border-top: 1px dotted var(--border-soft);
+    font-size: var(--fs-xs); color: var(--text-muted); font-style: italic;
+  }
+
+  /* Table ──────────────────────────────────────────────────── */
+  .table-card { padding: 0; overflow: hidden; }
+  .table-wrap { overflow-x: auto; }
+  .rank-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+  }
+  .rank-th {
+    text-align: right;
+    padding: var(--space-3) var(--space-3);
+    border-bottom: 2px solid var(--border-muted);
+    background: var(--bg-section);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    color: var(--text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .rank-th[data-col]:hover { color: var(--color-navy); }
+  .rank-th--num { text-align: right; }
+  .rank-th--county { text-align: left; }
+  .rank-th.is-sorted {
+    color: var(--color-navy);
+    background: #f1eedb;
+  }
+  .sort-arrow { font-size: 10px; }
+  .rank-table tbody td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+    color: var(--text-primary);
+  }
+  .rank-table tbody td.is-sorted {
+    background: #fbfaf1;
+    font-weight: var(--fw-semibold);
+  }
+  .rank-table tbody td.rank-num {
+    color: var(--text-muted);
+    font-weight: var(--fw-medium);
+  }
+  .rank-table tbody td.rank-county {
+    text-align: left;
+    font-weight: var(--fw-medium);
+  }
+  .rank-table tbody td.rank-county a {
+    color: var(--color-navy);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-gold);
+  }
+  .rank-table tbody td.rank-county a:hover { border-bottom-color: var(--color-navy); }
+  .rank-table tbody tr:hover { background: var(--bg-section); }
+  .rank-table tbody .rank-empty {
+    padding: var(--space-7);
+    text-align: center;
+    color: var(--text-muted);
+  }
+  .rank-pager {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border-soft);
+  }
+  .rank-pager button {
+    background: var(--bg-page);
+    border: 1px solid var(--color-navy);
+    color: var(--color-navy);
+    padding: 6px 14px;
+    font-family: inherit; font-size: var(--fs-sm);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .rank-pager button:hover:not(:disabled) { background: var(--color-navy); color: var(--color-white); }
+  .rank-pager button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .table-card .source {
+    display: block; padding: var(--space-3) var(--space-4);
+    font-size: var(--fs-xs); color: var(--text-muted); font-style: italic;
+    border-top: 1px solid var(--border-soft);
+  }
+</style>
