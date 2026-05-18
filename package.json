@@ -8,8 +8,9 @@
     "hud": "node scripts/fetch-hud-ami.mjs",
     "gazetteer": "node scripts/fetch-gazetteer.mjs",
     "data": "node scripts/build-data.mjs",
-    "dev": "npm run hud && npm run gazetteer && npm run data && astro dev",
-    "build": "npm run hud && npm run gazetteer && npm run data && astro build",
+    "rankings": "node scripts/build-rankings.mjs",
+    "dev": "npm run hud && npm run gazetteer && npm run data && npm run rankings && astro dev",
+    "build": "npm run hud && npm run gazetteer && npm run data && npm run rankings && astro build",
     "preview": "astro preview",
     "astro": "astro"
   },
