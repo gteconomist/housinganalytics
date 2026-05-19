@@ -151,23 +151,47 @@ function num(v) {
 const OWN_DETAIL = new Set(['1', '2', '3', '5']);
 const counties = {};      // fips -> { sectors: Map, subsectors: Map }
 
+// Resolve a header column name across possible variants. BLS docs say
+// `annual_avg_estabs` but some recent vintages publish `annual_avg_estabs_count`,
+// and pre-2017 files used `qtrly_estabs_count` quarterly-style names. Be tolerant.
+function findCol(header, ...candidates) {
+  const norm = s => String(s).trim().toLowerCase().replace(/[\s_]+/g, '_');
+  const nh = header.map(norm);
+  for (const c of candidates) {
+    const i = nh.indexOf(norm(c));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+let _headerLogged = false;
+
 function processCountyCsv(csvText, expectedFips) {
   const lines = csvText.split(/\r?\n/);
   if (lines.length < 2) return null;
   const header = parseCsvLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
-  const idx = name => header.indexOf(name);
   const I = {
-    area:       idx('area_fips'),
-    own:        idx('own_code'),
-    industry:   idx('industry_code'),
-    agglvl:     idx('agglvl_code'),
-    indTitle:   idx('industry_title'),
-    estabs:     idx('annual_avg_estabs'),
-    emp:        idx('annual_avg_emplvl'),
-    wages:      idx('total_annual_wages'),
-    wkly:       idx('annual_avg_wkly_wage'),
-    pay:        idx('avg_annual_pay'),
+    area:       findCol(header, 'area_fips'),
+    own:        findCol(header, 'own_code'),
+    industry:   findCol(header, 'industry_code'),
+    agglvl:     findCol(header, 'agglvl_code'),
+    indTitle:   findCol(header, 'industry_title'),
+    estabs:     findCol(header, 'annual_avg_estabs', 'annual_avg_estabs_count', 'qtrly_estabs', 'qtrly_estabs_count'),
+    emp:        findCol(header, 'annual_avg_emplvl', 'annual_avg_emplvl_count'),
+    wages:      findCol(header, 'total_annual_wages'),
+    wkly:       findCol(header, 'annual_avg_wkly_wage'),
+    pay:        findCol(header, 'avg_annual_pay'),
   };
+  // One-shot startup diagnostic so we can verify column resolution in the build log.
+  if (!_headerLogged) {
+    _headerLogged = true;
+    console.log('QCEW header sample:', header.slice(0, 30).join(' | '));
+    console.log('QCEW resolved column indices:', JSON.stringify(I));
+    if (I.estabs < 0) {
+      console.warn('WARN: annual_avg_estabs column not found — establishments will be 0. ' +
+                   'Header was: ' + header.join(','));
+    }
+  }
   if (I.area < 0 || I.agglvl < 0 || I.industry < 0 || I.emp < 0) return null;
 
   // Per (industry_code, agglvl_code) bucket within this county.
