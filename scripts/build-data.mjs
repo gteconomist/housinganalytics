@@ -49,6 +49,17 @@ async function loadGazetteer() {
   }
 }
 
+// Optional QCEW data (industry employment + wages). Written by fetch-qcew.mjs.
+// Returns the parsed object; build-data attaches `industries` to each county.
+async function loadQcew() {
+  const f = join(__dirname, '..', 'src', 'data', 'generated', 'qcew.json');
+  try {
+    return JSON.parse(await readFile(f, 'utf8'));
+  } catch {
+    return { counties: {} };
+  }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const ROOT        = join(__dirname, '..');
@@ -394,8 +405,11 @@ counties.forEach(c => {
 // live in src/data/generated/ alongside what we're about to overwrite.
 const hudAmi    = await loadHudAmi();
 const gazetteer = await loadGazetteer();
+const qcew      = await loadQcew();
 console.log(`HUD AMI loaded for ${Object.keys(hudAmi).length} counties.`);
 console.log(`Gazetteer loaded for ${Object.keys(gazetteer).length} counties.`);
+console.log(`QCEW loaded for ${Object.keys(qcew.counties ?? {}).length} counties ` +
+            `(${qcew.vintage_label ?? 'no vintage'}).`);
 
 if (existsSync(OUT_DIR)) await rm(OUT_DIR, { recursive: true, force: true });
 await mkdir(OUT_DIR, { recursive: true });
@@ -424,6 +438,14 @@ for (const c of counties) {
     c.land_area_sqmi = null;
     c.population_density = null;
   }
+  // Attach QCEW industry rows if available.
+  const ind = qcew.counties?.[c.geoid];
+  c.industries = ind ? {
+    year: qcew.year ?? null,
+    vintage_label: qcew.vintage_label ?? null,
+    sectors:    ind.sectors    ?? [],
+    subsectors: ind.subsectors ?? [],
+  } : null;
   const json = JSON.stringify(c, null, 2);
   await writeFile(join(OUT_DIR,    'counties', `${c.geoid}.json`), json);
   await writeFile(join(PUBLIC_DIR, 'counties', `${c.geoid}.json`), json);
