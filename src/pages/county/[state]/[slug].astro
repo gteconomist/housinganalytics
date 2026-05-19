@@ -1,7 +1,7 @@
 ---
 import Base from '../../../layouts/Base.astro';
 import manifest from '../../../data/generated/manifest.json';
-import { fmtMoney, fmtInt, fmtPct, fmtRatio } from '../../../lib/format.js';
+import { fmtMoney, fmtInt, fmtPct, fmtRatio, affordableHomePrice } from '../../../lib/format.js';
 
 // Generate one static page per county at build time.
 export async function getStaticPaths() {
@@ -232,6 +232,9 @@ const chartData = {
   },
 };
 
+// Section 4 chart data is filled below after topSectors is computed.
+chartData.industryTopSectors = { labels: [], emp: [], wage: [] };
+
 // Workforce housing range
 const mhi = county.hh_income_median;
 const workforceLow  = mhi ? mhi * 0.80 : null;
@@ -240,6 +243,53 @@ const workforceHigh = mhi ? mhi * 1.20 : null;
 // HUD AMI (may be null if the HUD fetch step didn't run / failed). The page
 // guards every reference so the section just collapses gracefully.
 const hud = county.hud_ami;
+
+// ── Section 4: Industry & Workforce Wages (BLS QCEW) ──────────────
+// county.industries is null when QCEW didn't load (graceful degrade).
+const industries = county.industries;
+
+// Attach affordability (home price + max rent at 30% of gross) to every
+// industry row. Reuses the same calc as the Section 3 affordability widget
+// so numbers tie out: 7% rate, 5% down, 30-yr, $2,500/yr T&I, 0.5% PMI,
+// 30% housing-budget rule.
+function withAffordability(row) {
+  const inc = row.avg_annual_pay;
+  if (inc == null) return { ...row, affordablePrice: null, affordableRent: null, affordablePriceVsMedian: null };
+  const r = affordableHomePrice({ annualIncome: inc });
+  const price = r?.homePrice ?? null;
+  return {
+    ...row,
+    affordablePrice: price,
+    affordableRent:  (inc * 0.30) / 12,
+    affordablePriceVsMedian:
+      (price != null && county.value_median != null) ? price - county.value_median : null,
+  };
+}
+
+const sectorRows    = (industries?.sectors    ?? []).map(withAffordability);
+const subsectorRows = (industries?.subsectors ?? []).map(withAffordability);
+
+// Top 10 sectors by employment for the chart.
+const topSectors = sectorRows.slice(0, 10);
+const totalIndustryEmp = sectorRows.reduce((s, r) => s + (r.emp ?? 0), 0);
+const totalIndustryEstabs = sectorRows.reduce((s, r) => s + (r.estabs ?? 0), 0);
+
+// Industry-weighted average annual pay across all sectors (single headline number).
+let _payNum = 0, _payDen = 0;
+for (const r of sectorRows) {
+  if (r.avg_annual_pay != null && r.emp != null && r.emp > 0) {
+    _payNum += r.avg_annual_pay * r.emp;
+    _payDen += r.emp;
+  }
+}
+const overallAvgAnnualPay = _payDen > 0 ? _payNum / _payDen : null;
+
+// Fill the Section 4 chart payload now that topSectors is known.
+chartData.industryTopSectors = {
+  labels: topSectors.map(r => r.title),
+  emp:    topSectors.map(r => r.emp ?? 0),
+  wage:   topSectors.map(r => r.avg_annual_pay ?? 0),
+};
 ---
 
 <Base title={`${county.county_name}, ${county.state_name}`} county={county}>
@@ -720,6 +770,146 @@ const hud = county.hud_ami;
     </figure>
   </section>
 
+  <!-- ── 4. Industry & Workforce Wages (BLS QCEW) ─────────────────── -->
+  {industries && sectorRows.length > 0 && (
+    <section class="container report-section">
+      <header class="section-head">
+        <p class="eyebrow">Section 4</p>
+        <h2>Industry &amp; Workforce Wages</h2>
+        <p class="muted">
+          Employment, average wages, and the housing each industry's typical earner can
+          afford in {county.county_name}.
+        </p>
+      </header>
+
+      <div class="grid grid-3 industry-kpis">
+        <div class="kpi">
+          <div class="kpi__label">Covered employment</div>
+          <div class="kpi__value">{fmtInt(totalIndustryEmp)}</div>
+          <div class="kpi__delta muted">Across {sectorRows.length} sectors</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__label">Establishments</div>
+          <div class="kpi__value">{fmtInt(totalIndustryEstabs)}</div>
+          <div class="kpi__delta muted">QCEW {industries.year ?? '—'}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__label">Avg annual pay (workforce)</div>
+          <div class="kpi__value">{fmtMoney(overallAvgAnnualPay)}</div>
+          <div class="kpi__delta muted">Employment-weighted across sectors</div>
+        </div>
+      </div>
+
+      <figure class="card card--medium">
+        <h3>Top 10 sectors by employment</h3>
+        <canvas data-chart="industryTopSectors"></canvas>
+        <figcaption class="muted">
+          Annual average employment by NAICS 2-digit sector. Counties with fewer than five
+          covered establishments in a sector may show suppressed totals.
+        </figcaption>
+        <small class="source">Source: {industries.vintage_label ?? 'BLS QCEW Annual Averages'}.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Attainable housing by industry</h3>
+        <div class="industry-toggle">
+          <button type="button" class="industry-toggle__btn industry-toggle__btn--active"
+                  data-industry-view="sectors">Sectors (NAICS 2-digit)</button>
+          {subsectorRows.length > 0 && (
+            <button type="button" class="industry-toggle__btn"
+                    data-industry-view="subsectors">Subsectors (NAICS 3-digit)</button>
+          )}
+        </div>
+
+        <div class="industry-table-wrap" data-industry-table="sectors">
+          <table class="industry-table">
+            <thead>
+              <tr>
+                <th class="industry-table__name">Industry</th>
+                <th>Employment</th>
+                <th>Avg annual wage</th>
+                <th>Affordable home price</th>
+                <th>vs. median value</th>
+                <th>Affordable monthly rent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sectorRows.map(r => (
+                <tr>
+                  <td class="industry-table__name">
+                    <span class="industry-table__title">{r.title}</span>
+                    <span class="industry-table__naics muted">NAICS {r.naics}</span>
+                  </td>
+                  <td>{fmtInt(r.emp)}</td>
+                  <td>{fmtMoney(r.avg_annual_pay)}</td>
+                  <td>{fmtMoney(r.affordablePrice)}</td>
+                  <td class={r.affordablePriceVsMedian != null
+                              ? (r.affordablePriceVsMedian >= 0 ? 'pos' : 'neg')
+                              : ''}>
+                    {r.affordablePriceVsMedian == null
+                      ? '—'
+                      : (r.affordablePriceVsMedian >= 0
+                          ? '+' + fmtMoney(r.affordablePriceVsMedian)
+                          : '−' + fmtMoney(Math.abs(r.affordablePriceVsMedian)))}
+                  </td>
+                  <td>{fmtMoney(r.affordableRent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {subsectorRows.length > 0 && (
+          <div class="industry-table-wrap" data-industry-table="subsectors" hidden>
+            <table class="industry-table">
+              <thead>
+                <tr>
+                  <th class="industry-table__name">Subsector</th>
+                  <th>Employment</th>
+                  <th>Avg annual wage</th>
+                  <th>Affordable home price</th>
+                  <th>vs. median value</th>
+                  <th>Affordable monthly rent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subsectorRows.map(r => (
+                  <tr>
+                    <td class="industry-table__name">
+                      <span class="industry-table__title">{r.title}</span>
+                      <span class="industry-table__naics muted">NAICS {r.naics}</span>
+                    </td>
+                    <td>{fmtInt(r.emp)}</td>
+                    <td>{fmtMoney(r.avg_annual_pay)}</td>
+                    <td>{fmtMoney(r.affordablePrice)}</td>
+                    <td class={r.affordablePriceVsMedian != null
+                                ? (r.affordablePriceVsMedian >= 0 ? 'pos' : 'neg')
+                                : ''}>
+                      {r.affordablePriceVsMedian == null
+                        ? '—'
+                        : (r.affordablePriceVsMedian >= 0
+                            ? '+' + fmtMoney(r.affordablePriceVsMedian)
+                            : '−' + fmtMoney(Math.abs(r.affordablePriceVsMedian)))}
+                    </td>
+                    <td>{fmtMoney(r.affordableRent)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <figcaption class="muted">
+          Affordable home price assumes the industry's average earner uses 30% of gross
+          income for housing, with a 30-year mortgage at 7%, 5% down, $2,500/yr taxes
+          &amp; insurance, and 0.5% PMI. Adjust the Section 3 calculator for other terms.
+          Affordable rent is 30% of monthly gross pay.
+        </figcaption>
+        <small class="source">Source: {industries.vintage_label ?? 'BLS QCEW Annual Averages'}; ACS 5-year 2024 (median home value).</small>
+      </figure>
+    </section>
+  )}
+
   <!-- ── Methodology footnote ─────────────────────────────────────── -->
   <section class="container report-section">
     <details class="methodology">
@@ -1080,6 +1270,32 @@ const hud = county.hud_ami;
     options: countOpts({ rotation: 45 }),
   });
 
+  // ── Section 4: top sectors by employment ──────────────────────
+  if (chartData.industryTopSectors && chartData.industryTopSectors.labels.length) {
+    mk('industryTopSectors', {
+      type: 'bar',
+      data: {
+        labels: chartData.industryTopSectors.labels,
+        datasets: [{ data: chartData.industryTopSectors.emp, backgroundColor: C.navy }],
+      },
+      options: countOpts({ rotation: 45 }),
+    });
+  }
+
+  // ── Section 4: sectors / subsectors table toggle ──────────────
+  document.querySelectorAll('[data-industry-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.getAttribute('data-industry-view');
+      // Swap which button is active.
+      document.querySelectorAll('[data-industry-view]').forEach(b =>
+        b.classList.toggle('industry-toggle__btn--active', b === btn));
+      // Swap visible table.
+      document.querySelectorAll('[data-industry-table]').forEach(t => {
+        t.hidden = t.getAttribute('data-industry-table') !== view;
+      });
+    });
+  });
+
   // ── Affordability calculator ──────────────────────────────────
   const aff = {
     basis:   document.getElementById('aff-basis'),
@@ -1352,6 +1568,66 @@ const hud = county.hud_ami;
     color: var(--text-primary);
   }
   .methodology p { margin-top: var(--space-3); }
+
+  /* ── Section 4: Industry & Workforce Wages ─────────────────────── */
+  .industry-kpis { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 800px) { .industry-kpis { grid-template-columns: 1fr; } }
+
+  .industry-toggle {
+    display: flex;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-3);
+  }
+  .industry-toggle__btn {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-muted);
+    background: var(--bg-page);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+  .industry-toggle__btn--active {
+    background: var(--color-navy);
+    color: var(--bg-page);
+    border-color: var(--color-navy);
+  }
+
+  .industry-table-wrap {
+    overflow-x: auto;
+    margin-bottom: var(--space-2);
+  }
+  .industry-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+  }
+  .industry-table th, .industry-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .industry-table thead th {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-muted);
+    background: var(--bg-section);
+    position: sticky;
+    top: 0;
+  }
+  .industry-table .industry-table__name { text-align: left; white-space: normal; }
+  .industry-table thead .industry-table__name { text-align: left; }
+  .industry-table__title { display: block; font-weight: var(--fw-medium); color: var(--text-primary); }
+  .industry-table__naics { display: block; font-size: var(--fs-xs); }
+  .industry-table tbody tr:last-child th,
+  .industry-table tbody tr:last-child td { border-bottom: none; }
+  .industry-table .pos { color: #1f6b3b; }
+  .industry-table .neg { color: var(--color-red); }
 
   /* Make Chart.js canvases behave well in flex/grid containers */
   canvas { max-width: 100%; height: 280px !important; }
