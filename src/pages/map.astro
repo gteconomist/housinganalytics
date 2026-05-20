@@ -1,0 +1,545 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="National map — housinganalytics.org"
+      description="Choropleth map of all 3,222 U.S. counties on every housing metric. Pick a metric, hover for county values, click through to the county profile.">
+
+  <section class="map-hero">
+    <div class="container">
+      <p class="eyebrow">National map</p>
+      <h1>U.S. county map &amp; metric explorer</h1>
+      <p class="muted">
+        Color every county in the country by any metric. Hover a county for its value, click through
+        to the full profile. Alaska and Hawaii are inset in the lower-left.
+      </p>
+    </div>
+  </section>
+
+  <section class="container" data-loading hidden>
+    <p class="muted">Loading map &amp; county data…</p>
+  </section>
+
+  <section class="container map-error" data-error hidden>
+    <p>Couldn't load the map. Try a hard refresh.</p>
+  </section>
+
+  <section class="container map-shell" data-shell hidden>
+
+    <!-- Controls -->
+    <div class="map-controls card">
+      <div class="ctrl ctrl--metric">
+        <label for="metric-select">Color counties by</label>
+        <select id="metric-select" data-metric></select>
+      </div>
+      <div class="ctrl ctrl--actions">
+        <a class="btn btn--ghost" data-rankings-link href="/rankings">Open in rankings →</a>
+      </div>
+    </div>
+
+    <!-- Summary line -->
+    <div class="map-summary muted" data-summary></div>
+
+    <!-- Map figure -->
+    <figure class="card map-card">
+      <div class="map-wrap">
+        <svg class="map-svg" viewBox="0 0 975 610" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Choropleth of U.S. counties">
+          <g data-counties></g>
+          <g data-states-mesh></g>
+          <g data-nation-outline></g>
+        </svg>
+        <div class="map-tooltip" data-tooltip hidden></div>
+      </div>
+
+      <!-- Legend -->
+      <div class="map-legend" data-legend>
+        <div class="legend-bar" data-legend-bar></div>
+        <div class="legend-ticks">
+          <span data-legend-min>—</span>
+          <span data-legend-mid>—</span>
+          <span data-legend-max>—</span>
+        </div>
+        <div class="legend-note muted small">
+          Continuous gradient. Endpoints clipped to the 2nd / 98th percentile so a handful of
+          extreme counties don't compress the rest of the scale.
+        </div>
+      </div>
+
+      <small class="source" data-source>Source: ACS 5-year 2024. County boundaries: U.S. Census via us-atlas.</small>
+    </figure>
+  </section>
+</Base>
+
+<script type="module">
+  // ─────────────────────────────────────────────────────────────
+  // National map — D3 choropleth over all 3,222 U.S. counties.
+  // Loads the same rankings.json the Rankings page does.
+  // ─────────────────────────────────────────────────────────────
+  import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
+  import * as topojson from 'https://cdn.jsdelivr.net/npm/topojson-client@3/+esm';
+
+  // ── DOM ─────────────────────────────────────────────────────
+  const els = {
+    loading:    document.querySelector('[data-loading]'),
+    error:      document.querySelector('[data-error]'),
+    shell:      document.querySelector('[data-shell]'),
+    metric:     document.querySelector('[data-metric]'),
+    rankLink:   document.querySelector('[data-rankings-link]'),
+    summary:    document.querySelector('[data-summary]'),
+    svg:        document.querySelector('.map-svg'),
+    gCounties:  document.querySelector('[data-counties]'),
+    gStates:    document.querySelector('[data-states-mesh]'),
+    gNation:    document.querySelector('[data-nation-outline]'),
+    tooltip:    document.querySelector('[data-tooltip]'),
+    legendBar:  document.querySelector('[data-legend-bar]'),
+    legendMin:  document.querySelector('[data-legend-min]'),
+    legendMid:  document.querySelector('[data-legend-mid]'),
+    legendMax:  document.querySelector('[data-legend-max]'),
+    source:     document.querySelector('[data-source]'),
+  };
+  els.loading.hidden = false;
+
+  // ── Constants — brand palette ───────────────────────────────
+  const css = getComputedStyle(document.documentElement);
+  const cssVar = name => css.getPropertyValue(name).trim();
+  const C = {
+    cream:   cssVar('--color-cream')   || '#f9f6e5',
+    navy:    cssVar('--color-navy')    || '#003057',
+    red:     cssVar('--color-red')     || '#e04f39',
+    teal:    cssVar('--color-teal')    || '#008c95',
+    sage:    cssVar('--color-sage')    || '#d6dbd4',
+    gold:    cssVar('--color-gold')    || '#b3a369',
+    white:   '#fff',
+  };
+  const RAMP = {
+    'good-high': [C.cream, C.navy],
+    'good-low':  [C.cream, C.red],
+    'neutral':   [C.cream, C.teal],
+  };
+  const NO_DATA = '#ececec';
+
+  // ── Per-metric direction classifier ─────────────────────────
+  // good-high = higher is better (income, attainment)
+  // good-low  = higher is worse (cost burden, vacancy, poverty)
+  // neutral   = magnitude only (counts, year built, demographic shares)
+  const GOOD_HIGH = new Set([
+    'hh_income_median', 'hh_income_mean', 'per_capita_income',
+    'income_median_owner', 'income_median_renter',
+    'income_median_under25', 'income_median_25_44',
+    'income_median_45_64', 'income_median_65_plus',
+    'earners_0_income', 'earners_1_income', 'earners_2_income',
+    'earners_3_plus_income', 'earners_nonfamily_income',
+    'homeownership_rate',
+    'bachelors_plus_rate',
+    'hud_ami_4p_100', 'hud_ami_4p_80', 'hud_ami_4p_120',
+    'population_total',
+  ]);
+  const GOOD_LOW = new Set([
+    'vacancy_rate', 'homeowner_vacancy_rate', 'rental_vacancy_rate',
+    'renter_cost_burden_rate', 'renter_severe_cost_burden_rate',
+    'owner_cost_burden_rate',
+    'poverty_rate',
+    'price_to_income_ratio', 'rent_to_income_ratio',
+    'aging_stock_share',
+    'renter_rate',
+  ]);
+  function directionFor(field) {
+    if (GOOD_HIGH.has(field)) return 'good-high';
+    if (GOOD_LOW.has(field))  return 'good-low';
+    return 'neutral';
+  }
+
+  // ── Boot — fetch rankings.json + us-atlas in parallel ──────
+  let DATA, TOPO;
+  try {
+    [DATA, TOPO] = await Promise.all([
+      fetch('/data/rankings.json').then(r => { if (!r.ok) throw new Error('rankings ' + r.status); return r.json(); }),
+      fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json').then(r => { if (!r.ok) throw new Error('atlas ' + r.status); return r.json(); }),
+    ]);
+  } catch (err) {
+    console.error(err);
+    els.loading.hidden = true;
+    els.error.hidden = false;
+    throw err;
+  }
+  els.loading.hidden = true;
+  els.shell.hidden = false;
+
+  // ── Index column lookups ────────────────────────────────────
+  const COL = {};
+  DATA.headers.forEach((h, i) => COL[h] = i);
+  const METRIC_BY_FIELD = {};
+  DATA.metrics.forEach(m => METRIC_BY_FIELD[m.field] = m);
+
+  // Row index by 5-digit FIPS so map paths can look up O(1).
+  const ROW_BY_FIPS = new Map();
+  for (const r of DATA.rows) ROW_BY_FIPS.set(r[COL.geoid], r);
+
+  // ── Formatters (mirror rankings page) ───────────────────────
+  const fmtMoney = v => (v == null || !isFinite(v)) ? '—' : '$' + Math.round(v).toLocaleString();
+  const fmtInt   = v => (v == null || !isFinite(v)) ? '—' : Math.round(v).toLocaleString();
+  const fmtPct   = v => (v == null || !isFinite(v)) ? '—' : v.toFixed(1) + '%';
+  const fmtRatio = v => (v == null || !isFinite(v)) ? '—' : v.toFixed(2);
+  const fmtYear  = v => (v == null || !isFinite(v)) ? '—' : String(Math.round(v));
+  const FMT = { money: fmtMoney, count: fmtInt, pct: fmtPct, ratio: fmtRatio, year: fmtYear };
+
+  // ── URL state ───────────────────────────────────────────────
+  function readState() {
+    const u = new URL(window.location.href);
+    return {
+      metric: u.searchParams.get('metric') || 'hh_income_median',
+    };
+  }
+  function writeState() {
+    const u = new URL(window.location.href);
+    u.searchParams.set('metric', state.metric);
+    history.replaceState({}, '', u);
+  }
+  const state = readState();
+  if (!METRIC_BY_FIELD[state.metric]) state.metric = 'hh_income_median';
+
+  // ── Build the metric picker (grouped optgroups) ─────────────
+  (function buildMetricPicker() {
+    const byGroup = new Map();
+    for (const m of DATA.metrics) {
+      if (!byGroup.has(m.group)) byGroup.set(m.group, []);
+      byGroup.get(m.group).push(m);
+    }
+    const frag = document.createDocumentFragment();
+    for (const [group, metrics] of byGroup) {
+      const og = document.createElement('optgroup');
+      og.label = group;
+      for (const m of metrics) {
+        const opt = document.createElement('option');
+        opt.value = m.field;
+        opt.textContent = m.label;
+        if (m.field === state.metric) opt.selected = true;
+        og.appendChild(opt);
+      }
+      frag.appendChild(og);
+    }
+    els.metric.appendChild(frag);
+  })();
+
+  // ── Render counties + state mesh ONCE; recolor on metric change.
+  // counties-albers-10m.json is pre-projected to a 975×610 viewBox,
+  // so we use d3.geoPath() with the default null projection (planar).
+  const path = d3.geoPath();
+  const counties = topojson.feature(TOPO, TOPO.objects.counties).features;
+  const statesMesh = topojson.mesh(TOPO, TOPO.objects.states, (a, b) => a !== b);
+  const nationOutline = topojson.feature(TOPO, TOPO.objects.nation);
+
+  // Counties — one <path> per county. id = 5-digit FIPS.
+  // We use the d3 selection to bind data, then attach pointer events.
+  const gCounties = d3.select(els.gCounties);
+  const countyPaths = gCounties
+    .selectAll('path.county')
+    .data(counties, d => d.id)
+    .join('path')
+      .attr('class', 'county')
+      .attr('d', path)
+      .attr('data-fips', d => d.id)
+      .attr('fill', NO_DATA)
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 0.25)
+      .style('cursor', 'pointer');
+
+  // State mesh — interior state borders, drawn on top of counties.
+  d3.select(els.gStates)
+    .selectAll('path.state-mesh')
+    .data([statesMesh])
+    .join('path')
+      .attr('class', 'state-mesh')
+      .attr('d', path)
+      .attr('fill', 'none')
+      .attr('stroke', '#000')
+      .attr('stroke-width', 0.6)
+      .attr('stroke-linejoin', 'round')
+      .attr('pointer-events', 'none');
+
+  // Nation outline — outer ring (includes AK/HI insets in the albers projection).
+  d3.select(els.gNation)
+    .selectAll('path.nation')
+    .data([nationOutline])
+    .join('path')
+      .attr('class', 'nation')
+      .attr('d', path)
+      .attr('fill', 'none')
+      .attr('stroke', C.navy)
+      .attr('stroke-width', 0.8)
+      .attr('pointer-events', 'none');
+
+  // ── Pointer events: hover tooltip + click navigate ──────────
+  const fmtForCurrentMetric = () => {
+    const m = METRIC_BY_FIELD[state.metric];
+    return FMT[m.format] || fmtInt;
+  };
+  countyPaths
+    .on('mousemove', (event, d) => {
+      const fips = d.id;
+      const row = ROW_BY_FIPS.get(fips);
+      const m = METRIC_BY_FIELD[state.metric];
+      let html;
+      if (!row) {
+        html = `<div class="tt-county">Unknown county (FIPS ${fips})</div>
+                <div class="tt-meta">No data — not in ACS county set (e.g., PR)</div>`;
+      } else {
+        const v = row[COL[state.metric]];
+        const f = fmtForCurrentMetric();
+        html = `<div class="tt-county">${row[COL.county_name]}</div>
+                <div class="tt-state">${row[COL.state_name]}</div>
+                <div class="tt-metric">${m.label}</div>
+                <div class="tt-value">${f(v)}</div>`;
+      }
+      els.tooltip.innerHTML = html;
+      els.tooltip.hidden = false;
+      positionTooltip(event);
+    })
+    .on('mouseleave', () => { els.tooltip.hidden = true; })
+    .on('click', (_event, d) => {
+      const row = ROW_BY_FIPS.get(d.id);
+      if (!row) return;
+      window.location.href = `/county/${row[COL.state_slug]}/${row[COL.slug]}/`;
+    });
+
+  function positionTooltip(event) {
+    const wrap = els.svg.parentElement.getBoundingClientRect();
+    const x = event.clientX - wrap.left;
+    const y = event.clientY - wrap.top;
+    // Flip the tooltip to the left of the cursor if it would overflow.
+    const tt = els.tooltip;
+    tt.style.left = '0px';
+    tt.style.top  = '0px';
+    const w = tt.offsetWidth;
+    const h = tt.offsetHeight;
+    let nx = x + 14;
+    let ny = y + 14;
+    if (nx + w > wrap.width)  nx = x - w - 14;
+    if (ny + h > wrap.height) ny = y - h - 14;
+    tt.style.left = `${Math.max(4, nx)}px`;
+    tt.style.top  = `${Math.max(4, ny)}px`;
+  }
+
+  // ── Render: recolor counties + redraw legend for the selected metric.
+  function render() {
+    const metric = METRIC_BY_FIELD[state.metric];
+    const dir = directionFor(state.metric);
+    const ramp = RAMP[dir];
+
+    // Gather values; ignore null/non-finite.
+    const idx = COL[state.metric];
+    const values = [];
+    for (const r of DATA.rows) {
+      const v = r[idx];
+      if (v != null && isFinite(v)) values.push(v);
+    }
+
+    // Percentile clip — d3.quantileSorted needs a sorted array. We sort once.
+    values.sort((a, b) => a - b);
+    const lo  = d3.quantileSorted(values, 0.02);
+    const hi  = d3.quantileSorted(values, 0.98);
+    const med = d3.quantileSorted(values, 0.50);
+    // Defensive: degenerate distribution (all equal) — fall back to min/max.
+    const domain = lo === hi
+      ? [values[0], values[values.length - 1]]
+      : [lo, hi];
+
+    const scale = d3.scaleLinear()
+      .domain(domain)
+      .range([0, 1])
+      .clamp(true);
+    const interp = d3.interpolateRgb(ramp[0], ramp[1]);
+    const colorFor = v => (v == null || !isFinite(v)) ? NO_DATA : interp(scale(v));
+
+    // Recolor every path.
+    countyPaths.attr('fill', d => {
+      const row = ROW_BY_FIPS.get(d.id);
+      if (!row) return NO_DATA;
+      return colorFor(row[COL[state.metric]]);
+    });
+
+    // Legend bar — paint a horizontal gradient with a CSS background.
+    els.legendBar.style.background = `linear-gradient(to right, ${ramp[0]} 0%, ${ramp[1]} 100%)`;
+    const f = FMT[metric.format] || fmtInt;
+    els.legendMin.textContent = f(domain[0]);
+    els.legendMid.textContent = f(med);
+    els.legendMax.textContent = f(domain[1]);
+
+    // Summary line + source.
+    const dirLabel = dir === 'good-high' ? 'higher is better (navy)' :
+                     dir === 'good-low'  ? 'higher is worse (red)'    :
+                     'magnitude only (teal)';
+    document.querySelector('[data-summary]').innerHTML =
+      `<strong>${values.length.toLocaleString()}</strong> counties colored by <strong>${metric.label}</strong> · ${dirLabel}`;
+    els.source.textContent =
+      `Source: ${metric.source}. County boundaries: U.S. Census via us-atlas. Hover for values, click any county to open its profile.`;
+
+    // Update the rankings cross-link to carry the same metric.
+    els.rankLink.href = `/rankings?metric=${encodeURIComponent(state.metric)}`;
+
+    writeState();
+  }
+
+  // ── Wire events ─────────────────────────────────────────────
+  els.metric.addEventListener('change', () => {
+    state.metric = els.metric.value;
+    render();
+  });
+
+  render();
+</script>
+
+<style is:global>
+  .map-hero {
+    background: var(--bg-section);
+    padding: var(--space-7) 0 var(--space-6);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .map-hero h1 { margin: var(--space-2) 0 var(--space-3); }
+  .map-hero .muted { max-width: 64ch; }
+
+  .map-error { padding: var(--space-7) 0; color: var(--color-red); }
+  .map-shell { padding-top: var(--space-6); padding-bottom: var(--space-9); }
+
+  .map-controls {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-4);
+    align-items: end;
+  }
+  @media (max-width: 640px) {
+    .map-controls { grid-template-columns: 1fr; }
+  }
+  .ctrl { display: flex; flex-direction: column; gap: 6px; }
+  .ctrl label {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+  .ctrl select {
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    padding: 8px 10px;
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    background: var(--bg-page);
+    color: var(--text-body);
+  }
+  .ctrl select:focus { outline: 2px solid var(--color-gold); outline-offset: 1px; }
+  .ctrl--actions { justify-content: end; }
+  .btn {
+    font-family: inherit; font-size: var(--fs-sm); font-weight: var(--fw-medium);
+    padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid var(--color-navy);
+    line-height: 1.2;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn--ghost { background: var(--bg-page); color: var(--color-navy); }
+  .btn--ghost:hover { background: var(--bg-section); }
+
+  .map-summary {
+    margin: var(--space-4) 0 var(--space-4);
+    font-size: var(--fs-sm);
+  }
+  .map-summary strong { color: var(--text-primary); font-weight: var(--fw-semibold); }
+
+  /* Map figure ───────────────────────────────────────────────── */
+  .map-card { padding: var(--space-4); }
+  .map-wrap {
+    position: relative;
+    width: 100%;
+  }
+  .map-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: var(--bg-page);
+  }
+  .map-svg .county {
+    transition: stroke-width 80ms ease;
+  }
+  .map-svg .county:hover {
+    stroke: #000;
+    stroke-width: 1.2;
+  }
+
+  .map-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--color-white);
+    border: 1px solid var(--color-navy);
+    border-left: 4px solid var(--color-navy);
+    padding: 8px 10px;
+    font-size: var(--fs-xs);
+    line-height: 1.4;
+    box-shadow: var(--shadow-card);
+    border-radius: var(--radius-sm);
+    min-width: 160px;
+    max-width: 260px;
+    z-index: 5;
+  }
+  .map-tooltip .tt-county {
+    font-weight: var(--fw-semibold);
+    color: var(--color-navy);
+    font-size: var(--fs-sm);
+  }
+  .map-tooltip .tt-state {
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .map-tooltip .tt-metric {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 10px;
+    margin-top: 4px;
+  }
+  .map-tooltip .tt-value {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-md);
+    font-weight: var(--fw-semibold);
+    color: var(--text-primary);
+  }
+  .map-tooltip .tt-meta {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  /* Legend ───────────────────────────────────────────────────── */
+  .map-legend {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px dotted var(--border-soft);
+  }
+  .legend-bar {
+    width: 100%;
+    height: 12px;
+    border: 1px solid var(--border-muted);
+    border-radius: 2px;
+  }
+  .legend-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: var(--fs-xs);
+    color: var(--text-body);
+    font-variant-numeric: tabular-nums;
+  }
+  .legend-note {
+    margin-top: 6px;
+    font-style: italic;
+  }
+
+  .map-card .source {
+    display: block;
+    margin-top: var(--space-3);
+    padding-top: var(--space-2);
+    border-top: 1px dotted var(--border-soft);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    font-style: italic;
+  }
+</style>
