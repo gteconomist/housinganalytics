@@ -102,29 +102,60 @@ async function fetchBytes(urls, label) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Mini ZIP walker (same as fetch-qcew). Calls onEntry(name, data).
+// ZIP walker using the central directory (CD).
+//
+// The OEWS zips use streaming-mode entries (general-purpose-bit-flag 0x0008)
+// where local file headers report compressed_size = 0 — the real size lives
+// in a data descriptor AFTER the compressed payload. So we MUST read the CD
+// to get reliable sizes. The CD lives at the end of the file; we find it by
+// scanning backwards for the End-of-Central-Directory (EOCD) signature.
 // ─────────────────────────────────────────────────────────────────
 function walkZip(buf, onEntry) {
-  let i = 0, entries = 0;
-  while (i < buf.length - 30) {
-    if (buf[i] !== 0x50 || buf[i+1] !== 0x4b || buf[i+2] !== 0x03 || buf[i+3] !== 0x04) break;
-    const compressionMethod = buf.readUInt16LE(i + 8);
-    const compressed   = buf.readUInt32LE(i + 18);
-    const nameLen      = buf.readUInt16LE(i + 26);
-    const extraLen     = buf.readUInt16LE(i + 28);
-    const name         = buf.slice(i + 30, i + 30 + nameLen).toString('utf8');
-    const dataStart    = i + 30 + nameLen + extraLen;
-    if (!name.endsWith('/')) {
-      const compData = buf.slice(dataStart, dataStart + compressed);
-      let data;
-      if (compressionMethod === 0)      data = compData;
-      else if (compressionMethod === 8) data = inflateRawSync(compData);
-      else { i = dataStart + compressed; continue; }
-      onEntry(name, data);
+  // 1) Locate EOCD: signature 0x06054b50 ("PK\x05\x06"), scan backwards.
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf[i] === 0x50 && buf[i+1] === 0x4b && buf[i+2] === 0x05 && buf[i+3] === 0x06) {
+      eocd = i;
+      break;
     }
-    i = dataStart + compressed;
-    entries++;
-    if (entries > 100_000) break;
+  }
+  if (eocd < 0) throw new Error('ZIP end-of-central-directory record not found.');
+
+  const cdSize   = buf.readUInt32LE(eocd + 12);
+  const cdOffset = buf.readUInt32LE(eocd + 16);
+
+  // 2) Iterate central directory entries (signature 0x02014b50, "PK\x01\x02").
+  let p = cdOffset;
+  const end = cdOffset + cdSize;
+  while (p < end - 46) {
+    if (buf[p] !== 0x50 || buf[p+1] !== 0x4b || buf[p+2] !== 0x01 || buf[p+3] !== 0x02) break;
+    const compressionMethod = buf.readUInt16LE(p + 10);
+    const compressed        = buf.readUInt32LE(p + 20);
+    const nameLen           = buf.readUInt16LE(p + 28);
+    const extraLen          = buf.readUInt16LE(p + 30);
+    const commentLen        = buf.readUInt16LE(p + 32);
+    const localHeaderOffset = buf.readUInt32LE(p + 42);
+    const name              = buf.slice(p + 46, p + 46 + nameLen).toString('utf8');
+
+    // 3) Read the local file header at that offset to find the data start.
+    //    Local header lengths can differ from CD's (extra-field sizes vary).
+    if (localHeaderOffset + 30 < buf.length &&
+        buf[localHeaderOffset] === 0x50 && buf[localHeaderOffset+1] === 0x4b &&
+        buf[localHeaderOffset+2] === 0x03 && buf[localHeaderOffset+3] === 0x04) {
+      const localNameLen  = buf.readUInt16LE(localHeaderOffset + 26);
+      const localExtraLen = buf.readUInt16LE(localHeaderOffset + 28);
+      const dataStart     = localHeaderOffset + 30 + localNameLen + localExtraLen;
+
+      if (!name.endsWith('/') && compressed > 0) {
+        const compData = buf.slice(dataStart, dataStart + compressed);
+        let data;
+        if (compressionMethod === 0)      data = compData;
+        else if (compressionMethod === 8) data = inflateRawSync(compData);
+        else { p += 46 + nameLen + extraLen + commentLen; continue; }
+        onEntry(name, data);
+      }
+    }
+    p += 46 + nameLen + extraLen + commentLen;
   }
 }
 
