@@ -742,15 +742,17 @@ const occRows = (occupations?.rows ?? [])
           <div class={`stat-card ${county.seasonal_stock_share != null && county.seasonal_stock_share >= 10 ? 'stat-card--flag' : ''}`}>
             <p class="stat-card__label">Seasonal / recreational share of all housing</p>
             <p class="stat-card__value">{fmtPct(county.seasonal_stock_share)}</p>
+            <p class="stat-card__sub">{fmtInt(county.vacant_seasonal)} units of {fmtInt(county.units_total)} total</p>
             <p class="stat-card__hint">
               {county.seasonal_stock_share != null && county.seasonal_stock_share >= 10
                 ? <>⚑ Above the 10% threshold — meaningful pressure on year-round residents from second-home / short-term-rental demand.</>
-                : <>Share of {fmtInt(county.units_total)} total housing units held for seasonal or recreational use.</>}
+                : <>Housing units held for seasonal or recreational use.</>}
             </p>
           </div>
           <div class={`stat-card ${county.distress_stock_share != null && county.distress_stock_share >= 5 ? 'stat-card--flag' : ''}`}>
             <p class="stat-card__label">"Other vacant" share of all housing</p>
             <p class="stat-card__value">{fmtPct(county.distress_stock_share)}</p>
+            <p class="stat-card__sub">{fmtInt(county.vacant_other)} units of {fmtInt(county.units_total)} total</p>
             <p class="stat-card__hint">
               {county.distress_stock_share != null && county.distress_stock_share >= 5
                 ? <>⚑ Above the 5% threshold — possible indicator of disinvestment, abandonment, or condemned stock.</>
@@ -1668,8 +1670,9 @@ const occRows = (occupations?.rows ?? [])
     background: #fdf3f0;
   }
   .stat-card__label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 var(--space-2); }
-  .stat-card__value { font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--color-navy); margin: 0 0 var(--space-2); }
+  .stat-card__value { font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--color-navy); margin: 0 0 var(--space-1); }
   .stat-card--flag .stat-card__value { color: var(--color-orange-red, #e04f39); }
+  .stat-card__sub   { font-size: var(--fs-sm); color: var(--text-muted); margin: 0 0 var(--space-2); font-variant-numeric: tabular-nums; }
   .stat-card__hint  { font-size: var(--fs-sm); color: var(--text-body); margin: 0; }
 
   .card {
