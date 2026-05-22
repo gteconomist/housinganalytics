@@ -940,10 +940,13 @@ const occRows = (occupations?.rows ?? [])
         <p class="eyebrow">Section 5</p>
         <h2>Wages by Occupation</h2>
         <p class="muted">
-          Selected essential-worker occupations — jobs, the 10-year change,
-          wages, and the housing each typical earner can afford. Wages are
-          MSA-level (or nonmetropolitan-area-level for rural counties);
-          counties inside the same area share the same wage profile.
+          Selected essential-worker occupations for the MSA or nonmetropolitan
+          area containing this county — jobs, the 10-year change, wages, and
+          the housing each typical earner can afford. <strong>Both jobs counts
+          and wages are reported at the MSA / nonmetropolitan-area level</strong>
+          (BLS does not publish OEWS at the county level), so every county
+          inside the same area shows the same numbers. For county-accurate
+          employment totals, see Section 4 above.
         </p>
       </header>
 
@@ -1003,8 +1006,10 @@ const occRows = (occupations?.rows ?? [])
           (2010 SOC → 2018 SOC) — the change estimate is best-effort.
         </figcaption>
         <small class="source">
-          Source: {occupations.vintage_label ?? 'BLS OEWS'}. Wages reflect the
-          MSA or nonmetropolitan area containing this county.
+          Source: {occupations.vintage_label ?? 'BLS OEWS'}. Jobs counts and
+          wages reflect the MSA or nonmetropolitan area containing this
+          county, not the county alone — OEWS is not published at the county
+          level.
         </small>
       </figure>
     </section>
