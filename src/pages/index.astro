@@ -21,11 +21,17 @@ import { fmtInt } from '../lib/format.js';
         <input
           type="search"
           name="q"
-          placeholder="Search a county — e.g. Muscogee, Upson, Cook…"
+          placeholder="Search a county or city — e.g. Muscogee, Columbus, Atlanta…"
           autocomplete="off"
-          aria-label="Search counties" />
+          aria-label="Search counties and places" />
         <ul class="search__results" hidden></ul>
       </form>
+      {manifest.place_count > 0 && (
+        <p class="search__hint muted">
+          {fmtInt(manifest.place_count)} cities and towns (population ≥ 10,000) now searchable
+          alongside counties. Place rows are tagged <span class="place-tag">Place</span>.
+        </p>
+      )}
     </div>
   </section>
 
@@ -73,37 +79,58 @@ import { fmtInt } from '../lib/format.js';
     </ul>
 
     <p class="coming-soon muted">
-      <strong>Coming next:</strong> a national map view, a place-name lookup (cities and CDPs
-      resolved to their county), BLS QCEW wage and employment overlays, and one-click Word/PDF
-      export of any county profile.
+      <strong>Coming next:</strong> a national map view, place rankings and compare alongside
+      the county tools, and one-click Word/PDF export of any profile.
     </p>
   </section>
 </Base>
 
-<script type="module" define:vars={{ counties: manifest.counties }}>
-  // Lightweight typeahead.
+<script type="module" define:vars={{ counties: manifest.counties, places: manifest.places ?? [] }}>
+  // Lightweight typeahead — unified across counties and places.
+  // Both lists already share the shape { name, state, state_slug, slug },
+  // we just tag each with its geography type so the URL goes to the right
+  // template and the result row shows the type chip.
   const form  = document.querySelector('[data-county-search]');
   const input = form.querySelector('input');
   const out   = form.querySelector('.search__results');
 
+  const countyRows = counties.map(c => ({ ...c, kind: 'county', href: `/county/${c.state_slug}/${c.slug}` }));
+  const placeRows  = places.map(p   => ({ ...p, kind: 'place',  href: `/place/${p.state_slug}/${p.slug}` }));
+  const all = [...countyRows, ...placeRows];
+
   function render(matches) {
     if (!matches.length) { out.hidden = true; out.innerHTML = ''; return; }
     out.hidden = false;
-    out.innerHTML = matches.slice(0, 8).map(c => `
-      <li><a href="/county/${c.state_slug}/${c.slug}">
-        <span>${c.name}</span>
-        <span class="muted">${c.state}</span>
+    out.innerHTML = matches.slice(0, 10).map(r => `
+      <li><a href="${r.href}">
+        <span>${r.name}<span class="kind-chip kind-chip--${r.kind}">${r.kind === 'place' ? 'Place' : 'County'}</span></span>
+        <span class="muted">${r.state}</span>
       </a></li>
     `).join('');
+  }
+
+  // Rank: exact prefix match first, then substring, with counties slightly
+  // preferred when the user types just a state name (places drown counties
+  // out otherwise — there are ~2,000 places vs. 3,222 counties).
+  function score(row, q) {
+    const name = row.name.toLowerCase();
+    const state = row.state.toLowerCase();
+    if (name.startsWith(q)) return 0;
+    if (name.includes(q))   return 1;
+    if (state.startsWith(q)) return row.kind === 'county' ? 2 : 3;
+    if (state.includes(q))   return row.kind === 'county' ? 4 : 5;
+    return 9;
   }
 
   input.addEventListener('input', e => {
     const q = e.target.value.trim().toLowerCase();
     if (q.length < 2) return render([]);
-    render(counties.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.state.toLowerCase().includes(q)
-    ));
+    const matches = all
+      .map(r => ({ r, s: score(r, q) }))
+      .filter(x => x.s < 9)
+      .sort((a, b) => a.s - b.s || a.r.name.localeCompare(b.r.name))
+      .map(x => x.r);
+    render(matches);
   });
 
   input.addEventListener('blur', () => setTimeout(() => render([]), 200));
@@ -159,6 +186,26 @@ import { fmtInt } from '../lib/format.js';
     text-decoration: none; color: var(--text-body);
   }
   .search__results a:hover { background: var(--bg-section); }
+
+  .search__hint {
+    margin: var(--space-3) 0 0;
+    font-size: var(--fs-xs);
+    max-width: 560px;
+  }
+  .place-tag, .kind-chip {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 0 6px;
+    font-size: 0.65rem;
+    font-weight: var(--fw-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  .place-tag        { background: var(--color-gold); color: var(--color-navy); }
+  .kind-chip--place { background: var(--color-gold); color: var(--color-navy); }
+  .kind-chip--county{ background: var(--color-navy); color: var(--text-on-dark); }
 
   .container > h2 { margin: var(--space-7) 0 var(--space-3); }
   .section-lede { max-width: 70ch; margin: 0 0 var(--space-6); font-size: var(--fs-md); }

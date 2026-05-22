@@ -7,12 +7,14 @@
   "scripts": {
     "hud": "node scripts/fetch-hud-ami.mjs",
     "gazetteer": "node scripts/fetch-gazetteer.mjs",
+    "gazetteer-places": "node scripts/fetch-gazetteer-places.mjs",
     "qcew": "node scripts/fetch-qcew.mjs",
     "oews": "node --max-old-space-size=4096 scripts/fetch-oews.mjs",
+    "places": "node scripts/fetch-acs-places.mjs",
     "data": "node scripts/build-data.mjs",
     "rankings": "node scripts/build-rankings.mjs",
-    "dev": "npm run hud && npm run gazetteer && npm run qcew && npm run oews && npm run data && npm run rankings && astro dev",
-    "build": "npm run hud && npm run gazetteer && npm run qcew && npm run oews && npm run data && npm run rankings && astro build",
+    "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run places && npm run data && npm run rankings && astro dev",
+    "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run places && npm run data && npm run rankings && astro build",
     "preview": "astro preview",
     "astro": "astro"
   },

@@ -28,6 +28,29 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ACS_TO_FIELD, MHC_COMPONENTS } from '../src/data/variable-map.js';
 
+// Optional places data (sub-county geographies — cities, towns, CDPs).
+// Written by fetch-acs-places.mjs. Loaded BEFORE the wipe so the raw API
+// payload survives, then processed alongside counties below.
+async function loadPlaces() {
+  const f = join(__dirname, '..', 'src', 'data', 'generated', 'places.json');
+  try {
+    return JSON.parse(await readFile(f, 'utf8'));
+  } catch {
+    return { places: {}, place_count: 0 };
+  }
+}
+
+// Optional Gazetteer places data (land area for population density on
+// place profile pages).
+async function loadGazetteerPlaces() {
+  const f = join(__dirname, '..', 'src', 'data', 'generated', 'gazetteer-places.json');
+  try {
+    return JSON.parse(await readFile(f, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
 // Optional HUD AMI data, written by fetch-hud-ami.mjs. If the file is missing
 // or empty, county pages just won't show the HUD panels.
 async function loadHudAmi() {
@@ -415,24 +438,31 @@ counties.forEach(c => {
 
 // Load external data BEFORE we wipe the output directory — these JSON files
 // live in src/data/generated/ alongside what we're about to overwrite.
-const hudAmi    = await loadHudAmi();
-const gazetteer = await loadGazetteer();
-const qcew      = await loadQcew();
-const oews      = await loadOews();
+const hudAmi          = await loadHudAmi();
+const gazetteer       = await loadGazetteer();
+const qcew            = await loadQcew();
+const oews            = await loadOews();
+const placesRaw       = await loadPlaces();
+const gazetteerPlaces = await loadGazetteerPlaces();
 console.log(`HUD AMI loaded for ${Object.keys(hudAmi).length} counties.`);
 console.log(`Gazetteer loaded for ${Object.keys(gazetteer).length} counties.`);
 console.log(`QCEW loaded for ${Object.keys(qcew.counties ?? {}).length} counties ` +
             `(${qcew.vintage_label ?? 'no vintage'}).`);
 console.log(`OEWS loaded for ${Object.keys(oews.counties ?? {}).length} counties ` +
             `(${oews.vintage_label ?? 'no vintage'}).`);
+console.log(`Places loaded: ${Object.keys(placesRaw.places ?? {}).length} ` +
+            `(${placesRaw.vintage ?? 'no vintage'}).`);
+console.log(`Gazetteer places loaded for ${Object.keys(gazetteerPlaces).length} places.`);
 
 if (existsSync(OUT_DIR)) await rm(OUT_DIR, { recursive: true, force: true });
 await mkdir(OUT_DIR, { recursive: true });
 await mkdir(join(OUT_DIR, 'counties'), { recursive: true });
 await mkdir(join(OUT_DIR, 'states'),   { recursive: true });
+await mkdir(join(OUT_DIR, 'places'),   { recursive: true });
 // Public mirror (consumed by the client-side Compare page).
 if (existsSync(PUBLIC_DIR)) await rm(PUBLIC_DIR, { recursive: true, force: true });
 await mkdir(join(PUBLIC_DIR, 'counties'), { recursive: true });
+await mkdir(join(PUBLIC_DIR, 'places'),   { recursive: true });
 
 // Per-county files
 for (const c of counties) {
@@ -474,6 +504,106 @@ for (const c of counties) {
   await writeFile(join(PUBLIC_DIR, 'counties', `${c.geoid}.json`), json);
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Places (sub-county geographies — cities, towns, CDPs)
+// ─────────────────────────────────────────────────────────────────
+// Census place names look like "Atlanta city, Georgia" or "North Druid Hills
+// CDP, Georgia". Strip the LSAD suffix for the slug only; keep the original
+// name visible on the page.
+const LSAD_SUFFIX_RE = / (city|town|village|borough|municipality|CDP|township|comunidad|zona urbana)$/i;
+
+function placeSlug(placeName) {
+  return slug(placeName.replace(LSAD_SUFFIX_RE, ''));
+}
+
+const places = [];
+for (const [geoid, raw] of Object.entries(placesRaw.places ?? {})) {
+  // Parse "Atlanta city, Georgia" → { place_name: 'Atlanta city', state_name: 'Georgia' }
+  const [place_name, state_name] = String(raw.name).split(',').map(s => s.trim());
+  if (!place_name || !state_name) continue;
+
+  // Translate raw ACS codes → field names (same registry counties use).
+  /** @type {Record<string, number|null>} */
+  const data = {};
+  for (const [code, fieldName] of Object.entries(ACS_TO_FIELD)) {
+    if (code in (raw.vars ?? {})) data[fieldName] = raw.vars[code];
+  }
+  // Derived MHC buckets — sum of raw component codes the API returned.
+  for (const [outField, codes] of Object.entries(MHC_COMPONENTS)) {
+    let sum = 0, hasAny = false;
+    for (const code of codes) {
+      const v = raw.vars?.[code];
+      if (v != null) { sum += v; hasAny = true; }
+    }
+    data[outField] = hasAny ? sum : null;
+  }
+
+  const place = {
+    geoid,                             // 7-digit (state + place FIPS)
+    name: raw.name,
+    place_name,
+    state_name,
+    state_fips: raw.state_fips,
+    parent_county_fips: raw.parent_county_fips ?? null,
+    acs_year: raw.acs_year ?? null,
+    geography_kind: 'place',
+    ...data,
+  };
+  addDerived(place);
+  place.slug = placeSlug(place_name);
+  place.state_slug = slug(state_name);
+  places.push(place);
+}
+
+// Detect intra-state slug collisions and disambiguate with the 5-digit place
+// FIPS suffix. Rare (<1% of places) but cheap insurance.
+{
+  const byKey = new Map();
+  for (const p of places) {
+    const key = `${p.state_slug}/${p.slug}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(p);
+  }
+  for (const [, group] of byKey) {
+    if (group.length > 1) {
+      for (const p of group) p.slug = `${p.slug}-${p.geoid.slice(2)}`;
+    }
+  }
+}
+
+// Per-place files. Inherit HUD AMI from parent county (HUD publishes income
+// limits at county level; places within a county share the same MFI). Hide
+// Sections 4 & 5 entirely on place pages — QCEW industries and OEWS wages
+// aren't published at place geography and inheriting them would mislead.
+let placesWithHud = 0, placesWithGaz = 0;
+for (const p of places) {
+  const stateAgg = stateAggs[p.state_name];
+  p._context = {
+    state: stateAgg ? lightContext(stateAgg) : null,
+    national: lightContext(nationalAgg),
+  };
+  p.hud_ami = p.parent_county_fips ? (hudAmi[p.parent_county_fips] ?? null) : null;
+  if (p.hud_ami) placesWithHud++;
+  const gaz = gazetteerPlaces[p.geoid];
+  if (gaz?.land_area_sqmi && p.population_total != null) {
+    p.land_area_sqmi = gaz.land_area_sqmi;
+    p.population_density = p.population_total / gaz.land_area_sqmi;
+    placesWithGaz++;
+  } else {
+    p.land_area_sqmi = null;
+    p.population_density = null;
+  }
+  // Sections 4 & 5 explicitly null — the place template should not render them.
+  p.industries = null;
+  p.occupations = null;
+
+  const json = JSON.stringify(p, null, 2);
+  await writeFile(join(OUT_DIR,    'places', `${p.geoid}.json`), json);
+  await writeFile(join(PUBLIC_DIR, 'places', `${p.geoid}.json`), json);
+}
+console.log(`✓ Wrote ${places.length} places. HUD AMI inherited for ${placesWithHud}, ` +
+            `land area attached for ${placesWithGaz}.`);
+
 function lightContext(a) {
   return {
     name: a.name,
@@ -510,6 +640,9 @@ const manifest = {
   source_file: 'Full Housing Data Table.xlsx',
   county_count: counties.length,
   state_count: Object.keys(stateAggs).length,
+  place_count: places.length,
+  places_vintage: placesRaw.vintage ?? null,
+  places_min_population: placesRaw.min_population ?? null,
   states: Object.values(stateAggs).map(s => ({
     name: s.name,
     slug: slug(s.name),
@@ -528,9 +661,21 @@ const manifest = {
     value_median: c.value_median,
     homeownership_rate: c.homeownership_rate,
   })).sort((a, b) => a.state.localeCompare(b.state) || a.name.localeCompare(b.name)),
+  places: places.map(p => ({
+    geoid: p.geoid,
+    name: p.place_name,
+    state: p.state_name,
+    state_slug: p.state_slug,
+    slug: p.slug,
+    parent_county_fips: p.parent_county_fips,
+    population_total: p.population_total,
+    hh_income_median: p.hh_income_median,
+    value_median: p.value_median,
+    homeownership_rate: p.homeownership_rate,
+  })).sort((a, b) => a.state.localeCompare(b.state) || a.name.localeCompare(b.name)),
 };
 await writeFile(join(OUT_DIR,    'manifest.json'), JSON.stringify(manifest, null, 2));
 await writeFile(join(PUBLIC_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
-console.log(`\n✓ Wrote ${counties.length} counties, ${Object.keys(stateAggs).length} states, 1 national to ${OUT_DIR}`);
+console.log(`\n✓ Wrote ${counties.length} counties, ${places.length} places, ${Object.keys(stateAggs).length} states, 1 national to ${OUT_DIR}`);
 console.log(`✓ Mirrored to ${PUBLIC_DIR} for client-side fetch.\n`);

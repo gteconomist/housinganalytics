@@ -31,6 +31,20 @@ npm run build   # builds data, produces production site in ./dist
 
 The `npm run data` step reads the Excel spreadsheet and writes per-county JSON files to `src/data/generated/` (gitignored). Astro consumes these at build time.
 
+### Census API key (for place-level lookups)
+
+The `npm run places` step pulls sub-county data (cities, towns, CDPs) from the Census Data API. Register a free key at https://api.census.gov/data/key_signup.html and add it to a `.env` file at the repo root:
+
+```bash
+CENSUS_API_KEY=your_40_char_hex_key_here
+```
+
+Other env vars the script honors:
+
+- `CENSUS_STATE` — 2-digit state FIPS to fetch (default `13` for Georgia pilot, or `all` for national)
+- `CENSUS_YEAR` — ACS5 vintage year (default `2024`; falls back to 2023 / 2022 if unavailable)
+- `PLACE_MIN_POP` — population threshold; places below this are skipped (default `10000`)
+
 ## Project structure
 
 ```

@@ -34,6 +34,16 @@ jobs:
           # GitHub runners have 7 GB RAM. Default Node heap is too small for
           # the astro build over 3,222 county pages with QCEW + OEWS payloads.
           NODE_OPTIONS: --max-old-space-size=6144
+          # Census API key for the place-level fetch step (fetch-acs-places.mjs).
+          # Configure as a repository secret at:
+          #   github.com/gteconomist/housinganalytics/settings/secrets/actions
+          # If the secret is missing the places step still runs but rate-limits
+          # may kick in at higher state counts.
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+          # 2-digit state FIPS, or 'all'. Default '13' = Georgia pilot.
+          CENSUS_STATE: ${{ vars.CENSUS_STATE || '13' }}
+          # Population threshold for place inclusion (default 10000).
+          PLACE_MIN_POP: ${{ vars.PLACE_MIN_POP || '10000' }}
         run: npm run build
 
       - name: Upload artifact

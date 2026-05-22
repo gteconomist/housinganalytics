@@ -1,0 +1,1780 @@
+---
+import Base from '../../../layouts/Base.astro';
+import manifest from '../../../data/generated/manifest.json';
+import { fmtMoney, fmtInt, fmtPct, fmtRatio, affordableHomePrice } from '../../../lib/format.js';
+
+// Generate one static page per place at build time.
+//
+// IMPORTANT: This template is a near-clone of the county profile. Place data
+// has the same shape as county data (same field names, same derived metrics)
+// because build-data.mjs normalizes both through the same code path. To keep
+// the template diff trivial we alias `place` as `county` below — every chart,
+// table, and KPI tile then renders unchanged.
+//
+// Differences vs. the county template:
+//   • Hero shows place_name and state_name
+//   • HUD AMI is inherited from the parent county (build-data sets this)
+//   • Sections 4 (QCEW industries) and 5 (OEWS wages) auto-hide because the
+//     build sets place.industries = null and place.occupations = null
+export async function getStaticPaths() {
+  const m = (await import('../../../data/generated/manifest.json')).default;
+  return (m.places ?? []).map(p => ({
+    params: { state: p.state_slug, slug: p.slug },
+    props:  { geoid: p.geoid },
+  }));
+}
+
+const { geoid } = Astro.props;
+const place = (await import(`../../../data/generated/places/${geoid}.json`)).default;
+// Alias so the (county-shaped) template code below keeps working unchanged.
+const county = place;
+const state    = county._context.state;
+const national = county._context.national;
+
+// ──────────────────────────────────────────────────────────────────
+// Pre-shape data for charts (so the client-side script just receives plain
+// JSON in <script type="application/json"> tags and stays small).
+// ──────────────────────────────────────────────────────────────────
+function pct(part, whole) { return (whole && part != null) ? (part / whole) * 100 : 0; }
+
+const tot_units    = county.units_total ?? 0;
+const tot_occupied = county.tenure_total_occupied ?? 0;
+const tot_renter   = county.tenure_renter_occupied ?? 0;
+const tot_owner    = county.tenure_owner_occupied ?? 0;
+const tot_pop      = county.population_total ?? 0;
+
+const chartData = {
+  // 1. Racial composition (county vs state)
+  race: {
+    labels: ['White', 'Black', 'Asian', 'Two or more', 'Other / NHPI / AIAN'],
+    county: [
+      pct(county.race_white,    tot_pop),
+      pct(county.race_black,    tot_pop),
+      pct(county.race_asian,    tot_pop),
+      pct(county.race_two_plus, tot_pop),
+      pct((county.race_other ?? 0) + (county.race_aian ?? 0) + (county.race_nhpi ?? 0), tot_pop),
+    ],
+    // For state context, build the same shares from the state agg fields:
+    state: [],
+  },
+
+  // 2. Tenure
+  tenure: {
+    labels: ['Owner-occupied', 'Renter-occupied'],
+    values: [
+      pct(county.tenure_owner_occupied,  tot_occupied),
+      pct(county.tenure_renter_occupied, tot_occupied),
+    ],
+    state: [
+      state.homeownership_rate ?? 0,
+      state.renter_rate ?? 0,
+    ],
+  },
+
+  // 3. Structure type
+  structure: {
+    labels: ['SFD', 'SFA', '2 units', '3–4', '5–9', '10–19', '20–49', '50+', 'Mobile', 'Other'],
+    values: [
+      pct(county.structure_1_detached, tot_units),
+      pct(county.structure_1_attached, tot_units),
+      pct(county.structure_2,          tot_units),
+      pct(county.structure_3_4,        tot_units),
+      pct(county.structure_5_9,        tot_units),
+      pct(county.structure_10_19,      tot_units),
+      pct(county.structure_20_49,      tot_units),
+      pct(county.structure_50_plus,    tot_units),
+      pct(county.structure_mobile,     tot_units),
+      pct(county.structure_other,      tot_units),
+    ],
+  },
+
+  // 4. Year built
+  yearBuilt: {
+    labels: ['Pre-1940', '1940–59', '1960–79', '1980–99', '2000–09', '2010–19', '2020+'],
+    values: [
+      county.year_built_1939_earlier,
+      county.year_built_1940_59,
+      county.year_built_1960_79,
+      county.year_built_1980_99,
+      county.year_built_2000_09,
+      county.year_built_2010_19,
+      county.year_built_2020_plus,
+    ],
+  },
+
+  // 5. Bedrooms vs household size (the "housing size mismatch")
+  bedrooms: {
+    labels: ['Studio', '1 BR', '2 BR', '3 BR', '4 BR', '5+ BR'],
+    units:  [county.br_0, county.br_1, county.br_2, county.br_3, county.br_4, county.br_5_plus],
+  },
+  hhSize: {
+    labels: ['1 person', '2 person', '3 person', '4+ person'],
+    values: [county.hh_size_1, county.hh_size_2, county.hh_size_3, county.hh_size_4_plus],
+  },
+
+  // 6. Home value distribution
+  homeValue: {
+    labels: ['<$50K', '$50–99K', '$100–150K', '$150–200K', '$200–300K', '$300–500K', '$500K–1M', '$1M+'],
+    values: [
+      county.value_lt_50k, county.value_50_99k, county.value_100_150k, county.value_150_200k,
+      county.value_200_300k, county.value_300_500k, county.value_500_1m, county.value_1m_plus,
+    ],
+  },
+
+  // 7. Median rent by bedroom
+  rentByBR: {
+    labels: ['Studio', '1 BR', '2 BR', '3 BR', '4 BR', '5+ BR'],
+    county: [county.rent_median_0br, county.rent_median_1br, county.rent_median_2br,
+             county.rent_median_3br, county.rent_median_4br, county.rent_median_5br],
+  },
+
+  // 8. Renter cost burden
+  renterBurden: {
+    labels: ['<10%', '10–14%', '15–19%', '20–24%', '25–29%', '30–34%', '35–39%', '40–49%', '50%+'],
+    values: [
+      county.rent_burden_lt_10, county.rent_burden_10_14, county.rent_burden_15_19,
+      county.rent_burden_20_24, county.rent_burden_25_29, county.rent_burden_30_34,
+      county.rent_burden_35_39, county.rent_burden_40_49, county.rent_burden_50_plus,
+    ],
+  },
+
+  // 9. Owner cost burden (B25106: by income band, 30%+ buckets) — quick view
+  ownerBurden: {
+    labels: ['<$20K', '$20–35K', '$35–50K', '$50–75K', '$75K+'],
+    values: [
+      county.cb_owner_30_plus_lt20k,   county.cb_owner_30_plus_20_35k,
+      county.cb_owner_30_plus_35_50k, county.cb_owner_30_plus_50_75k,
+      county.cb_owner_30_plus_75k_plus,
+    ],
+  },
+
+  // 10. Tenure × age
+  tenureAge: {
+    labels: ['<35', '35–44', '45–54', '55–64', '65–74', '75–84', '85+'],
+    owners: [
+      county.owner_age_under35, county.owner_age_35_44, county.owner_age_45_54,
+      county.owner_age_55_64, county.owner_age_65_74, county.owner_age_75_84, county.owner_age_85_plus,
+    ],
+    renters: [
+      county.renter_age_under35, county.renter_age_35_44, county.renter_age_45_54,
+      county.renter_age_55_64, county.renter_age_65_74, county.renter_age_75_84, county.renter_age_85_plus,
+    ],
+  },
+
+  // 11. Owner vs Renter income distributions
+  incomeByTenure: {
+    labels: ['<$5K', '$5–10K', '$10–15K', '$15–20K', '$20–25K', '$25–35K', '$35–50K',
+             '$50–75K', '$75–100K', '$100–150K', '$150K+'],
+    owners: [
+      county.oi_lt_5k, county.oi_5_10k, county.oi_10_15k, county.oi_15_20k, county.oi_20_25k,
+      county.oi_25_35k, county.oi_35_50k, county.oi_50_75k, county.oi_75_100k, county.oi_100_150k,
+      county.oi_150k_plus,
+    ],
+    renters: [
+      county.ri_lt_5k, county.ri_5_10k, county.ri_10_15k, county.ri_15_20k, county.ri_20_25k,
+      county.ri_25_35k, county.ri_35_50k, county.ri_50_75k, county.ri_75_100k, county.ri_100_150k,
+      county.ri_150k_plus,
+    ],
+  },
+
+  // 12. Education attainment
+  education: {
+    labels: ['<9th', '9–12 no dipl.', 'HS grad', 'Some college', "Assoc.", "Bachelor's", 'Graduate'],
+    values: [
+      county.edu_lt_9th, county.edu_9_12_no_diploma, county.edu_hs_grad,
+      county.edu_some_college, county.edu_associates, county.edu_bachelors, county.edu_graduate,
+    ],
+  },
+
+  // 13. Median HH income by tenure — county vs state
+  incomeByTenureMedians: {
+    labels: ['All households', 'Owner-occupied', 'Renter-occupied'],
+    county: [county.hh_income_median, county.income_median_owner, county.income_median_renter],
+    state:  [state.hh_income_median,  state.income_median_owner ?? null, state.income_median_renter ?? null],
+  },
+
+  // 14. Median HH income by age of householder
+  incomeByAge: {
+    labels: ['Under 25', '25–44', '45–64', '65+'],
+    values: [
+      county.income_median_under25, county.income_median_25_44,
+      county.income_median_45_64,   county.income_median_65_plus,
+    ],
+  },
+
+  // 15. Median income by number of earners (Figure 22)
+  earnersIncome: {
+    labels: ['0 earners', '1 earner', '2 earners', '3+ earners'],
+    values: [
+      county.earners_0_income, county.earners_1_income,
+      county.earners_2_income, county.earners_3_plus_income,
+    ],
+  },
+
+  // 16. Earners table (Table 7 — count, share, income, attainable home)
+  earnersTable: {
+    rows: [
+      ['0 earners',   county.earners_0,      county.earners_0_income],
+      ['1 earner',    county.earners_1,      county.earners_1_income],
+      ['2 earners',   county.earners_2,      county.earners_2_income],
+      ['3+ earners',  county.earners_3_plus, county.earners_3_plus_income],
+    ],
+    total_families: (county.earners_0 ?? 0) + (county.earners_1 ?? 0) +
+                    (county.earners_2 ?? 0) + (county.earners_3_plus ?? 0),
+  },
+
+  // 17. Household size (Figure 32)
+  householdSize: {
+    labels: ['1 person', '2 person', '3 person', '4+ person'],
+    values: [county.hh_size_1, county.hh_size_2, county.hh_size_3, county.hh_size_4_plus],
+  },
+
+  // 18. Number of bedrooms (Figure 33)
+  bedroomsDistribution: {
+    labels: ['Studio', '1 BR', '2 BR', '3 BR', '4 BR', '5+ BR'],
+    values: [county.br_0, county.br_1, county.br_2, county.br_3, county.br_4, county.br_5_plus],
+  },
+
+  // 19. Monthly housing costs (Figure 34)
+  monthlyHousingCost: {
+    labels: ['<$500', '$500–999', '$1,000–1,499', '$1,500–1,999', '$2,000–2,499', '$2,500–2,999', '$3,000+'],
+    values: [
+      county.mhc_lt_500, county.mhc_500_999, county.mhc_1000_1499,
+      county.mhc_1500_1999, county.mhc_2000_2499, county.mhc_2500_2999,
+      county.mhc_3000_plus,
+    ],
+  },
+};
+
+// Section 4 chart data is filled below after topSectors is computed.
+chartData.industryTopSectors = { labels: [], emp: [], wage: [] };
+
+// Workforce housing range
+const mhi = county.hh_income_median;
+const workforceLow  = mhi ? mhi * 0.80 : null;
+const workforceHigh = mhi ? mhi * 1.20 : null;
+
+// HUD AMI (may be null if the HUD fetch step didn't run / failed). The page
+// guards every reference so the section just collapses gracefully.
+const hud = county.hud_ami;
+
+// ── Section 4: Industry & Workforce Wages (BLS QCEW) ──────────────
+// county.industries is null when QCEW didn't load (graceful degrade).
+const industries = county.industries;
+
+// Attach affordability (home price + max rent at 30% of gross) to every
+// industry row. Reuses the same calc as the Section 3 affordability widget
+// so numbers tie out: 7% rate, 5% down, 30-yr, $2,500/yr T&I, 0.5% PMI,
+// 30% housing-budget rule.
+function withAffordability(row) {
+  const inc = row.avg_annual_pay;
+  if (inc == null) return { ...row, affordablePrice: null, affordableRent: null, affordablePriceVsMedian: null };
+  const r = affordableHomePrice({ annualIncome: inc });
+  const price = r?.homePrice ?? null;
+  return {
+    ...row,
+    affordablePrice: price,
+    affordableRent:  (inc * 0.30) / 12,
+    affordablePriceVsMedian:
+      (price != null && county.value_median != null) ? price - county.value_median : null,
+  };
+}
+
+const sectorRows    = (industries?.sectors    ?? []).map(withAffordability);
+const subsectorRows = (industries?.subsectors ?? []).map(withAffordability);
+
+// Top 10 sectors by employment for the chart.
+const topSectors = sectorRows.slice(0, 10);
+const totalIndustryEmp = sectorRows.reduce((s, r) => s + (r.emp ?? 0), 0);
+const totalIndustryEstabs = sectorRows.reduce((s, r) => s + (r.estabs ?? 0), 0);
+
+// Industry-weighted average annual pay across all sectors (single headline number).
+let _payNum = 0, _payDen = 0;
+for (const r of sectorRows) {
+  if (r.avg_annual_pay != null && r.emp != null && r.emp > 0) {
+    _payNum += r.avg_annual_pay * r.emp;
+    _payDen += r.emp;
+  }
+}
+const overallAvgAnnualPay = _payDen > 0 ? _payNum / _payDen : null;
+
+// Fill the Section 4 chart payload now that topSectors is known.
+chartData.industryTopSectors = {
+  labels: topSectors.map(r => r.title),
+  emp:    topSectors.map(r => r.emp ?? 0),
+  wage:   topSectors.map(r => r.avg_annual_pay ?? 0),
+};
+
+// ── Section 5: Wages by Occupation (BLS OEWS) ─────────────────────
+// county.occupations is null when OEWS didn't load (graceful degrade).
+const occupations = county.occupations;
+
+// Attach affordability per occupation row. Uses the same Section 3 formula
+// so the columns tie out across the page.
+function withOccAffordability(row) {
+  const inc = row.annual;
+  if (inc == null) return { ...row, affordablePrice: null, affordableRent: null };
+  const r = affordableHomePrice({ annualIncome: inc });
+  return {
+    ...row,
+    affordablePrice: r?.homePrice ?? null,
+    affordableRent:  (inc * 0.30) / 12,
+  };
+}
+// Sort by annual wage ascending (matches Alfie's reference report style:
+// low-wage essential workers up top, high-wage at the bottom).
+const occRows = (occupations?.rows ?? [])
+  .filter(r => r.annual != null)
+  .map(withOccAffordability)
+  .sort((a, b) => (a.annual ?? 0) - (b.annual ?? 0));
+---
+
+<Base title={`${place.place_name}, ${place.state_name}`} county={county}>
+
+  <!-- ── Hero ─────────────────────────────────────────────────────── -->
+  <section class="county-hero">
+    <div class="container">
+      <p class="eyebrow">{place.state_name} · Place GEOID {place.geoid}</p>
+      <h1>{place.place_name}</h1>
+      <p class="county-hero__lede muted">
+        ACS 5-year {place.acs_year ?? ''} estimates · population {fmtInt(place.population_total)} ·
+        {fmtInt(place.units_total)} housing units
+      </p>
+
+      <div class="kpis">
+        <div class="kpi"><div class="kpi__label">Median household income</div>
+          <div class="kpi__value">{fmtMoney(county.hh_income_median)}</div>
+          <div class="kpi__delta muted">State {fmtMoney(state.hh_income_median)}</div></div>
+        <div class="kpi"><div class="kpi__label">Median home value</div>
+          <div class="kpi__value">{fmtMoney(county.value_median)}</div>
+          <div class="kpi__delta muted">State {fmtMoney(state.value_median)}</div></div>
+        <div class="kpi"><div class="kpi__label">Median gross rent</div>
+          <div class="kpi__value">{fmtMoney(county.rent_median)}</div>
+          <div class="kpi__delta muted">State {fmtMoney(state.rent_median)}</div></div>
+        <div class="kpi"><div class="kpi__label">Homeownership rate</div>
+          <div class="kpi__value">{fmtPct(county.homeownership_rate)}</div>
+          <div class="kpi__delta muted">State {fmtPct(state.homeownership_rate)}</div></div>
+        <div class="kpi"><div class="kpi__label">Renter cost-burden rate</div>
+          <div class="kpi__value">{fmtPct(county.renter_cost_burden_rate)}</div>
+          <div class="kpi__delta muted">≥30% of income</div></div>
+        <div class="kpi"><div class="kpi__label">Owner cost-burden rate</div>
+          <div class="kpi__value">{fmtPct(county.owner_cost_burden_rate)}</div>
+          <div class="kpi__delta muted">≥30% of income</div></div>
+        <div class="kpi"><div class="kpi__label">Homeowner vacancy</div>
+          <div class="kpi__value">{fmtPct(county.homeowner_vacancy_rate)}</div>
+          <div class="kpi__delta muted">Of owner-occupied + for-sale units</div></div>
+        <div class="kpi"><div class="kpi__label">Rental vacancy</div>
+          <div class="kpi__value">{fmtPct(county.rental_vacancy_rate)}</div>
+          <div class="kpi__delta muted">Of renter-occupied + for-rent units</div></div>
+        <div class="kpi"><div class="kpi__label">Overall vacancy</div>
+          <div class="kpi__value">{fmtPct(county.vacancy_rate)}</div>
+          <div class="kpi__delta muted">All housing units</div></div>
+        <div class="kpi"><div class="kpi__label">Price-to-income ratio</div>
+          <div class="kpi__value">{fmtRatio(county.price_to_income_ratio)}</div>
+          <div class="kpi__delta muted">Affordable: 2.0–3.0</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 1. Community Profile ─────────────────────────────────────── -->
+  <section class="container report-section">
+    <header class="section-head">
+      <p class="eyebrow">Section 1</p>
+      <h2>Community Profile</h2>
+      <p class="muted">Population, demographics, household composition, and income.</p>
+    </header>
+
+    <!-- Community Data Summary — at-a-glance reference table -->
+    <div class="card">
+      <h3>Community Data Summary</h3>
+      <table class="summary-table">
+        <thead>
+          <tr><th></th><th>{place.place_name}</th><th>{place.state_name}</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Population</th>
+            <td>{fmtInt(county.population_total)}</td>
+            <td>{fmtInt(state.population_total)}</td></tr>
+          {county.population_density != null && (
+            <tr><th>Population density (per sq. mi.)</th>
+              <td>{fmtRatio(county.population_density)}</td>
+              <td>—</td></tr>
+          )}
+          <tr><th>Median household income</th>
+            <td>{fmtMoney(county.hh_income_median)}</td>
+            <td>{fmtMoney(state.hh_income_median)}</td></tr>
+          <tr><th>HUD Area Median Income (4-person, 100%)</th>
+            <td>{hud ? fmtMoney(hud.ami_100_4p) : '—'}</td>
+            <td>—</td></tr>
+          <tr><th>Households</th>
+            <td>{fmtInt(county.hh_total_s1101)}</td>
+            <td>—</td></tr>
+          <tr><th>Average household size</th>
+            <td>{fmtRatio(county.hh_avg_size)} people</td>
+            <td>—</td></tr>
+          <tr><th>Owner-occupied</th>
+            <td>{fmtPct(county.homeownership_rate)}</td>
+            <td>{fmtPct(state.homeownership_rate)}</td></tr>
+          <tr><th>Renter-occupied</th>
+            <td>{fmtPct(county.renter_rate)}</td>
+            <td>{fmtPct(state.renter_rate)}</td></tr>
+          <tr><th>Race</th>
+            <td>{fmtPct(pct(county.race_white, county.population_total))} White ·
+                {fmtPct(pct(county.race_black, county.population_total))} Black</td>
+            <td>{fmtPct(pct(state.race_white,  state.population_total))} White ·
+                {fmtPct(pct(state.race_black,  state.population_total))} Black</td></tr>
+        </tbody>
+      </table>
+      <small class="source">Source: ACS 5-year 2024 (Tables DP05, S1101, DP04, S1901){county.population_density != null ? ' and Census Gazetteer (land area)' : ''}; HUD FY2026 Income Limits.</small>
+    </div>
+
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Racial composition</h3>
+        <canvas data-chart="race"></canvas>
+        <figcaption class="muted">
+          {place.place_name} compared with {place.state_name}.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table DP05.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Educational attainment (population 25+)</h3>
+        <canvas data-chart="education"></canvas>
+        <figcaption class="muted">
+          {fmtPct(county.bachelors_plus_rate)} hold a bachelor's degree or higher
+          (state: {fmtPct(state.bachelors_plus_rate)}).
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S1501.</small>
+      </figure>
+    </div>
+
+    <!-- Median HH income by tenure + by age of householder -->
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Median Household Income by Tenure</h3>
+        {county.income_median_owner != null ? (
+          <canvas data-chart="incomeByTenureMedians"></canvas>
+        ) : (
+          <p class="muted">Add ACS variables <code>B25119_002E</code> and <code>B25119_003E</code> to the spreadsheet to populate this chart.</p>
+        )}
+        <figcaption class="muted">
+          Owner-occupied vs. renter-occupied household income, county and state.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25119.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Median Household Income by Age of Householder</h3>
+        {county.income_median_25_44 != null ? (
+          <canvas data-chart="incomeByAge"></canvas>
+        ) : (
+          <p class="muted">Add ACS variables <code>B19049_002E</code>–<code>B19049_005E</code> to the spreadsheet to populate this chart.</p>
+        )}
+        <figcaption class="muted">
+          Median household income by age group of householder.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B19049.</small>
+      </figure>
+    </div>
+
+    <!-- Earners cluster: Figure 22 + Figure 32 (Household Size) side-by-side,
+         with the affordability table (Table 7) below — keeps the two charts
+         wide enough that their X-axis labels don't collide. -->
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Median Household Income by Number of Earners</h3>
+        <canvas data-chart="earnersIncome"></canvas>
+        <figcaption class="muted">
+          Median household income for families with each earner count.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S1903.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Household Size</h3>
+        <canvas data-chart="householdSize"></canvas>
+        <figcaption class="muted">
+          Distribution of households by number of people.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2501.</small>
+      </figure>
+    </div>
+
+    <figure class="card">
+      <h3>Income by Number of Earners</h3>
+      <table class="earners-table">
+        <thead>
+          <tr>
+            <th>Earners</th>
+            <th>Share</th>
+            <th>Median income</th>
+            <th>Attainable monthly housing cost</th>
+            <th>Attainable home</th>
+          </tr>
+        </thead>
+        <tbody>
+          {chartData.earnersTable.rows.map(([label, count, income]) => {
+            const share = chartData.earnersTable.total_families
+              ? (count ?? 0) / chartData.earnersTable.total_families * 100
+              : null;
+            // Attainable monthly housing cost = 30% of gross income / 12.
+            const monthlyCost = (income != null && income > 0) ? (income * 0.30) / 12 : null;
+            // Attainable home: 30% of income, 30-yr mortgage at 7%, 5% down, $2500 t&i, 0.5% PMI
+            let attainable = null;
+            if (income != null && income > 0) {
+              const monthlyBudget = monthlyCost;
+              const monthlyTaxIns = 2500 / 12;
+              const monthlyRate = 0.07 / 12;
+              const n = 360;
+              const piFactor = (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+              const principal = (monthlyBudget - monthlyTaxIns) / (piFactor + 0.005 / 12);
+              attainable = principal > 0 ? principal / 0.95 : 0;
+            }
+            return (
+              <tr>
+                <th>{label}</th>
+                <td>{share != null ? fmtPct(share) : '—'}</td>
+                <td>{income != null ? fmtMoney(income) : '—'}</td>
+                <td>{monthlyCost != null ? fmtMoney(monthlyCost) : '—'}</td>
+                <td>{attainable != null ? fmtMoney(attainable) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <figcaption class="muted">
+        Attainable monthly housing cost = 30% of gross income ÷ 12.
+        Attainable home price assumes 30% housing budget, 30-yr mortgage at 7%, 5% down.
+      </figcaption>
+      <small class="source">Source: ACS 5-year 2024, Table S1903; affordability formula derived.</small>
+    </figure>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <h4>Households</h4>
+        <p class="big-num">{fmtInt(county.hh_total_s1101)}</p>
+        <p class="muted">Average size: {fmtRatio(county.hh_avg_size)} people</p>
+      </div>
+      <div class="card">
+        <h4>Households with children</h4>
+        <p class="big-num">{fmtInt(county.hh_with_children)}</p>
+        <p class="muted">{fmtPct(pct(county.hh_with_children, county.hh_total_s1101))} of households</p>
+      </div>
+      <div class="card">
+        <h4>Per-capita income</h4>
+        <p class="big-num">{fmtMoney(county.per_capita_income)}</p>
+        <p class="muted">Poverty rate: {fmtPct(county.poverty_rate)}</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2. Residential Market Analysis ───────────────────────────── -->
+  <section class="container report-section">
+    <header class="section-head">
+      <p class="eyebrow">Section 2</p>
+      <h2>Residential Market Analysis</h2>
+      <p class="muted">Housing stock characteristics — tenure, type, age, size, vacancy, rents.</p>
+    </header>
+
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Tenure</h3>
+        <canvas data-chart="tenure"></canvas>
+        <figcaption class="muted">
+          {fmtPct(county.homeownership_rate)} owner-occupied vs.
+          state average {fmtPct(state.homeownership_rate)}.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table DP04.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Structure type</h3>
+        <canvas data-chart="structure"></canvas>
+        <figcaption class="muted">
+          Single-family share {fmtPct(county.single_family_share)} ·
+          Missing middle (2–19 units) {fmtPct(county.missing_middle_share)}.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25024.</small>
+      </figure>
+    </div>
+
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Housing stock by decade</h3>
+        <canvas data-chart="yearBuilt"></canvas>
+        <figcaption class="muted">
+          {fmtPct(county.aging_stock_share)} built before 1980 ·
+          Median structure age {fmtRatio(county.structure_median_age)} yrs.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2504.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Housing size mismatch</h3>
+        <canvas data-chart="sizeMismatch"></canvas>
+        <figcaption class="muted">
+          Compares the share of housing units by bedroom count against the share of households by size —
+          a common diagnostic of housing supply/demand alignment.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Tables B25041 (bedrooms) and S2501 (household size).</small>
+      </figure>
+    </div>
+
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Home value distribution</h3>
+        <canvas data-chart="homeValue"></canvas>
+        <figcaption class="muted">
+          Owner-occupied homes by value bracket. Median: {fmtMoney(county.value_median)}.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table DP04.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Monthly Housing Costs</h3>
+        <canvas data-chart="monthlyHousingCost"></canvas>
+        <figcaption class="muted">
+          Distribution of monthly housing costs across all occupied units.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25104.</small>
+      </figure>
+    </div>
+
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Number of Bedrooms</h3>
+        <canvas data-chart="bedroomsDistribution"></canvas>
+        <figcaption class="muted">
+          Housing units by number of bedrooms.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25041.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Median rent by bedroom</h3>
+        <canvas data-chart="rentByBR"></canvas>
+        <figcaption class="muted">
+          Overall median gross rent: {fmtMoney(county.rent_median)}.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25031.</small>
+      </figure>
+    </div>
+
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Renters by age</h3>
+        <canvas data-chart="renterAge"></canvas>
+        <figcaption class="muted">Number of renter householders by age bracket.</figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2502.</small>
+      </figure>
+      <figure class="card">
+        <h3>Owners by age</h3>
+        <canvas data-chart="ownerAge"></canvas>
+        <figcaption class="muted">Number of owner householders by age bracket.</figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2502.</small>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ── 3. Workforce Housing Needs Assessment ────────────────────── -->
+  <section class="container report-section">
+    <header class="section-head">
+      <p class="eyebrow">Section 3</p>
+      <h2>Workforce Housing Needs Assessment</h2>
+      <p class="muted">Affordability, cost burden, and the housing options for households in the workforce income range.</p>
+    </header>
+
+    <div class="grid grid-2">
+      <div class="card workforce">
+        <h3>Workforce range — ACS median household income</h3>
+        <div class="workforce__bands">
+          <div><span class="muted">80% MHI</span><strong>{fmtMoney(workforceLow)}</strong></div>
+          <div><span class="muted">100% MHI</span><strong>{fmtMoney(mhi)}</strong></div>
+          <div><span class="muted">120% MHI</span><strong>{fmtMoney(workforceHigh)}</strong></div>
+        </div>
+        <p class="muted">
+          Place-level median from ACS 5-year estimates. A household at 100% MHI in {place.place_name}
+          should be able to afford a home up to roughly
+          <strong id="aff-price-mhi">—</strong> (30% housing budget, default mortgage terms).
+        </p>
+      </div>
+
+      <div class="card workforce">
+        <h3>Workforce range — HUD Area Median Income</h3>
+        {hud ? (
+          <Fragment>
+            <table class="ami-table">
+              <thead>
+                <tr><th></th><th>1-person</th><th>2-person</th><th>4-person</th></tr>
+              </thead>
+              <tbody>
+                <tr><th>80% AMI</th>
+                  <td>{fmtMoney(hud.ami_80_1p)}</td>
+                  <td>{fmtMoney(hud.ami_80_2p)}</td>
+                  <td>{fmtMoney(hud.ami_80_4p)}</td></tr>
+                <tr><th>100% AMI</th>
+                  <td>{fmtMoney(hud.ami_100_1p)}</td>
+                  <td>{fmtMoney(hud.ami_100_2p)}</td>
+                  <td>{fmtMoney(hud.ami_100_4p)}</td></tr>
+                <tr><th>120% AMI</th>
+                  <td>{fmtMoney(hud.ami_120_1p)}</td>
+                  <td>{fmtMoney(hud.ami_120_2p)}</td>
+                  <td>{fmtMoney(hud.ami_120_4p)}</td></tr>
+              </tbody>
+            </table>
+            <p class="muted">
+              HUD FMR Area: <strong>{hud.fmr_area ?? '—'}</strong>. 80% AMI uses HUD's published
+              Section 8 Low Income Limits; 100% is HUD MFI; 120% is the standard workforce convention.
+              HUD publishes Income Limits at the county / MSA level; values shown are inherited
+              from the parent county that contains {place.place_name}.
+            </p>
+          </Fragment>
+        ) : (
+          <p class="muted">HUD AMI data not available for this place's parent county.</p>
+        )}
+      </div>
+    </div>
+
+    <div class="card affordability">
+      <h3>Affordability calculator</h3>
+      <p class="muted">Follows the standard 30%-of-gross-income affordability rule.</p>
+      <div class="aff-inputs">
+        <label class="aff-basis">Income basis
+          <select id="aff-basis">
+            <option value="custom">Custom (type below)</option>
+            <option value="mhi" selected>ACS median household income</option>
+            {hud && (
+              <Fragment>
+                <option value="ami_80_1p">HUD AMI · 1-person · 80%</option>
+                <option value="ami_100_1p">HUD AMI · 1-person · 100%</option>
+                <option value="ami_120_1p">HUD AMI · 1-person · 120%</option>
+                <option value="ami_80_2p">HUD AMI · 2-person · 80%</option>
+                <option value="ami_100_2p">HUD AMI · 2-person · 100%</option>
+                <option value="ami_120_2p">HUD AMI · 2-person · 120%</option>
+                <option value="ami_80_4p">HUD AMI · 4-person · 80%</option>
+                <option value="ami_100_4p">HUD AMI · 4-person · 100%</option>
+                <option value="ami_120_4p">HUD AMI · 4-person · 120%</option>
+              </Fragment>
+            )}
+          </select>
+        </label>
+        <label>Household income
+          <input type="number" id="aff-income" value={Math.round(mhi ?? 50000)} step="1000" min="0" />
+        </label>
+        <label>Interest rate
+          <input type="number" id="aff-rate" value="7.0" step="0.1" min="0" max="20" />%
+        </label>
+        <label>Down payment
+          <input type="number" id="aff-down" value="5" step="1" min="0" max="100" />%
+        </label>
+        <label>Taxes &amp; insurance / yr
+          <input type="number" id="aff-ti" value="2500" step="100" min="0" />
+        </label>
+      </div>
+      <div class="aff-results">
+        <div><span class="muted">Affordable monthly</span><strong id="aff-monthly">—</strong></div>
+        <div><span class="muted">Affordable home price</span><strong id="aff-price">—</strong></div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <figure class="card">
+        <h3>Renter cost burden</h3>
+        <canvas data-chart="renterBurden"></canvas>
+        <figcaption class="muted">
+          {fmtPct(county.renter_cost_burden_rate)} of renter households spend ≥30% of income on rent
+          ({fmtPct(county.renter_severe_cost_burden_rate)} spend ≥50%).
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25070.</small>
+      </figure>
+      <figure class="card">
+        <h3>Owner cost burden by income</h3>
+        <canvas data-chart="ownerBurden"></canvas>
+        <figcaption class="muted">
+          {fmtPct(county.owner_cost_burden_rate)} of homeowners spend ≥30% of income on housing.
+          Bars show counts of cost-burdened owners by income bracket.
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table B25106.</small>
+      </figure>
+    </div>
+
+    <figure class="card card--medium">
+      <h3>Household income — owners vs renters</h3>
+      <canvas data-chart="incomeByTenure"></canvas>
+      <figcaption class="muted">
+        Distribution of household income for owner-occupied (navy) and renter-occupied (gold) households.
+      </figcaption>
+      <small class="source">Source: ACS 5-year 2024, Table B25118.</small>
+    </figure>
+  </section>
+
+  <!-- ── 4. Industry & Workforce Wages (BLS QCEW) ─────────────────── -->
+  {industries && sectorRows.length > 0 && (
+    <section class="container report-section">
+      <header class="section-head">
+        <p class="eyebrow">Section 4</p>
+        <h2>Industry &amp; Workforce Wages</h2>
+        <p class="muted">
+          Employment, average wages, and the housing each industry's typical earner can
+          afford in {place.place_name}.
+        </p>
+      </header>
+
+      <div class="grid grid-3 industry-kpis">
+        <div class="kpi">
+          <div class="kpi__label">Covered employment</div>
+          <div class="kpi__value">{fmtInt(totalIndustryEmp)}</div>
+          <div class="kpi__delta muted">Across {sectorRows.length} sectors</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__label">Establishments</div>
+          <div class="kpi__value">{fmtInt(totalIndustryEstabs)}</div>
+          <div class="kpi__delta muted">QCEW {industries.year ?? '—'}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__label">Avg annual pay (workforce)</div>
+          <div class="kpi__value">{fmtMoney(overallAvgAnnualPay)}</div>
+          <div class="kpi__delta muted">Employment-weighted across sectors</div>
+        </div>
+      </div>
+
+      <figure class="card card--medium">
+        <h3>Top 10 sectors by employment</h3>
+        <canvas data-chart="industryTopSectors"></canvas>
+        <figcaption class="muted">
+          Annual average employment by NAICS 2-digit sector. Counties with fewer than five
+          covered establishments in a sector may show suppressed totals.
+        </figcaption>
+        <small class="source">Source: {industries.vintage_label ?? 'BLS QCEW Annual Averages'}.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Attainable housing by industry</h3>
+        <div class="industry-toggle">
+          <button type="button" class="industry-toggle__btn industry-toggle__btn--active"
+                  data-industry-view="sectors">Sectors (NAICS 2-digit)</button>
+          {subsectorRows.length > 0 && (
+            <button type="button" class="industry-toggle__btn"
+                    data-industry-view="subsectors">Subsectors (NAICS 3-digit)</button>
+          )}
+        </div>
+
+        <div class="industry-table-wrap" data-industry-table="sectors">
+          <table class="industry-table">
+            <thead>
+              <tr>
+                <th class="industry-table__name">Industry</th>
+                <th>Employment</th>
+                <th>Avg annual wage</th>
+                <th>Affordable home price</th>
+                <th>vs. median value</th>
+                <th>Affordable monthly rent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sectorRows.map(r => (
+                <tr>
+                  <td class="industry-table__name">
+                    <span class="industry-table__title">{r.title}</span>
+                    <span class="industry-table__naics muted">NAICS {r.naics}</span>
+                  </td>
+                  <td>{fmtInt(r.emp)}</td>
+                  <td>{fmtMoney(r.avg_annual_pay)}</td>
+                  <td>{fmtMoney(r.affordablePrice)}</td>
+                  <td class={r.affordablePriceVsMedian != null
+                              ? (r.affordablePriceVsMedian >= 0 ? 'pos' : 'neg')
+                              : ''}>
+                    {r.affordablePriceVsMedian == null
+                      ? '—'
+                      : (r.affordablePriceVsMedian >= 0
+                          ? '+' + fmtMoney(r.affordablePriceVsMedian)
+                          : '−' + fmtMoney(Math.abs(r.affordablePriceVsMedian)))}
+                  </td>
+                  <td>{fmtMoney(r.affordableRent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {subsectorRows.length > 0 && (
+          <div class="industry-table-wrap" data-industry-table="subsectors" hidden>
+            <table class="industry-table">
+              <thead>
+                <tr>
+                  <th class="industry-table__name">Subsector</th>
+                  <th>Employment</th>
+                  <th>Avg annual wage</th>
+                  <th>Affordable home price</th>
+                  <th>vs. median value</th>
+                  <th>Affordable monthly rent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subsectorRows.map(r => (
+                  <tr>
+                    <td class="industry-table__name">
+                      <span class="industry-table__title">{r.title}</span>
+                      <span class="industry-table__naics muted">NAICS {r.naics}</span>
+                    </td>
+                    <td>{fmtInt(r.emp)}</td>
+                    <td>{fmtMoney(r.avg_annual_pay)}</td>
+                    <td>{fmtMoney(r.affordablePrice)}</td>
+                    <td class={r.affordablePriceVsMedian != null
+                                ? (r.affordablePriceVsMedian >= 0 ? 'pos' : 'neg')
+                                : ''}>
+                      {r.affordablePriceVsMedian == null
+                        ? '—'
+                        : (r.affordablePriceVsMedian >= 0
+                            ? '+' + fmtMoney(r.affordablePriceVsMedian)
+                            : '−' + fmtMoney(Math.abs(r.affordablePriceVsMedian)))}
+                    </td>
+                    <td>{fmtMoney(r.affordableRent)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <figcaption class="muted">
+          Affordable home price assumes the industry's average earner uses 30% of gross
+          income for housing, with a 30-year mortgage at 7%, 5% down, $2,500/yr taxes
+          &amp; insurance, and 0.5% PMI. Adjust the Section 3 calculator for other terms.
+          Affordable rent is 30% of monthly gross pay.
+        </figcaption>
+        <small class="source">Source: {industries.vintage_label ?? 'BLS QCEW Annual Averages'}; ACS 5-year 2024 (median home value).</small>
+      </figure>
+    </section>
+  )}
+
+  <!-- ── 5. Wages by Occupation (BLS OEWS) ────────────────────────── -->
+  {occupations && occRows.length > 0 && (
+    <section class="container report-section">
+      <header class="section-head">
+        <p class="eyebrow">Section 5</p>
+        <h2>Wages by Occupation</h2>
+        <p class="muted">
+          Selected essential-worker occupations for the MSA or nonmetropolitan
+          area containing this county — jobs, the 10-year change, wages, and
+          the housing each typical earner can afford. <strong>Both jobs counts
+          and wages are reported at the MSA / nonmetropolitan-area level</strong>
+          (BLS does not publish OEWS at the county level), so every county
+          inside the same area shows the same numbers. For county-accurate
+          employment totals, see Section 4 above.
+        </p>
+      </header>
+
+      <figure class="card">
+        <h3>Occupational wages and affordable housing</h3>
+        <div class="industry-table-wrap">
+          <table class="industry-table occ-table">
+            <thead>
+              <tr>
+                <th class="industry-table__name">Occupation</th>
+                <th>{occupations.year ?? ''}<br>jobs</th>
+                <th>{occupations.prior_year ?? ''}–{occupations.year ?? ''}<br>change</th>
+                <th>%<br>change</th>
+                <th>Hourly<br>wage</th>
+                <th>Annual<br>wage</th>
+                <th>Affordable<br>home price</th>
+                <th>Affordable<br>monthly rent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {occRows.map(r => {
+                const chgCls = r.jobs_change == null ? '' : (r.jobs_change >= 0 ? 'pos' : 'neg');
+                const pctCls = r.jobs_pct_change == null ? '' : (r.jobs_pct_change >= 0 ? 'pos' : 'neg');
+                const fmtChg = (v) => v == null
+                  ? '—'
+                  : (v >= 0 ? fmtInt(v) : `(${fmtInt(Math.abs(v))})`);
+                const fmtPctChg = (v) => v == null
+                  ? '—'
+                  : (v >= 0 ? `${v.toFixed(0)}%` : `(${Math.abs(v).toFixed(0)}%)`);
+                return (
+                  <tr>
+                    <td class="industry-table__name">
+                      <span class="industry-table__title">{r.title}</span>
+                      <span class="industry-table__naics muted">
+                        SOC {r.soc}{r.soc_changed ? ' · prior-year code differs' : ''}
+                      </span>
+                    </td>
+                    <td>{fmtInt(r.jobs)}</td>
+                    <td class={chgCls}>{fmtChg(r.jobs_change)}</td>
+                    <td class={pctCls}>{fmtPctChg(r.jobs_pct_change)}</td>
+                    <td>{r.hourly != null ? `$${r.hourly.toFixed(2)}` : '—'}</td>
+                    <td>{fmtMoney(r.annual)}</td>
+                    <td>{fmtMoney(r.affordablePrice)}</td>
+                    <td>{fmtMoney(r.affordableRent)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <figcaption class="muted">
+          Affordable home price uses the same Section 3 formula (30% housing
+          budget, 30-year mortgage at 7%, 5% down, $2,500/yr T&amp;I, 0.5% PMI).
+          Affordable rent is 30% of monthly wages. Negative job-change values
+          are shown in red parentheses. A "prior-year code differs" note flags
+          occupations whose SOC code changed between the two vintages
+          (2010 SOC → 2018 SOC) — the change estimate is best-effort.
+        </figcaption>
+        <small class="source">
+          Source: {occupations.vintage_label ?? 'BLS OEWS'}. Jobs counts and
+          wages reflect the MSA or nonmetropolitan area containing this
+          county, not the county alone — OEWS is not published at the county
+          level.
+        </small>
+      </figure>
+    </section>
+  )}
+
+  <!-- ── Methodology footnote ─────────────────────────────────────── -->
+  <section class="container report-section">
+    <details class="methodology">
+      <summary>Methodology &amp; sources</summary>
+      <p>
+        All figures derive from the {place.acs_year ?? '2024'} American Community Survey 5-year estimates
+        pulled directly from the Census Data API at the place geography level. State and national
+        comparisons are population-weighted aggregates of county-level estimates (an approximation;
+        ACS publishes its own state and national medians which can differ slightly).
+      </p>
+      <p>
+        HUD Area Median Income figures are inherited from the parent county (HUD publishes Income
+        Limits at county/MSA level). BLS industry (QCEW) and occupation wage (OEWS) sections from
+        the county profiles are not shown on place pages because those datasets are not published at
+        sub-county geography — see the parent county profile for that context.
+      </p>
+      <p>
+        The affordability calculator uses a 30% housing-budget rule with a 30-year mortgage. Defaults are
+        7% interest, 5% down, $2,500/year taxes and insurance, and 0.5% PMI — adjustable above.
+      </p>
+      <p class="muted">
+        Place GEOID: {place.geoid} · Parent county FIPS: {place.parent_county_fips ?? '—'}.
+      </p>
+    </details>
+  </section>
+</Base>
+
+<!-- ── Data + Chart.js init ──────────────────────────────────────── -->
+<script type="application/json" id="county-data" set:html={JSON.stringify({ county, chartData })}></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  const { county, chartData } = JSON.parse(document.getElementById('county-data').textContent);
+
+  // Color palette pulled from CSS variables on the live element.
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    navy:    css.getPropertyValue('--color-navy').trim(),
+    gold:    css.getPropertyValue('--color-gold').trim(),
+    amber:   css.getPropertyValue('--color-amber').trim(),
+    cream:   css.getPropertyValue('--color-cream').trim(),
+    sage:    css.getPropertyValue('--color-sage').trim(),
+    char:    css.getPropertyValue('--color-charcoal').trim(),
+    // Tertiary — used only when a chart has > 4 series.
+    teal:    css.getPropertyValue('--color-teal').trim(),
+    blue:    css.getPropertyValue('--color-blue').trim(),
+    lteal:   css.getPropertyValue('--color-light-teal').trim(),
+    purple:  css.getPropertyValue('--color-purple').trim(),
+    lime:    css.getPropertyValue('--color-lime').trim(),
+    red:     css.getPropertyValue('--color-red').trim(),
+  };
+
+  Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
+  // House style: all axis ticks, tick labels, and legend text in black.
+  Chart.defaults.color = '#000';
+  Chart.defaults.borderColor = '#e6e2d2';
+  // Square corners on bar elements (house style).
+  Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
+  Chart.defaults.elements.bar.borderRadius = 0;
+
+  // ── Custom plugin: data labels on top of bars ─────────────────
+  // Self-contained replacement for chartjs-plugin-datalabels so we don't
+  // depend on an external CDN that might fail to load.
+  const dataLabels = {
+    id: 'datalabels',
+    afterDatasetsDraw(chart, _args, opts) {
+      if (!opts || opts.display === false) return;
+      const ctx = chart.ctx;
+      chart.data.datasets.forEach((dataset, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden || !meta.data || meta.type !== 'bar') return;
+        meta.data.forEach((bar, idx) => {
+          const value = dataset.data[idx];
+          if (value == null || !isFinite(value)) return;
+          const formatted = opts.formatter ? opts.formatter(value) : String(value);
+          if (!formatted) return;
+          ctx.save();
+          ctx.fillStyle = opts.color || C.navy;
+          ctx.font = (opts.font || '500 11px Roboto, system-ui, sans-serif');
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(formatted, bar.x, bar.y - 4);
+          ctx.restore();
+        });
+      });
+    },
+  };
+  Chart.register(dataLabels);
+
+  const mk = (sel, cfg) => {
+    const el = document.querySelector(`canvas[data-chart="${sel}"]`);
+    if (!el) return;
+    new Chart(el, cfg);
+  };
+
+  // ── Format helpers ─────────────────────────────────────────────
+  const fmtPct   = v => (v == null || !isFinite(v)) ? '' : (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + '%';
+  const fmtInt   = v => (v == null || !isFinite(v)) ? '' : Math.round(v).toLocaleString();
+  const fmtMoney = v => (v == null || !isFinite(v)) ? '' : '$' + Math.round(v).toLocaleString();
+
+  // Top padding so data labels above the tallest bar aren't clipped.
+  const CHART_TOP_PADDING = 22;
+
+  // Common axis shape: no grid lines, axis line kept, black tick labels.
+  const X_AXIS = (rotation) => ({
+    grid:   { display: false },
+    border: { display: true, color: '#000' },
+    ticks:  { maxRotation: rotation, minRotation: rotation, autoSkip: false, color: '#000' },
+  });
+  const Y_AXIS = (extras = {}) => ({
+    beginAtZero: true,
+    grid:   { display: false },
+    border: { display: true, color: '#000' },
+    ticks:  { color: '#000', ...extras.ticks },
+    ...extras,
+  });
+
+  // Option presets. `rotation` must be 0 or 45 per house style.
+  function pctOpts({ legend = false, rotation = 0, max } = {}) {
+    return {
+      layout: { padding: { top: CHART_TOP_PADDING } },
+      scales: {
+        y: Y_AXIS({ max, ticks: { color: '#000', callback: v => v + '%' } }),
+        x: X_AXIS(rotation),
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
+        datalabels: { formatter: fmtPct },
+      },
+    };
+  }
+  function countOpts({ legend = false, rotation = 0 } = {}) {
+    return {
+      layout: { padding: { top: CHART_TOP_PADDING } },
+      scales: {
+        y: Y_AXIS(),
+        x: X_AXIS(rotation),
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
+        datalabels: { formatter: fmtInt },
+      },
+    };
+  }
+  function moneyOpts({ legend = false, rotation = 0 } = {}) {
+    return {
+      layout: { padding: { top: CHART_TOP_PADDING } },
+      scales: {
+        y: Y_AXIS({ ticks: { color: '#000', callback: v => '$' + v.toLocaleString() } }),
+        x: X_AXIS(rotation),
+      },
+      plugins: {
+        legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
+        datalabels: { formatter: fmtMoney },
+      },
+    };
+  }
+
+  // ── Charts ─────────────────────────────────────────────────────
+  mk('race', {
+    type: 'bar',
+    data: {
+      labels: chartData.race.labels,
+      datasets: [{ data: chartData.race.county, backgroundColor: C.navy }],
+    },
+    options: pctOpts({ rotation: 45, max: 100 }),
+  });
+
+  mk('education', {
+    type: 'bar',
+    data: {
+      labels: chartData.education.labels,
+      datasets: [{ data: chartData.education.values, backgroundColor: C.gold }],
+    },
+    options: countOpts({ rotation: 45 }),
+  });
+
+  mk('tenure', {
+    type: 'doughnut',
+    data: {
+      labels: chartData.tenure.labels,
+      datasets: [{ data: chartData.tenure.values, backgroundColor: [C.navy, C.gold] }],
+    },
+    options: {
+      plugins: {
+        legend: { position: 'bottom' },
+        datalabels: { display: false }, // bar-only plugin; skip on donut
+        tooltip: {
+          callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed.toFixed(1)}%` },
+        },
+      },
+    },
+  });
+
+  mk('structure', {
+    type: 'bar',
+    data: {
+      labels: chartData.structure.labels,
+      datasets: [{ data: chartData.structure.values, backgroundColor: C.navy }],
+    },
+    options: pctOpts({ rotation: 45 }),
+  });
+
+  mk('yearBuilt', {
+    type: 'bar',
+    data: {
+      labels: chartData.yearBuilt.labels,
+      datasets: [{ data: chartData.yearBuilt.values, backgroundColor: C.navy }],
+    },
+    options: countOpts({ rotation: 45 }),
+  });
+
+  // Housing size mismatch: bedrooms vs household size on a unified percent axis.
+  // Bedrooms: 0/1/2/3/4/5+ → align to household size buckets 1/2/3/4+ as the report does.
+  // We render them as paired groups: BR distribution vs HH-size distribution.
+  const brTotal = chartData.bedrooms.units.reduce((a,b) => a + (b||0), 0) || 1;
+  const hhTotal = chartData.hhSize.values.reduce((a,b) => a + (b||0), 0) || 1;
+  const brPct = chartData.bedrooms.units.map(v => (v||0)/brTotal*100);
+  const hhPct = chartData.hhSize.values.map(v => (v||0)/hhTotal*100);
+  mk('sizeMismatch', {
+    type: 'bar',
+    data: {
+      labels: ['Studio / 1 person', '1 BR / 2 person', '2 BR / 3 person', '3+ BR / 4+ person'],
+      datasets: [
+        { label: 'Housing units (% by BR)', data: [brPct[0]+brPct[1], brPct[2], brPct[3], brPct[4]+brPct[5]], backgroundColor: C.navy },
+        { label: 'Households (% by size)',  data: hhPct, backgroundColor: C.gold },
+      ],
+    },
+    options: pctOpts({ legend: true, rotation: 0 }),
+  });
+
+  mk('homeValue', {
+    type: 'bar',
+    data: {
+      labels: chartData.homeValue.labels,
+      datasets: [{ data: chartData.homeValue.values, backgroundColor: C.navy }],
+    },
+    options: countOpts({ rotation: 45 }),
+  });
+
+  mk('rentByBR', {
+    type: 'bar',
+    data: {
+      labels: chartData.rentByBR.labels,
+      datasets: [{ data: chartData.rentByBR.county, backgroundColor: C.navy }],
+    },
+    options: moneyOpts({ rotation: 0 }),
+  });
+
+  mk('renterAge', {
+    type: 'bar',
+    data: {
+      labels: chartData.tenureAge.labels,
+      datasets: [{ data: chartData.tenureAge.renters, backgroundColor: C.gold }],
+    },
+    options: countOpts({ rotation: 0 }),
+  });
+  mk('ownerAge', {
+    type: 'bar',
+    data: {
+      labels: chartData.tenureAge.labels,
+      datasets: [{ data: chartData.tenureAge.owners, backgroundColor: C.navy }],
+    },
+    options: countOpts({ rotation: 0 }),
+  });
+
+  // Renter cost burden: deliberate 3-stop visual signal —
+  //   <30% income to housing  = sage  (#d6dbd4)  — healthy
+  //   30%–49.9%               = navy  (#003057)  — cost burdened
+  //   50%+                    = red   (#e04f39)  — severely cost burdened
+  mk('renterBurden', {
+    type: 'bar',
+    data: {
+      labels: chartData.renterBurden.labels,
+      datasets: [{
+        data: chartData.renterBurden.values,
+        backgroundColor: chartData.renterBurden.labels.map((_, i) =>
+          i < 5 ? C.sage : (i < 8 ? C.navy : C.red)
+        ),
+      }],
+    },
+    options: countOpts({ rotation: 0 }),
+  });
+  mk('ownerBurden', {
+    type: 'bar',
+    data: {
+      labels: chartData.ownerBurden.labels,
+      datasets: [{ data: chartData.ownerBurden.values, backgroundColor: C.navy }],
+    },
+    options: countOpts({ rotation: 0 }),
+  });
+
+  mk('incomeByTenure', {
+    type: 'bar',
+    data: {
+      labels: chartData.incomeByTenure.labels,
+      datasets: [
+        { label: 'Owners',  data: chartData.incomeByTenure.owners,  backgroundColor: C.navy },
+        { label: 'Renters', data: chartData.incomeByTenure.renters, backgroundColor: C.gold },
+      ],
+    },
+    options: countOpts({ legend: true, rotation: 45 }),
+  });
+
+  // ── New charts ───────────────────────────────────────────────
+  // Median HH income by tenure (county vs state grouped bars)
+  mk('incomeByTenureMedians', {
+    type: 'bar',
+    data: {
+      labels: chartData.incomeByTenureMedians.labels,
+      datasets: [
+        { label: 'County', data: chartData.incomeByTenureMedians.county, backgroundColor: C.navy },
+        { label: 'State',  data: chartData.incomeByTenureMedians.state,  backgroundColor: C.gold },
+      ],
+    },
+    options: moneyOpts({ legend: true, rotation: 0 }),
+  });
+
+  // Median HH income by age of householder
+  mk('incomeByAge', {
+    type: 'bar',
+    data: {
+      labels: chartData.incomeByAge.labels,
+      datasets: [{ data: chartData.incomeByAge.values, backgroundColor: C.navy }],
+    },
+    options: moneyOpts({ rotation: 0 }),
+  });
+
+  // Median income by number of earners
+  mk('earnersIncome', {
+    type: 'bar',
+    data: {
+      labels: chartData.earnersIncome.labels,
+      datasets: [{ data: chartData.earnersIncome.values, backgroundColor: C.navy }],
+    },
+    options: moneyOpts({ rotation: 0 }),
+  });
+
+  // Household size distribution
+  mk('householdSize', {
+    type: 'bar',
+    data: {
+      labels: chartData.householdSize.labels,
+      datasets: [{ data: chartData.householdSize.values, backgroundColor: C.gold }],
+    },
+    options: countOpts({ rotation: 0 }),
+  });
+
+  // Number of bedrooms
+  mk('bedroomsDistribution', {
+    type: 'bar',
+    data: {
+      labels: chartData.bedroomsDistribution.labels,
+      datasets: [{ data: chartData.bedroomsDistribution.values, backgroundColor: C.navy }],
+    },
+    options: countOpts({ rotation: 0 }),
+  });
+
+  // Monthly housing costs distribution
+  mk('monthlyHousingCost', {
+    type: 'bar',
+    data: {
+      labels: chartData.monthlyHousingCost.labels,
+      datasets: [{ data: chartData.monthlyHousingCost.values, backgroundColor: C.navy }],
+    },
+    options: countOpts({ rotation: 45 }),
+  });
+
+  // ── Section 4: top sectors by employment ──────────────────────
+  if (chartData.industryTopSectors && chartData.industryTopSectors.labels.length) {
+    mk('industryTopSectors', {
+      type: 'bar',
+      data: {
+        labels: chartData.industryTopSectors.labels,
+        datasets: [{ data: chartData.industryTopSectors.emp, backgroundColor: C.navy }],
+      },
+      options: countOpts({ rotation: 45 }),
+    });
+  }
+
+  // ── Section 4: sectors / subsectors table toggle ──────────────
+  document.querySelectorAll('[data-industry-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.getAttribute('data-industry-view');
+      // Swap which button is active.
+      document.querySelectorAll('[data-industry-view]').forEach(b =>
+        b.classList.toggle('industry-toggle__btn--active', b === btn));
+      // Swap visible table.
+      document.querySelectorAll('[data-industry-table]').forEach(t => {
+        t.hidden = t.getAttribute('data-industry-table') !== view;
+      });
+    });
+  });
+
+  // ── Affordability calculator ──────────────────────────────────
+  const aff = {
+    basis:   document.getElementById('aff-basis'),
+    income:  document.getElementById('aff-income'),
+    rate:    document.getElementById('aff-rate'),
+    down:    document.getElementById('aff-down'),
+    ti:      document.getElementById('aff-ti'),
+    monthly: document.getElementById('aff-monthly'),
+    price:   document.getElementById('aff-price'),
+    priceMhi: document.getElementById('aff-price-mhi'),
+  };
+  // Income basis lookup table — populates the income input when the user
+  // changes the dropdown. "custom" leaves whatever they typed alone.
+  const basisValues = {
+    mhi: county.hh_income_median ?? null,
+    ami_80_1p:  county.hud_ami?.ami_80_1p  ?? null,
+    ami_100_1p: county.hud_ami?.ami_100_1p ?? null,
+    ami_120_1p: county.hud_ami?.ami_120_1p ?? null,
+    ami_80_2p:  county.hud_ami?.ami_80_2p  ?? null,
+    ami_100_2p: county.hud_ami?.ami_100_2p ?? null,
+    ami_120_2p: county.hud_ami?.ami_120_2p ?? null,
+    ami_80_4p:  county.hud_ami?.ami_80_4p  ?? null,
+    ami_100_4p: county.hud_ami?.ami_100_4p ?? null,
+    ami_120_4p: county.hud_ami?.ami_120_4p ?? null,
+  };
+  if (aff.basis) {
+    aff.basis.addEventListener('change', () => {
+      const v = basisValues[aff.basis.value];
+      if (v != null) { aff.income.value = Math.round(v); update(); }
+    });
+    // Typing in the income field switches the dropdown to "custom" so it's clear
+    // what's driving the number.
+    aff.income.addEventListener('input', () => { aff.basis.value = 'custom'; });
+  }
+  function recalc(income, rate, downPct, ti) {
+    const monthlyBudget = (income * 0.30) / 12;
+    const monthlyTaxIns = ti / 12;
+    const monthlyRate = (rate / 100) / 12;
+    const n = 360;
+    const pmiMonthlyRate = 0.005 / 12;
+    const piFactor = monthlyRate === 0
+      ? (1 / n)
+      : (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+    const principal = (monthlyBudget - monthlyTaxIns) / (piFactor + pmiMonthlyRate);
+    const price = principal > 0 ? principal / (1 - downPct / 100) : 0;
+    return { monthlyBudget, price: Math.max(0, price) };
+  }
+  function update() {
+    const inc  = parseFloat(aff.income.value)  || 0;
+    const rate = parseFloat(aff.rate.value)    || 0;
+    const dp   = parseFloat(aff.down.value)    || 0;
+    const ti   = parseFloat(aff.ti.value)      || 0;
+    const { monthlyBudget, price } = recalc(inc, rate, dp, ti);
+    aff.monthly.textContent = '$' + Math.round(monthlyBudget).toLocaleString();
+    aff.price.textContent   = '$' + Math.round(price).toLocaleString();
+  }
+  ['income', 'rate', 'down', 'ti'].forEach(k => aff[k]?.addEventListener('input', update));
+  update();
+  // Anchor: home price at MHI
+  if (aff.priceMhi && county.hh_income_median) {
+    const { price } = recalc(county.hh_income_median, 7, 5, 2500);
+    aff.priceMhi.textContent = '$' + Math.round(price).toLocaleString();
+  }
+</script>
+
+<style>
+  .county-hero {
+    background: var(--bg-section);
+    padding: var(--space-7) 0 var(--space-6);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .county-hero h1 { font-size: var(--fs-3xl); margin-bottom: var(--space-2); }
+  .county-hero__lede { font-size: var(--fs-md); margin-bottom: var(--space-6); }
+
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: var(--space-3);
+  }
+  .kpi {
+    background: var(--bg-card);
+    border-left: 3px solid var(--color-gold);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-soft);
+  }
+  .kpi__label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: var(--space-1); }
+  .kpi__value { font-size: var(--fs-xl); font-weight: var(--fw-semibold); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .kpi__delta { font-size: var(--fs-xs); margin-top: 2px; }
+
+  .report-section { padding-top: var(--space-7); }
+  .section-head { margin-bottom: var(--space-5); }
+  .section-head h2 { margin-bottom: var(--space-2); }
+
+  .grid { display: grid; gap: var(--space-4); margin-bottom: var(--space-4); }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 800px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-soft);
+  }
+  /* Constrain a full-width card so it doesn't visually outsize its chart. */
+  .card--medium {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .card h3 { font-size: var(--fs-lg); margin-bottom: var(--space-3); }
+  .card h4 { font-size: var(--fs-md); margin-bottom: var(--space-2); }
+  .card figcaption,
+  .card .muted { font-size: var(--fs-sm); }
+  .card .source {
+    display: block;
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px dotted var(--border-soft);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .big-num { font-size: var(--fs-2xl); font-weight: var(--fw-semibold); color: var(--text-primary); margin: 0; font-variant-numeric: tabular-nums; }
+
+  .workforce__bands {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+  .workforce__bands > div { display: flex; flex-direction: column; gap: var(--space-1); }
+  .workforce__bands strong { font-size: var(--fs-xl); color: var(--text-primary); }
+
+  /* Community Data Summary table */
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-3) 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-table th, .summary-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+    font-size: var(--fs-sm);
+  }
+  .summary-table thead th {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-muted);
+  }
+  .summary-table tbody th {
+    text-align: left;
+    font-weight: var(--fw-medium);
+    color: var(--text-muted);
+  }
+  .summary-table tbody td {
+    color: var(--text-primary);
+    font-weight: var(--fw-semibold);
+  }
+  .summary-table tbody tr:last-child th,
+  .summary-table tbody tr:last-child td { border-bottom: none; }
+
+  /* Earners table — same skeleton as summary table */
+  .earners-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-3) 0;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+  }
+  .earners-table th, .earners-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+  }
+  .earners-table thead th {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-muted);
+  }
+  /* "Earners" header sits over a left-aligned column; align the header to match. */
+  .earners-table thead th:first-child { text-align: left; }
+  .earners-table tbody th {
+    text-align: left;
+    font-weight: var(--fw-medium);
+    color: var(--text-muted);
+  }
+  .earners-table tbody td {
+    color: var(--text-primary);
+    font-weight: var(--fw-semibold);
+  }
+  .earners-table tbody tr:last-child th,
+  .earners-table tbody tr:last-child td { border-bottom: none; }
+
+  /* HUD AMI table inside the workforce card */
+  .ami-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-3) 0 var(--space-4);
+    font-variant-numeric: tabular-nums;
+  }
+  .ami-table th, .ami-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+  }
+  .ami-table thead th {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-muted);
+  }
+  .ami-table tbody th {
+    text-align: left;
+    font-weight: var(--fw-medium);
+    color: var(--text-muted);
+  }
+  .ami-table tbody td {
+    color: var(--text-primary);
+    font-weight: var(--fw-semibold);
+  }
+  .ami-table tbody tr:last-child th,
+  .ami-table tbody tr:last-child td { border-bottom: none; }
+
+  /* Income-basis dropdown spans both columns of the inputs grid */
+  .aff-basis { grid-column: 1 / -1; }
+  .aff-inputs select {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-muted); border-radius: var(--radius-sm);
+    font-family: inherit; font-size: var(--fs-base);
+    background: var(--bg-page);
+  }
+
+  .aff-inputs {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+  }
+  .aff-inputs label {
+    display: flex; flex-direction: column; gap: var(--space-1);
+    font-size: var(--fs-sm); color: var(--text-muted);
+  }
+  .aff-inputs input {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-muted); border-radius: var(--radius-sm);
+    font-family: inherit; font-size: var(--fs-base);
+    background: var(--bg-page);
+  }
+  .aff-results {
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);
+    padding: var(--space-4); background: var(--bg-section); border-radius: var(--radius-sm);
+  }
+  .aff-results strong { font-size: var(--fs-2xl); color: var(--text-primary); display: block; }
+
+  .methodology {
+    background: var(--bg-section);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+  }
+  .methodology summary {
+    cursor: pointer;
+    font-weight: var(--fw-medium);
+    color: var(--text-primary);
+  }
+  .methodology p { margin-top: var(--space-3); }
+
+  /* ── Section 4: Industry & Workforce Wages ─────────────────────── */
+  .industry-kpis { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 800px) { .industry-kpis { grid-template-columns: 1fr; } }
+
+  .industry-toggle {
+    display: flex;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-3);
+  }
+  .industry-toggle__btn {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-muted);
+    background: var(--bg-page);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+  .industry-toggle__btn--active {
+    background: var(--color-navy);
+    color: var(--bg-page);
+    border-color: var(--color-navy);
+  }
+
+  .industry-table-wrap {
+    overflow-x: auto;
+    margin-bottom: var(--space-2);
+  }
+  .industry-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+  }
+  .industry-table th, .industry-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .industry-table thead th {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-muted);
+    background: var(--bg-section);
+    position: sticky;
+    top: 0;
+  }
+  .industry-table .industry-table__name { text-align: left; white-space: normal; }
+  .industry-table thead .industry-table__name { text-align: left; }
+  .industry-table__title { display: block; font-weight: var(--fw-medium); color: var(--text-primary); }
+  .industry-table__naics { display: block; font-size: var(--fs-xs); }
+  .industry-table tbody tr:last-child th,
+  .industry-table tbody tr:last-child td { border-bottom: none; }
+  .industry-table .pos { color: #1f6b3b; }
+  .industry-table .neg { color: var(--color-red); }
+
+  /* Section 5 occ-table: 8 columns must fit. Allow headers to wrap on the
+     explicit <br> tags; tighten padding + font; let occupation titles wrap. */
+  .occ-table { font-size: var(--fs-xs); }
+  .occ-table th, .occ-table td { padding: var(--space-2) var(--space-2); }
+  .occ-table thead th {
+    white-space: normal;
+    line-height: 1.2;
+    vertical-align: bottom;
+  }
+  .occ-table .industry-table__name { width: 22%; min-width: 9rem; }
+  .occ-table .industry-table__title { font-size: var(--fs-sm); }
+
+  /* Make Chart.js canvases behave well in flex/grid containers */
+  canvas { max-width: 100%; height: 280px !important; }
+  /* The tenure donut needs a square canvas to render as a circle. */
+  canvas[data-chart="tenure"] {
+    max-width: 280px;
+    margin: 0 auto;
+    display: block;
+  }
+</style>
