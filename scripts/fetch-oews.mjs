@@ -241,15 +241,34 @@ if (areaDefBuf) {
     // then by value-pattern matching as a fallback. FIPS = mostly 5-digit
     // numeric. AREA = 5-digit (CBSA) or 7-digit (OEWS-padded) numeric.
     const norm = s => String(s ?? '').trim().toLowerCase().replace(/[\s_]+/g, '_');
-    let cArea = -1, cFips = -1;
-    // Prefer a column whose header contains "fips" — that's the 5-digit
-    // full county FIPS. Don't match "county code" alone (3-digit county-only
-    // suffix; multiple states share the same code).
+    let cArea = -1, cFips = -1, cCountyCode = -1;
+    // First pass: find an AREA column and a "fips"-containing column.
     header.forEach((cell, idx) => {
       const n = norm(cell);
       if (cFips < 0 && /fips/.test(n)) cFips = idx;
       if (cArea < 0 && /msa_code|cbsa_code|area_code|^code$|oews_area|\barea\b/.test(n) && !/title|name/.test(n)) cArea = idx;
     });
+    // Inspect the "fips" column's values. If they're mostly 1–2 digits, the
+    // header was misleading — it's the STATE FIPS, not the full county FIPS.
+    // In that case we look for a separate County Code column and concatenate.
+    if (cFips >= 0) {
+      const sample = rows.slice(h + 1, h + 1 + Math.min(50, rows.length - h - 1));
+      const lens = sample.map(r => String((r && r[cFips]) ?? '').replace(/\D/g, '').length);
+      const stateLike = lens.filter(L => L >= 1 && L <= 2).length;
+      if (stateLike >= sample.length * 0.5) {
+        // Treat cFips as state FIPS; find a separate county-code column.
+        header.forEach((cell, idx) => {
+          const n = norm(cell);
+          if (cCountyCode < 0 && idx !== cFips && idx !== cArea &&
+              /county.*code|^cnty/.test(n) && !/title|name|fips/.test(n)) cCountyCode = idx;
+        });
+        if (cCountyCode >= 0) {
+          console.log(`  Detected split FIPS: state in col ${cFips} ("${header[cFips]}") + county-only in col ${cCountyCode} ("${header[cCountyCode]}"). Will concatenate.`);
+        } else {
+          console.warn(`  cFips=${cFips} ("${header[cFips]}") looks like state-only but no county-code column found.`);
+        }
+      }
+    }
     // Value-pattern fallback if header detection missed something.
     if (cArea < 0 || cFips < 0) {
       const sample = rows.slice(h + 1, h + 1 + Math.min(50, rows.length - h - 1));
@@ -271,11 +290,19 @@ if (areaDefBuf) {
       const r = rows[i];
       if (!r) continue;
       let area = String(r[cArea] ?? '').replace(/\D/g, '');
-      let fips = String(r[cFips] ?? '').replace(/\D/g, '');
-      if (!area || !fips) continue;
+      if (!area) continue;
+      let fips;
+      if (cCountyCode >= 0) {
+        // Split-column mode: state FIPS in cFips, county in cCountyCode.
+        const s = String(r[cFips] ?? '').replace(/\D/g, '').padStart(2, '0');
+        const c = String(r[cCountyCode] ?? '').replace(/\D/g, '').padStart(3, '0');
+        if (s.length !== 2 || c.length !== 3) continue;
+        fips = s + c;
+      } else {
+        fips = String(r[cFips] ?? '').replace(/\D/g, '').padStart(5, '0');
+        if (fips.length !== 5) continue;
+      }
       area = area.padStart(7, '0');
-      fips = fips.padStart(5, '0');
-      if (fips.length !== 5) continue;
       fipsToArea[fips] = area;
       added++;
     }
