@@ -178,26 +178,46 @@ async function fetchStateAllVars(year, stateFips) {
 // ── Place → primary county crosswalk ──────────────────────────────
 // Census publishes a place-county relationship file. For places that span
 // counties, we pick the county containing the largest share of the place
-// population.
+// population. Census has reorganized this directory a few times; we try
+// every known location.
 const RELATIONSHIP_URLS = [
-  'https://www2.census.gov/geo/docs/maps-data/data/rel2020/place/tab20_place_county20_natl.txt',
+  // 2020-vintage relationship files (current as of 2024-2026 site builds)
   'https://www2.census.gov/geo/docs/maps-data/data/rel2020/place_county/tab20_place_county20_natl.txt',
+  'https://www2.census.gov/geo/docs/maps-data/data/rel2020/place/tab20_place_county20_natl.txt',
+  'https://www2.census.gov/geo/docs/maps-data/data/rel2020/tab20_place_county20_natl.txt',
+  // Legacy 2010-vintage paths some scripts on the internet still cite
+  'https://www2.census.gov/geo/docs/maps-data/data/rel/place_county/tab_place_county_natl.txt',
+  'https://www2.census.gov/geo/docs/maps-data/data/rel/tab_place_county_natl.txt',
 ];
+
+// Use a Gazetteer-style Accept header — Census is picky and rejects some
+// requests whose Accept doesn't include text/plain or octet-stream.
+const CROSSWALK_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (housinganalytics.org build pipeline)',
+  'Accept': 'text/plain, application/octet-stream, */*',
+};
 
 async function fetchPlaceCountyCrosswalk() {
   for (const url of RELATIONSHIP_URLS) {
     try {
       console.log(`Fetching place-county relationship: ${url}`);
-      const res = await fetch(url, { headers: HEADERS });
-      if (!res.ok) { console.warn(`  HTTP ${res.status}`); continue; }
+      const res = await fetch(url, { headers: CROSSWALK_HEADERS, redirect: 'follow' });
+      if (!res.ok) {
+        console.warn(`  HTTP ${res.status} ${res.statusText}`);
+        continue;
+      }
       const text = await res.text();
-      console.log(`Downloaded ${text.length.toLocaleString()} bytes.`);
-      return parseCrosswalk(text);
+      console.log(`  Downloaded ${text.length.toLocaleString()} bytes.`);
+      const xwalk = parseCrosswalk(text);
+      if (Object.keys(xwalk).length > 0) return xwalk;
+      console.warn(`  Parser returned 0 entries — file format may have changed; trying next URL.`);
     } catch (e) {
-      console.warn(`  ${e.message}`);
+      console.warn(`  Fetch threw: ${e.message}${e.cause?.message ? ' / cause: ' + e.cause.message : ''}`);
     }
   }
-  console.warn('WARNING: Place-county crosswalk fetch failed; HUD AMI will not be inherited.');
+  console.warn('WARNING: Place-county crosswalk fetch failed across all known URLs.');
+  console.warn('         HUD AMI will not be inherited onto place profiles.');
+  console.warn('         Place pages will still render — they just lose the workforce-housing table.');
   return {};
 }
 

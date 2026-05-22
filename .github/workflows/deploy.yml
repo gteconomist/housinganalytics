@@ -31,9 +31,11 @@ jobs:
 
       - name: Build site
         env:
-          # GitHub runners have 7 GB RAM. Default Node heap is too small for
-          # the astro build over 3,222 county pages with QCEW + OEWS payloads.
-          NODE_OPTIONS: --max-old-space-size=6144
+          # GitHub-hosted Linux runners have 16 GB RAM. The astro build over
+          # 3,222 county pages + ~4,200 place pages with QCEW + OEWS payloads
+          # comfortably exceeds the old 6 GB ceiling, so give V8 12 GB and
+          # leave headroom for the OS and any spawned child processes.
+          NODE_OPTIONS: --max-old-space-size=12288
           # Census API key for the place-level fetch step (fetch-acs-places.mjs).
           # Configure as a repository secret at:
           #   github.com/gteconomist/housinganalytics/settings/secrets/actions

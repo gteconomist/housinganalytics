@@ -17,6 +17,9 @@ public/data/
 *.swp
 *.swo
 *.textClipping
+# Excel lock files (created when an .xlsx is open in Excel)
+~$*.xlsx
+~$*.xls
 
 # Logs
 npm-debug.log*
