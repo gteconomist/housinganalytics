@@ -179,20 +179,31 @@ function findCol(header, ...candidates) {
   return -1;
 }
 
-// Find an XLSX entry inside a downloaded ZIP, parse with SheetJS, return rows.
-function readFirstXlsxFromZip(zipBuf) {
-  let rows = null;
+// Read ALL data-bearing XLSX entries inside the zip and concatenate their data
+// rows. The OEWS zip contains separate workbooks for MSA + BOS + (sometimes)
+// aggregated views; we want every (area, occupation) row from each.
+//
+// Returns { header, dataRows } — the header from the first usable workbook
+// (column layout is consistent across them), and concatenated data rows.
+function readAllXlsxFromZip(zipBuf) {
+  let header = null;
+  const dataRows = [];
   walkZip(zipBuf, (name, data) => {
-    if (rows) return;
     if (!/\.xlsx$/i.test(name) && !/\.xls$/i.test(name)) return;
-    // Skip "MSA_dl_table_layout.xlsx" or similar layout helper files.
-    if (/layout/i.test(name)) return;
-    const wb = XLSX.read(data, { type: 'buffer' });
+    // Skip layout / methodology helper workbooks.
+    if (/layout|methods|technical|areadef/i.test(name)) return;
+    let wb;
+    try { wb = XLSX.read(data, { type: 'buffer' }); }
+    catch (e) { console.warn(`  Skipping ${name}: ${e.message}`); return; }
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: false });
-    console.log(`  Parsed ${name} (${rows.length.toLocaleString()} rows)`);
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: false });
+    if (rows.length < 2) return;
+    if (!header) header = rows[0].map(c => String(c ?? ''));
+    // Skip the header row in subsequent files (column layout is identical).
+    for (let i = 1; i < rows.length; i++) dataRows.push(rows[i]);
+    console.log(`  Parsed ${name} (${(rows.length - 1).toLocaleString()} data rows)`);
   });
-  return rows;
+  return { header, dataRows };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -208,37 +219,64 @@ const areaDefBuf = await fetchBytes([
 const fipsToArea = {}; // "13215" -> "0017980" (OEWS AREA code, 7-char)
 if (areaDefBuf) {
   const wb = XLSX.read(areaDefBuf, { type: 'buffer' });
+  console.log(`  Workbook sheets: ${wb.SheetNames.join(', ')}`);
+
   // Try every sheet — BLS sometimes splits MSAs and nonmetropolitan areas across tabs.
   for (const sn of wb.SheetNames) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: null, blankrows: false });
     if (!rows.length) continue;
-    // Find the header row (some workbooks have title rows above the header).
+
+    // Find header row: the first row with ≥3 non-empty string cells.
     let h = -1;
-    for (let i = 0; i < Math.min(rows.length, 15); i++) {
-      const r = (rows[i] ?? []).map(c => String(c ?? '').toLowerCase());
-      if (r.some(c => /msa code|cbsa code|area code|area_code/.test(c)) &&
-          r.some(c => /fips|county code|cnty/.test(c))) { h = i; break; }
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+      const r = rows[i] ?? [];
+      const nonEmpty = r.filter(c => typeof c === 'string' && c.trim().length > 0).length;
+      if (nonEmpty >= 3) { h = i; break; }
     }
     if (h < 0) continue;
-    const header = rows[h].map(c => String(c ?? ''));
-    const cArea  = findCol(header, 'MSA Code', 'CBSA Code', 'Area Code', 'AREA');
-    // FIPS column has many possible spellings.
-    const cFips  = findCol(header, 'FIPS', 'County FIPS', 'County Code',
-                            'FIPS Code', 'cnty_code', 'FIPS Code', 'County Code (FIPS)');
+    const header = (rows[h] ?? []).map(c => String(c ?? ''));
+    console.log(`  Sheet "${sn}" header row ${h}: [${header.map(c => c.length > 40 ? c.slice(0, 40) + '…' : c).join(' | ')}]`);
+
+    // Find FIPS column and AREA column by header-name matching first,
+    // then by value-pattern matching as a fallback. FIPS = mostly 5-digit
+    // numeric. AREA = 5-digit (CBSA) or 7-digit (OEWS-padded) numeric.
+    const norm = s => String(s ?? '').trim().toLowerCase().replace(/[\s_]+/g, '_');
+    let cArea = -1, cFips = -1;
+    header.forEach((cell, idx) => {
+      const n = norm(cell);
+      if (cFips < 0 && /\bfips\b|county_code|cnty_code|county.*fips|subarea.*fips/.test(n)) cFips = idx;
+      if (cArea < 0 && /msa_code|cbsa_code|area_code|^code$|oews_area|\barea\b/.test(n) && !/title|name/.test(n)) cArea = idx;
+    });
+    // Value-pattern fallback if header detection missed something.
+    if (cArea < 0 || cFips < 0) {
+      const sample = rows.slice(h + 1, h + 1 + Math.min(50, rows.length - h - 1));
+      const ncols = header.length;
+      for (let c = 0; c < ncols; c++) {
+        if (cFips === c || cArea === c) continue;
+        const vals = sample.map(r => (r && r[c] != null) ? String(r[c]).replace(/\D/g, '') : '');
+        const fipsLike = vals.filter(v => v.length === 5).length;
+        const areaLike = vals.filter(v => v.length === 7 || (v.length === 5 && v !== vals[0])).length;
+        if (cFips < 0 && fipsLike >= sample.length * 0.5) cFips = c;
+        else if (cArea < 0 && areaLike >= sample.length * 0.5) cArea = c;
+      }
+    }
+    console.log(`  Sheet "${sn}" detected: cArea=${cArea} (header="${cArea>=0?header[cArea]:'?'}"), cFips=${cFips} (header="${cFips>=0?header[cFips]:'?'}")`);
     if (cArea < 0 || cFips < 0) continue;
+
+    let added = 0;
     for (let i = h + 1; i < rows.length; i++) {
       const r = rows[i];
       if (!r) continue;
       let area = String(r[cArea] ?? '').replace(/\D/g, '');
       let fips = String(r[cFips] ?? '').replace(/\D/g, '');
       if (!area || !fips) continue;
-      // OEWS area codes are 7 chars (zero-padded). County FIPS is 5 chars.
       area = area.padStart(7, '0');
       fips = fips.padStart(5, '0');
       if (fips.length !== 5) continue;
-      // Allow either MSA-style (00 + CBSA) or NMA-style codes.
       fipsToArea[fips] = area;
+      added++;
     }
+    console.log(`  Sheet "${sn}" added ${added.toLocaleString()} county→area mappings.`);
   }
   console.log(`  Built crosswalk for ${Object.keys(fipsToArea).length.toLocaleString()} counties.`);
 } else {
@@ -255,12 +293,11 @@ async function fetchAndParseOews(year, isPrior) {
   ], `OEWS May ${year}`);
   if (!zipBuf) return { byArea: new Map(), year: null };
 
-  const rows = readFirstXlsxFromZip(zipBuf);
-  if (!rows || rows.length < 2) {
+  const { header, dataRows } = readAllXlsxFromZip(zipBuf);
+  if (!header || dataRows.length < 1) {
     console.warn('  Could not find a usable XLSX inside the OEWS zip.');
     return { byArea: new Map(), year: null };
   }
-  const header = rows[0].map(c => String(c ?? ''));
   const I = {
     area:    findCol(header, 'AREA', 'area_code', 'area'),
     type:    findCol(header, 'AREA_TYPE', 'area_type'),
@@ -281,8 +318,8 @@ async function fetchAndParseOews(year, isPrior) {
 
   const byArea = new Map(); // areaCode -> Map(soc -> {emp, hMean, aMean})
   let kept = 0;
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
+  for (let i = 0; i < dataRows.length; i++) {
+    const r = dataRows[i];
     if (!r) continue;
     let area = String(r[I.area] ?? '').replace(/\D/g, '');
     if (!area) continue;
