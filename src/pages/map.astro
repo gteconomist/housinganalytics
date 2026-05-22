@@ -2,15 +2,16 @@
 import Base from '../layouts/Base.astro';
 ---
 <Base title="National map — housinganalytics.org"
-      description="Choropleth map of all 3,222 U.S. counties on every housing metric. Pick a metric, hover for county values, click through to the county profile.">
+      description="Choropleth map of all 3,222 U.S. counties on every housing metric. Pick a metric, choose a state to zoom, hover for county values, click through to the county profile.">
 
   <section class="map-hero">
     <div class="container">
-      <p class="eyebrow">National map</p>
+      <p class="eyebrow">National &amp; state map</p>
       <h1>U.S. county map &amp; metric explorer</h1>
       <p class="muted">
-        Color every county in the country by any metric. Hover a county for its value, click through
-        to the full profile. Alaska and Hawaii are inset in the lower-left.
+        Color every county in the country by any metric, or zoom into a single state for closer
+        analysis. Alaska and Hawaii are inset in the lower-left at the national level and use a
+        proper Albers projection when selected as a state.
       </p>
     </div>
   </section>
@@ -31,6 +32,20 @@ import Base from '../layouts/Base.astro';
         <label for="metric-select">Color counties by</label>
         <select id="metric-select" data-metric></select>
       </div>
+
+      <div class="ctrl ctrl--state">
+        <label for="state-select">View</label>
+        <select id="state-select" data-state></select>
+      </div>
+
+      <div class="ctrl ctrl--scale" data-scale-row hidden>
+        <label>Color scale</label>
+        <div class="scale-chips">
+          <button type="button" class="scale-chip" data-scale="national">National</button>
+          <button type="button" class="scale-chip" data-scale="state">Within state</button>
+        </div>
+      </div>
+
       <div class="ctrl ctrl--actions">
         <a class="btn btn--ghost" data-rankings-link href="/rankings">Open in rankings →</a>
       </div>
@@ -39,40 +54,70 @@ import Base from '../layouts/Base.astro';
     <!-- Summary line -->
     <div class="map-summary muted" data-summary></div>
 
-    <!-- Map figure -->
-    <figure class="card map-card">
-      <div class="map-wrap">
-        <svg class="map-svg" viewBox="0 0 975 610" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Choropleth of U.S. counties">
-          <g data-counties></g>
-          <g data-states-mesh></g>
-          <g data-nation-outline></g>
-        </svg>
-        <div class="map-tooltip" data-tooltip hidden></div>
-      </div>
-
-      <!-- Legend -->
-      <div class="map-legend" data-legend>
-        <div class="legend-bar" data-legend-bar></div>
-        <div class="legend-ticks">
-          <span data-legend-min>—</span>
-          <span data-legend-mid>—</span>
-          <span data-legend-max>—</span>
+    <!-- Map + callouts grid -->
+    <div class="map-grid" data-map-grid>
+      <figure class="card map-card">
+        <div class="map-wrap">
+          <svg class="map-svg" viewBox="0 0 975 610" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Choropleth of U.S. counties">
+            <g data-zoom>
+              <g data-counties></g>
+              <g data-states-mesh></g>
+              <g data-nation-outline></g>
+            </g>
+            <g data-special-projection hidden></g>
+          </svg>
+          <div class="map-tooltip" data-tooltip hidden></div>
+          <div class="map-spinner" data-spinner hidden>Loading state geography…</div>
         </div>
-        <div class="legend-note muted small">
-          Continuous gradient. Endpoints clipped to the 2nd / 98th percentile so a handful of
-          extreme counties don't compress the rest of the scale.
-        </div>
-      </div>
 
-      <small class="source" data-source>Source: ACS 5-year 2024. County boundaries: U.S. Census via us-atlas.</small>
-    </figure>
+        <!-- Legend -->
+        <div class="map-legend" data-legend>
+          <div class="legend-bar" data-legend-bar></div>
+          <div class="legend-ticks">
+            <span data-legend-min>—</span>
+            <span data-legend-mid>—</span>
+            <span data-legend-max>—</span>
+          </div>
+          <div class="legend-note muted small" data-legend-note>
+            Continuous gradient. Endpoints clipped to the 2nd / 98th percentile so a handful of
+            extreme counties don't compress the rest of the scale.
+          </div>
+        </div>
+
+        <small class="source" data-source>Source: ACS 5-year 2024. County boundaries: U.S. Census via us-atlas.</small>
+      </figure>
+
+      <aside class="map-callouts" data-callouts hidden>
+        <div class="callout-card card">
+          <h3 data-top-title>Top 5</h3>
+          <ol class="callout-list" data-top-list></ol>
+        </div>
+        <div class="callout-card card">
+          <h3 data-bottom-title>Bottom 5</h3>
+          <ol class="callout-list" data-bottom-list></ol>
+        </div>
+      </aside>
+    </div>
   </section>
 </Base>
 
 <script type="module">
   // ─────────────────────────────────────────────────────────────
-  // National map — D3 choropleth over all 3,222 U.S. counties.
-  // Loads the same rankings.json the Rankings page does.
+  // National + state map.
+  //
+  // Architecture:
+  //   • SVG viewBox is fixed at 975×610. State zoom is done by setting a
+  //     CSS transform on an inner <g data-zoom> wrapper (with non-scaling
+  //     strokes), so we never have to re-project the geometry for the lower 48.
+  //   • Alaska and Hawaii are inset into the lower-left in the standard
+  //     Albers-USA file. When the user picks AK or HI as a state, we lazy-
+  //     fetch the non-projected counties-10m.json and re-project that state
+  //     under a proper Albers centered on the state, into a separate <g>.
+  //   • Color scale: continuous gradient, percentile-clipped, with per-metric
+  //     direction (good-high → navy, good-low → red, neutral → teal). When
+  //     a state is selected, the user can toggle the scale between "National"
+  //     (all 3,222 counties used to set the percentile clip) and "Within state"
+  //     (only the state's counties used).
   // ─────────────────────────────────────────────────────────────
   import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
   import * as topojson from 'https://cdn.jsdelivr.net/npm/topojson-client@3/+esm';
@@ -83,22 +128,34 @@ import Base from '../layouts/Base.astro';
     error:      document.querySelector('[data-error]'),
     shell:      document.querySelector('[data-shell]'),
     metric:     document.querySelector('[data-metric]'),
+    state:      document.querySelector('[data-state]'),
+    scaleRow:   document.querySelector('[data-scale-row]'),
     rankLink:   document.querySelector('[data-rankings-link]'),
     summary:    document.querySelector('[data-summary]'),
+    grid:       document.querySelector('[data-map-grid]'),
     svg:        document.querySelector('.map-svg'),
+    zoomG:      document.querySelector('[data-zoom]'),
     gCounties:  document.querySelector('[data-counties]'),
     gStates:    document.querySelector('[data-states-mesh]'),
     gNation:    document.querySelector('[data-nation-outline]'),
+    gSpecial:   document.querySelector('[data-special-projection]'),
     tooltip:    document.querySelector('[data-tooltip]'),
+    spinner:    document.querySelector('[data-spinner]'),
     legendBar:  document.querySelector('[data-legend-bar]'),
     legendMin:  document.querySelector('[data-legend-min]'),
     legendMid:  document.querySelector('[data-legend-mid]'),
     legendMax:  document.querySelector('[data-legend-max]'),
+    legendNote: document.querySelector('[data-legend-note]'),
     source:     document.querySelector('[data-source]'),
+    callouts:   document.querySelector('[data-callouts]'),
+    topTitle:   document.querySelector('[data-top-title]'),
+    topList:    document.querySelector('[data-top-list]'),
+    bottomTitle:document.querySelector('[data-bottom-title]'),
+    bottomList: document.querySelector('[data-bottom-list]'),
   };
   els.loading.hidden = false;
 
-  // ── Constants — brand palette ───────────────────────────────
+  // ── Brand palette ────────────────────────────────────────────
   const css = getComputedStyle(document.documentElement);
   const cssVar = name => css.getPropertyValue(name).trim();
   const C = {
@@ -115,12 +172,10 @@ import Base from '../layouts/Base.astro';
     'good-low':  [C.cream, C.red],
     'neutral':   [C.cream, C.teal],
   };
-  const NO_DATA = '#ececec';
+  const NO_DATA       = '#ececec';   // counties with no metric value
+  const NEIGHBOR_GRAY = '#dcdcdc';   // counties in non-selected states when zoomed
 
   // ── Per-metric direction classifier ─────────────────────────
-  // good-high = higher is better (income, attainment)
-  // good-low  = higher is worse (cost burden, vacancy, poverty)
-  // neutral   = magnitude only (counts, year built, demographic shares)
   const GOOD_HIGH = new Set([
     'hh_income_median', 'hh_income_mean', 'per_capita_income',
     'income_median_owner', 'income_median_renter',
@@ -128,8 +183,7 @@ import Base from '../layouts/Base.astro';
     'income_median_45_64', 'income_median_65_plus',
     'earners_0_income', 'earners_1_income', 'earners_2_income',
     'earners_3_plus_income', 'earners_nonfamily_income',
-    'homeownership_rate',
-    'bachelors_plus_rate',
+    'homeownership_rate', 'bachelors_plus_rate',
     'hud_ami_4p_100', 'hud_ami_4p_80', 'hud_ami_4p_120',
     'population_total',
   ]);
@@ -139,8 +193,7 @@ import Base from '../layouts/Base.astro';
     'owner_cost_burden_rate',
     'poverty_rate',
     'price_to_income_ratio', 'rent_to_income_ratio',
-    'aging_stock_share',
-    'renter_rate',
+    'aging_stock_share', 'renter_rate',
   ]);
   function directionFor(field) {
     if (GOOD_HIGH.has(field)) return 'good-high';
@@ -148,7 +201,7 @@ import Base from '../layouts/Base.astro';
     return 'neutral';
   }
 
-  // ── Boot — fetch rankings.json + us-atlas in parallel ──────
+  // ── Boot ────────────────────────────────────────────────────
   let DATA, TOPO;
   try {
     [DATA, TOPO] = await Promise.all([
@@ -164,17 +217,38 @@ import Base from '../layouts/Base.astro';
   els.loading.hidden = true;
   els.shell.hidden = false;
 
-  // ── Index column lookups ────────────────────────────────────
+  // ── Indexes ────────────────────────────────────────────────
   const COL = {};
   DATA.headers.forEach((h, i) => COL[h] = i);
   const METRIC_BY_FIELD = {};
   DATA.metrics.forEach(m => METRIC_BY_FIELD[m.field] = m);
 
-  // Row index by 5-digit FIPS so map paths can look up O(1).
+  // FIPS → row, plus name ↔ FIPS for state lookups.
   const ROW_BY_FIPS = new Map();
-  for (const r of DATA.rows) ROW_BY_FIPS.set(r[COL.geoid], r);
+  const STATE_NAME_BY_FIPS = new Map();
+  const STATE_FIPS_BY_NAME = new Map();
+  for (const r of DATA.rows) {
+    ROW_BY_FIPS.set(r[COL.geoid], r);
+    STATE_NAME_BY_FIPS.set(r[COL.state_fips], r[COL.state_name]);
+    STATE_FIPS_BY_NAME.set(r[COL.state_name], r[COL.state_fips]);
+  }
+  // Puerto Rico is in the ACS rankings data but NOT in the Albers-USA topology
+  // (us-atlas only covers the 50 states + DC). Hide it from the picker so users
+  // don't pick a state we can't actually render.
+  const STATES_NOT_IN_TOPOLOGY = new Set(['Puerto Rico']);
+  const STATES = [...STATE_FIPS_BY_NAME.keys()]
+    .filter(s => !STATES_NOT_IN_TOPOLOGY.has(s))
+    .sort();
 
-  // ── Formatters (mirror rankings page) ───────────────────────
+  // Rows grouped by state — used for top/bottom callouts and state-rebased coloring.
+  const ROWS_BY_STATE = new Map();
+  for (const r of DATA.rows) {
+    const sName = r[COL.state_name];
+    if (!ROWS_BY_STATE.has(sName)) ROWS_BY_STATE.set(sName, []);
+    ROWS_BY_STATE.get(sName).push(r);
+  }
+
+  // ── Formatters ──────────────────────────────────────────────
   const fmtMoney = v => (v == null || !isFinite(v)) ? '—' : '$' + Math.round(v).toLocaleString();
   const fmtInt   = v => (v == null || !isFinite(v)) ? '—' : Math.round(v).toLocaleString();
   const fmtPct   = v => (v == null || !isFinite(v)) ? '—' : v.toFixed(1) + '%';
@@ -185,19 +259,28 @@ import Base from '../layouts/Base.astro';
   // ── URL state ───────────────────────────────────────────────
   function readState() {
     const u = new URL(window.location.href);
+    const stateParam = u.searchParams.get('state') || '';
+    const validState = stateParam && STATE_FIPS_BY_NAME.has(stateParam)
+                       && !STATES_NOT_IN_TOPOLOGY.has(stateParam)
+                       ? stateParam : '';
+    const scaleParam = u.searchParams.get('scale');
     return {
       metric: u.searchParams.get('metric') || 'hh_income_median',
+      state:  validState,
+      scale:  scaleParam === 'state' ? 'state' : 'national',
     };
   }
   function writeState() {
     const u = new URL(window.location.href);
     u.searchParams.set('metric', state.metric);
+    if (state.state) u.searchParams.set('state', state.state); else u.searchParams.delete('state');
+    if (state.state && state.scale === 'state') u.searchParams.set('scale', 'state'); else u.searchParams.delete('scale');
     history.replaceState({}, '', u);
   }
   const state = readState();
   if (!METRIC_BY_FIELD[state.metric]) state.metric = 'hh_income_median';
 
-  // ── Build the metric picker (grouped optgroups) ─────────────
+  // ── Pickers ─────────────────────────────────────────────────
   (function buildMetricPicker() {
     const byGroup = new Map();
     for (const m of DATA.metrics) {
@@ -220,92 +303,129 @@ import Base from '../layouts/Base.astro';
     els.metric.appendChild(frag);
   })();
 
-  // ── Render counties + state mesh ONCE; recolor on metric change.
-  // counties-albers-10m.json is pre-projected to a 975×610 viewBox,
-  // so we use d3.geoPath() with the default null projection (planar).
-  const path = d3.geoPath();
-  const counties = topojson.feature(TOPO, TOPO.objects.counties).features;
-  const statesMesh = topojson.mesh(TOPO, TOPO.objects.states, (a, b) => a !== b);
-  const nationOutline = topojson.feature(TOPO, TOPO.objects.nation);
+  (function buildStatePicker() {
+    const frag = document.createDocumentFragment();
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'All states (national)';
+    frag.appendChild(all);
+    for (const name of STATES) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (name === state.state) opt.selected = true;
+      frag.appendChild(opt);
+    }
+    els.state.appendChild(frag);
+  })();
 
-  // Counties — one <path> per county. id = 5-digit FIPS.
-  // We use the d3 selection to bind data, then attach pointer events.
+  // ── Topology features + the standard Albers-USA path ───────
+  const path = d3.geoPath();   // identity (planar) — Albers-USA file is pre-projected
+  const countyFeatures = topojson.feature(TOPO, TOPO.objects.counties).features;
+  const statesMesh     = topojson.mesh(TOPO, TOPO.objects.states, (a, b) => a !== b);
+  const nationOutline  = topojson.feature(TOPO, TOPO.objects.nation);
+
+  // Precompute the planar bbox per state from the Albers-USA file.
+  // (Used to zoom-fit any of the lower 48; AK and HI are also computed but
+  //  ignored at zoom time — they use the special projection instead.)
+  const STATE_BBOX = new Map();
+  for (const feat of countyFeatures) {
+    const sFips = String(feat.id).slice(0, 2);
+    const sName = STATE_NAME_BY_FIPS.get(sFips);
+    if (!sName) continue;
+    const b = path.bounds(feat);
+    const cur = STATE_BBOX.get(sName);
+    if (!cur) {
+      STATE_BBOX.set(sName, [[b[0][0], b[0][1]], [b[1][0], b[1][1]]]);
+    } else {
+      cur[0][0] = Math.min(cur[0][0], b[0][0]);
+      cur[0][1] = Math.min(cur[0][1], b[0][1]);
+      cur[1][0] = Math.max(cur[1][0], b[1][0]);
+      cur[1][1] = Math.max(cur[1][1], b[1][1]);
+    }
+  }
+
+  // ── Draw the standard Albers-USA layers (counties, mesh, nation) ─
   const gCounties = d3.select(els.gCounties);
   const countyPaths = gCounties
     .selectAll('path.county')
-    .data(counties, d => d.id)
+    .data(countyFeatures, d => d.id)
     .join('path')
       .attr('class', 'county')
       .attr('d', path)
       .attr('data-fips', d => d.id)
+      .attr('vector-effect', 'non-scaling-stroke')
       .attr('fill', NO_DATA)
       .attr('stroke', '#fff')
       .attr('stroke-width', 0.25)
       .style('cursor', 'pointer');
 
-  // State mesh — interior state borders, drawn on top of counties.
   d3.select(els.gStates)
     .selectAll('path.state-mesh')
     .data([statesMesh])
     .join('path')
       .attr('class', 'state-mesh')
       .attr('d', path)
+      .attr('vector-effect', 'non-scaling-stroke')
       .attr('fill', 'none')
       .attr('stroke', '#000')
       .attr('stroke-width', 0.6)
       .attr('stroke-linejoin', 'round')
       .attr('pointer-events', 'none');
 
-  // Nation outline — outer ring (includes AK/HI insets in the albers projection).
   d3.select(els.gNation)
     .selectAll('path.nation')
     .data([nationOutline])
     .join('path')
       .attr('class', 'nation')
       .attr('d', path)
+      .attr('vector-effect', 'non-scaling-stroke')
       .attr('fill', 'none')
       .attr('stroke', C.navy)
       .attr('stroke-width', 0.8)
       .attr('pointer-events', 'none');
 
-  // ── Pointer events: hover tooltip + click navigate ──────────
-  const fmtForCurrentMetric = () => {
+  // ── Pointer events (work on whichever paths are present) ───
+  function fmtForCurrentMetric() {
     const m = METRIC_BY_FIELD[state.metric];
     return FMT[m.format] || fmtInt;
-  };
-  countyPaths
-    .on('mousemove', (event, d) => {
-      const fips = d.id;
-      const row = ROW_BY_FIPS.get(fips);
-      const m = METRIC_BY_FIELD[state.metric];
-      let html;
-      if (!row) {
-        html = `<div class="tt-county">Unknown county (FIPS ${fips})</div>
-                <div class="tt-meta">No data — not in ACS county set (e.g., PR)</div>`;
-      } else {
-        const v = row[COL[state.metric]];
-        const f = fmtForCurrentMetric();
-        html = `<div class="tt-county">${row[COL.county_name]}</div>
-                <div class="tt-state">${row[COL.state_name]}</div>
-                <div class="tt-metric">${m.label}</div>
-                <div class="tt-value">${f(v)}</div>`;
-      }
-      els.tooltip.innerHTML = html;
-      els.tooltip.hidden = false;
-      positionTooltip(event);
-    })
-    .on('mouseleave', () => { els.tooltip.hidden = true; })
-    .on('click', (_event, d) => {
-      const row = ROW_BY_FIPS.get(d.id);
-      if (!row) return;
-      window.location.href = `/county/${row[COL.state_slug]}/${row[COL.slug]}/`;
-    });
+  }
+  function showTooltipForFips(fips, event) {
+    const row = ROW_BY_FIPS.get(fips);
+    const m = METRIC_BY_FIELD[state.metric];
+    let html;
+    if (!row) {
+      html = `<div class="tt-county">Unknown county (FIPS ${fips})</div>
+              <div class="tt-meta">No data — not in ACS county set (e.g., PR)</div>`;
+    } else {
+      const v = row[COL[state.metric]];
+      const f = fmtForCurrentMetric();
+      html = `<div class="tt-county">${row[COL.county_name]}</div>
+              <div class="tt-state">${row[COL.state_name]}</div>
+              <div class="tt-metric">${m.label}</div>
+              <div class="tt-value">${f(v)}</div>`;
+    }
+    els.tooltip.innerHTML = html;
+    els.tooltip.hidden = false;
+    positionTooltip(event);
+  }
+  function navigateToFips(fips) {
+    const row = ROW_BY_FIPS.get(fips);
+    if (!row) return;
+    window.location.href = `/county/${row[COL.state_slug]}/${row[COL.slug]}/`;
+  }
+  function wireCountyEvents(selection) {
+    selection
+      .on('mousemove', (event, d) => showTooltipForFips(d.id, event))
+      .on('mouseleave', () => { els.tooltip.hidden = true; })
+      .on('click', (_event, d) => navigateToFips(d.id));
+  }
+  wireCountyEvents(countyPaths);
 
   function positionTooltip(event) {
     const wrap = els.svg.parentElement.getBoundingClientRect();
     const x = event.clientX - wrap.left;
     const y = event.clientY - wrap.top;
-    // Flip the tooltip to the left of the cursor if it would overflow.
     const tt = els.tooltip;
     tt.style.left = '0px';
     tt.style.top  = '0px';
@@ -319,64 +439,291 @@ import Base from '../layouts/Base.astro';
     tt.style.top  = `${Math.max(4, ny)}px`;
   }
 
-  // ── Render: recolor counties + redraw legend for the selected metric.
+  // ── Zoom (transform-based; no re-projection for the lower 48) ─
+  const VIEW_W = 975, VIEW_H = 610;
+  const PADDING = 0.06;  // 6% breathing room around the state
+  const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function applyZoomToBbox(bbox, animate = true) {
+    const [[x0, y0], [x1, y1]] = bbox;
+    const w = x1 - x0, h = y1 - y0;
+    const scale = (1 - 2 * PADDING) * Math.min(VIEW_W / w, VIEW_H / h);
+    const tx = (VIEW_W - scale * (x0 + x1)) / 2;
+    const ty = (VIEW_H - scale * (y0 + y1)) / 2;
+    els.zoomG.style.transition = (animate && !prefersReducedMotion) ? 'transform 450ms ease' : 'none';
+    els.zoomG.style.transformOrigin = '0 0';
+    els.zoomG.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  }
+  function applyZoomReset(animate = true) {
+    els.zoomG.style.transition = (animate && !prefersReducedMotion) ? 'transform 450ms ease' : 'none';
+    els.zoomG.style.transformOrigin = '0 0';
+    els.zoomG.style.transform = 'translate(0px, 0px) scale(1)';
+  }
+
+  // ── AK/HI special projection (lazy) ─────────────────────────
+  let TOPO_GEO = null;
+  let specialPaths = null;        // d3 selection of paths in <g data-special-projection>
+  let currentSpecialState = '';   // 'Alaska' | 'Hawaii' | '' if not in special mode
+
+  async function ensureGeoTopology() {
+    if (TOPO_GEO) return TOPO_GEO;
+    els.spinner.hidden = false;
+    try {
+      TOPO_GEO = await fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json').then(r => {
+        if (!r.ok) throw new Error('counties-10m ' + r.status);
+        return r.json();
+      });
+    } finally {
+      els.spinner.hidden = true;
+    }
+    return TOPO_GEO;
+  }
+
+  function projectionFor(stateName) {
+    // Reasonable Albers parameters per state. fitExtent will scale + translate
+    // these into the viewport, so the rotate/center/parallels just need to be
+    // sane for the state.
+    if (stateName === 'Alaska') {
+      return d3.geoAlbers().rotate([154, 0]).center([-2, 58.5]).parallels([55, 65]);
+    }
+    if (stateName === 'Hawaii') {
+      return d3.geoAlbers().rotate([157, 0]).center([2.5, 19.9]).parallels([8, 18]);
+    }
+    return null;
+  }
+
+  async function enterSpecialProjection(stateName) {
+    const geo = await ensureGeoTopology();
+    const geoCounties = topojson.feature(geo, geo.objects.counties).features;
+    const sFips = STATE_FIPS_BY_NAME.get(stateName);
+    const stateCounties = geoCounties.filter(f => String(f.id).slice(0, 2) === sFips);
+    const stateFC = { type: 'FeatureCollection', features: stateCounties };
+
+    const proj = projectionFor(stateName);
+    proj.fitExtent([[20, 20], [VIEW_W - 20, VIEW_H - 20]], stateFC);
+    const projPath = d3.geoPath(proj);
+
+    // Hide the standard Albers-USA layers; show the special group.
+    d3.select(els.gCounties).style('display', 'none');
+    d3.select(els.gStates).style('display', 'none');
+    d3.select(els.gNation).style('display', 'none');
+    d3.select(els.gSpecial).attr('hidden', null).style('display', '');
+
+    // Reset zoom transform — special projection paths are already in viewport coords.
+    applyZoomReset(false);
+
+    specialPaths = d3.select(els.gSpecial)
+      .selectAll('path.county-special')
+      .data(stateCounties, d => d.id)
+      .join('path')
+        .attr('class', 'county-special')
+        .attr('d', projPath)
+        .attr('data-fips', d => d.id)
+        .attr('vector-effect', 'non-scaling-stroke')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 0.5)
+        .style('cursor', 'pointer');
+    wireCountyEvents(specialPaths);
+
+    currentSpecialState = stateName;
+  }
+
+  function leaveSpecialProjection() {
+    if (!currentSpecialState) return;
+    d3.select(els.gSpecial).attr('hidden', '').style('display', 'none').selectAll('*').remove();
+    d3.select(els.gCounties).style('display', '');
+    d3.select(els.gStates).style('display', '');
+    d3.select(els.gNation).style('display', '');
+    specialPaths = null;
+    currentSpecialState = '';
+  }
+
+  // ── Render: color + zoom + legend + callouts + summary ──────
   function render() {
     const metric = METRIC_BY_FIELD[state.metric];
     const dir = directionFor(state.metric);
     const ramp = RAMP[dir];
-
-    // Gather values; ignore null/non-finite.
     const idx = COL[state.metric];
+
+    // Validate scale: state-rebased only makes sense when a state is selected.
+    if (!state.state && state.scale === 'state') state.scale = 'national';
+
+    // ── Decide if we need the special projection (AK/HI) ────
+    const wantSpecial = (state.state === 'Alaska' || state.state === 'Hawaii');
+    if (wantSpecial && currentSpecialState !== state.state) {
+      // Async load + render; show the spinner; finish in a follow-up render.
+      enterSpecialProjection(state.state).then(() => {
+        applyColorAndLegend(metric, dir, ramp, idx);
+        renderCallouts(metric);
+        renderSummary(metric, dir);
+        writeState();
+      });
+      return;
+    }
+    if (!wantSpecial && currentSpecialState) {
+      leaveSpecialProjection();
+    }
+
+    // ── Apply zoom transform for continental states ────────
+    if (state.state && !wantSpecial) {
+      const bb = STATE_BBOX.get(state.state);
+      if (bb) applyZoomToBbox(bb, true);
+    } else if (!state.state) {
+      applyZoomReset(true);
+    }
+
+    applyColorAndLegend(metric, dir, ramp, idx);
+    renderCallouts(metric);
+    renderSummary(metric, dir);
+
+    // ── Scale toggle visibility + chip state ──────────────
+    els.scaleRow.hidden = !state.state;
+    if (state.state) {
+      els.scaleRow.querySelectorAll('[data-scale]').forEach(btn => {
+        btn.classList.toggle('is-on', btn.dataset.scale === state.scale);
+      });
+    }
+
+    // ── Rankings cross-link carries metric + state filter ──
+    let rl = `/rankings?metric=${encodeURIComponent(state.metric)}`;
+    if (state.state) rl += `&states=${encodeURIComponent(state.state)}`;
+    els.rankLink.href = rl;
+
+    // ── Grid layout: callouts panel ───────────────────────
+    if (state.state) {
+      els.callouts.hidden = false;
+      els.grid.classList.remove('no-state');
+    } else {
+      els.callouts.hidden = true;
+      els.grid.classList.add('no-state');
+    }
+
+    writeState();
+  }
+
+  function applyColorAndLegend(metric, dir, ramp, idx) {
+    // Build the value array to set the percentile clip.
+    let valueRows;
+    if (state.state && state.scale === 'state') {
+      valueRows = ROWS_BY_STATE.get(state.state) || [];
+    } else {
+      valueRows = DATA.rows;
+    }
     const values = [];
-    for (const r of DATA.rows) {
+    for (const r of valueRows) {
       const v = r[idx];
       if (v != null && isFinite(v)) values.push(v);
     }
-
-    // Percentile clip — d3.quantileSorted needs a sorted array. We sort once.
     values.sort((a, b) => a - b);
-    const lo  = d3.quantileSorted(values, 0.02);
-    const hi  = d3.quantileSorted(values, 0.98);
-    const med = d3.quantileSorted(values, 0.50);
-    // Defensive: degenerate distribution (all equal) — fall back to min/max.
-    const domain = lo === hi
-      ? [values[0], values[values.length - 1]]
-      : [lo, hi];
-
-    const scale = d3.scaleLinear()
-      .domain(domain)
-      .range([0, 1])
-      .clamp(true);
+    let domain, med;
+    if (values.length === 0) {
+      domain = [0, 1]; med = 0.5;
+    } else {
+      const lo  = d3.quantileSorted(values, 0.02);
+      const hi  = d3.quantileSorted(values, 0.98);
+      med = d3.quantileSorted(values, 0.50);
+      domain = (lo === hi) ? [values[0], values[values.length - 1]] : [lo, hi];
+    }
+    const scale = d3.scaleLinear().domain(domain).range([0, 1]).clamp(true);
     const interp = d3.interpolateRgb(ramp[0], ramp[1]);
     const colorFor = v => (v == null || !isFinite(v)) ? NO_DATA : interp(scale(v));
 
-    // Recolor every path.
-    countyPaths.attr('fill', d => {
-      const row = ROW_BY_FIPS.get(d.id);
-      if (!row) return NO_DATA;
-      return colorFor(row[COL[state.metric]]);
-    });
+    // Decide which county set is currently on-screen + how to color each.
+    const colorPath = (sel) => {
+      sel
+        .attr('fill', d => {
+          const row = ROW_BY_FIPS.get(d.id);
+          if (!row) return NO_DATA;
+          const fips = String(d.id);
+          const sFips = fips.slice(0, 2);
+          const sName = STATE_NAME_BY_FIPS.get(sFips);
+          // If a state is selected and this county isn't in it → neighbor gray.
+          if (state.state && sName !== state.state) return NEIGHBOR_GRAY;
+          return colorFor(row[COL[state.metric]]);
+        })
+        .style('pointer-events', d => {
+          const sFips = String(d.id).slice(0, 2);
+          const sName = STATE_NAME_BY_FIPS.get(sFips);
+          if (state.state && sName !== state.state) return 'none';
+          return '';
+        });
+    };
 
-    // Legend bar — paint a horizontal gradient with a CSS background.
+    if (currentSpecialState) {
+      // AK/HI: only the special paths are on-screen.
+      if (specialPaths) colorPath(specialPaths);
+    } else {
+      colorPath(countyPaths);
+    }
+
+    // Legend.
     els.legendBar.style.background = `linear-gradient(to right, ${ramp[0]} 0%, ${ramp[1]} 100%)`;
     const f = FMT[metric.format] || fmtInt;
     els.legendMin.textContent = f(domain[0]);
     els.legendMid.textContent = f(med);
     els.legendMax.textContent = f(domain[1]);
+    const scaleNote = (state.state && state.scale === 'state')
+      ? `Scale rebased to <strong>${state.state}</strong> only — the gradient endpoints reflect this state's 2nd/98th percentile, not the national distribution.`
+      : `Continuous gradient. Endpoints clipped to the national 2nd / 98th percentile so a handful of extreme counties don't compress the rest of the scale.`;
+    els.legendNote.innerHTML = scaleNote;
+  }
 
-    // Summary line + source.
+  function renderSummary(metric, dir) {
     const dirLabel = dir === 'good-high' ? 'higher is better (navy)' :
                      dir === 'good-low'  ? 'higher is worse (red)'    :
                      'magnitude only (teal)';
-    document.querySelector('[data-summary]').innerHTML =
-      `<strong>${values.length.toLocaleString()}</strong> counties colored by <strong>${metric.label}</strong> · ${dirLabel}`;
-    els.source.textContent =
-      `Source: ${metric.source}. County boundaries: U.S. Census via us-atlas. Hover for values, click any county to open its profile.`;
+    let countLabel;
+    if (state.state) {
+      const n = (ROWS_BY_STATE.get(state.state) || []).length;
+      countLabel = `<strong>${n.toLocaleString()}</strong> counties in <strong>${state.state}</strong>`;
+    } else {
+      countLabel = `<strong>${DATA.county_count.toLocaleString()}</strong> U.S. counties`;
+    }
+    els.summary.innerHTML = `${countLabel} colored by <strong>${metric.label}</strong> · ${dirLabel}`;
+    let src = `Source: ${metric.source}. County boundaries: U.S. Census via us-atlas.`;
+    if (state.state === 'Alaska' || state.state === 'Hawaii') {
+      src += ' AK/HI rendered under a state-centered Albers projection.';
+    }
+    src += ' Hover for values, click any county to open its profile.';
+    els.source.textContent = src;
+  }
 
-    // Update the rankings cross-link to carry the same metric.
-    els.rankLink.href = `/rankings?metric=${encodeURIComponent(state.metric)}`;
+  function renderCallouts(metric) {
+    if (!state.state) return;
+    const rows = (ROWS_BY_STATE.get(state.state) || [])
+      .filter(r => { const v = r[COL[state.metric]]; return v != null && isFinite(v); })
+      .slice()
+      .sort((a, b) => a[COL[state.metric]] - b[COL[state.metric]]);
 
-    writeState();
+    const total = rows.length;
+    const f = FMT[metric.format] || fmtInt;
+    const SMALL_STATE_THRESHOLD = 10;
+    const small = total <= SMALL_STATE_THRESHOLD;
+
+    function row(r, rank) {
+      const v = r[COL[state.metric]];
+      return `<li>
+        <span class="callout-rank">${rank}.</span>
+        <a class="callout-county" href="/county/${r[COL.state_slug]}/${r[COL.slug]}/">${r[COL.county_name]}</a>
+        <span class="callout-value">${f(v)}</span>
+      </li>`;
+    }
+
+    if (small) {
+      // Show a single ranked list — top is "highest", reverse the asc sort.
+      els.topTitle.textContent = `All ${total} counties — highest to lowest`;
+      const sorted = rows.slice().reverse();
+      els.topList.innerHTML = sorted.map((r, i) => row(r, i + 1)).join('');
+      els.bottomTitle.parentElement.style.display = 'none';
+    } else {
+      els.bottomTitle.parentElement.style.display = '';
+      const top = rows.slice(-5).reverse();   // highest 5
+      const bot = rows.slice(0, 5);            // lowest 5
+      els.topTitle.textContent    = `Top 5 — highest ${metric.label}`;
+      els.bottomTitle.textContent = `Bottom 5 — lowest ${metric.label}`;
+      els.topList.innerHTML    = top.map((r, i) => row(r, i + 1)).join('');
+      els.bottomList.innerHTML = bot.map((r, i) => row(r, i + 1)).join('');
+    }
   }
 
   // ── Wire events ─────────────────────────────────────────────
@@ -385,6 +732,23 @@ import Base from '../layouts/Base.astro';
     render();
   });
 
+  els.state.addEventListener('change', () => {
+    const newState = els.state.value;
+    // Returning to "All states" forces scale back to national (state-rebased
+    // is undefined without a state).
+    if (!newState) state.scale = 'national';
+    state.state = newState;
+    render();
+  });
+
+  els.scaleRow.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-scale]');
+    if (!btn) return;
+    state.scale = btn.dataset.scale === 'state' ? 'state' : 'national';
+    render();
+  });
+
+  // Initial render.
   render();
 </script>
 
@@ -402,9 +766,12 @@ import Base from '../layouts/Base.astro';
 
   .map-controls {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 2fr 1.5fr auto auto;
     gap: var(--space-4);
     align-items: end;
+  }
+  @media (max-width: 900px) {
+    .map-controls { grid-template-columns: 1fr 1fr; }
   }
   @media (max-width: 640px) {
     .map-controls { grid-template-columns: 1fr; }
@@ -439,11 +806,49 @@ import Base from '../layouts/Base.astro';
   .btn--ghost { background: var(--bg-page); color: var(--color-navy); }
   .btn--ghost:hover { background: var(--bg-section); }
 
+  /* Scale toggle ───────────────────────────────────────────── */
+  .scale-chips { display: flex; gap: 0; }
+  .scale-chip {
+    background: var(--bg-page);
+    border: 1px solid var(--border-muted);
+    color: var(--text-body);
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .scale-chip + .scale-chip { border-left: none; }
+  .scale-chip:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .scale-chip:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+  .scale-chip:hover { border-color: var(--color-navy); }
+  .scale-chip.is-on {
+    background: var(--color-navy);
+    color: var(--color-white);
+    border-color: var(--color-navy);
+  }
+
   .map-summary {
     margin: var(--space-4) 0 var(--space-4);
     font-size: var(--fs-sm);
   }
   .map-summary strong { color: var(--text-primary); font-weight: var(--fw-semibold); }
+
+  /* Grid: map + callouts ───────────────────────────────────── */
+  .map-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .map-grid.no-state {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  @media (max-width: 1000px) {
+    .map-grid, .map-grid.no-state {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
 
   /* Map figure ───────────────────────────────────────────────── */
   .map-card { padding: var(--space-4); }
@@ -457,12 +862,17 @@ import Base from '../layouts/Base.astro';
     display: block;
     background: var(--bg-page);
   }
-  .map-svg .county {
+  .map-svg .county,
+  .map-svg .county-special {
     transition: stroke-width 80ms ease;
   }
-  .map-svg .county:hover {
+  .map-svg .county:hover,
+  .map-svg .county-special:hover {
     stroke: #000;
     stroke-width: 1.2;
+  }
+  .map-svg [data-zoom] {
+    transform-box: fill-box;
   }
 
   .map-tooltip {
@@ -507,6 +917,20 @@ import Base from '../layouts/Base.astro';
     font-size: 11px;
     margin-top: 4px;
   }
+  .map-spinner {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    background: var(--color-white);
+    border: 1px solid var(--border-muted);
+    border-left: 4px solid var(--color-gold);
+    padding: 8px 12px;
+    font-size: var(--fs-xs);
+    color: var(--text-body);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-card);
+    z-index: 6;
+  }
 
   /* Legend ───────────────────────────────────────────────────── */
   .map-legend {
@@ -541,5 +965,49 @@ import Base from '../layouts/Base.astro';
     font-size: var(--fs-xs);
     color: var(--text-muted);
     font-style: italic;
+  }
+
+  /* Callouts ─────────────────────────────────────────────────── */
+  .map-callouts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  .callout-card { padding: var(--space-4); }
+  .callout-card h3 {
+    font-size: var(--fs-md);
+    margin: 0 0 var(--space-3) 0;
+    color: var(--color-navy);
+  }
+  .callout-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-sm);
+  }
+  .callout-list li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: var(--space-2);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-soft);
+    align-items: baseline;
+  }
+  .callout-list li:last-child { border-bottom: none; }
+  .callout-rank {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--fw-medium);
+  }
+  .callout-county {
+    color: var(--color-navy);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-gold);
+  }
+  .callout-county:hover { border-bottom-color: var(--color-navy); }
+  .callout-value {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--fw-semibold);
   }
 </style>
