@@ -60,6 +60,18 @@ async function loadQcew() {
   }
 }
 
+// Optional OEWS data (per-occupation wages + 10-year jobs change). Written
+// by fetch-oews.mjs. Geography is MSA / nonmetropolitan area — every county
+// inside a given OEWS area receives the same rows.
+async function loadOews() {
+  const f = join(__dirname, '..', 'src', 'data', 'generated', 'oews.json');
+  try {
+    return JSON.parse(await readFile(f, 'utf8'));
+  } catch {
+    return { counties: {} };
+  }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const ROOT        = join(__dirname, '..');
@@ -406,10 +418,13 @@ counties.forEach(c => {
 const hudAmi    = await loadHudAmi();
 const gazetteer = await loadGazetteer();
 const qcew      = await loadQcew();
+const oews      = await loadOews();
 console.log(`HUD AMI loaded for ${Object.keys(hudAmi).length} counties.`);
 console.log(`Gazetteer loaded for ${Object.keys(gazetteer).length} counties.`);
 console.log(`QCEW loaded for ${Object.keys(qcew.counties ?? {}).length} counties ` +
             `(${qcew.vintage_label ?? 'no vintage'}).`);
+console.log(`OEWS loaded for ${Object.keys(oews.counties ?? {}).length} counties ` +
+            `(${oews.vintage_label ?? 'no vintage'}).`);
 
 if (existsSync(OUT_DIR)) await rm(OUT_DIR, { recursive: true, force: true });
 await mkdir(OUT_DIR, { recursive: true });
@@ -445,6 +460,14 @@ for (const c of counties) {
     vintage_label: qcew.vintage_label ?? null,
     sectors:    ind.sectors    ?? [],
     subsectors: ind.subsectors ?? [],
+  } : null;
+  // Attach OEWS occupation rows if available.
+  const occ = oews.counties?.[c.geoid];
+  c.occupations = occ ? {
+    year: oews.year ?? null,
+    prior_year: oews.prior_year ?? null,
+    vintage_label: oews.vintage_label ?? null,
+    rows: occ,
   } : null;
   const json = JSON.stringify(c, null, 2);
   await writeFile(join(OUT_DIR,    'counties', `${c.geoid}.json`), json);
