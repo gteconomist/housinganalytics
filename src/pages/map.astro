@@ -444,20 +444,30 @@ import Base from '../layouts/Base.astro';
   const PADDING = 0.06;  // 6% breathing room around the state
   const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Zoom uses the native SVG `transform` attribute (always operates in viewBox
+  // coords, no CSS transform-box / transform-origin gotchas). d3's transition
+  // interpolates the translate/scale numbers under the hood.
+  d3.select(els.zoomG).attr('transform', 'translate(0,0) scale(1)');
+
   function applyZoomToBbox(bbox, animate = true) {
     const [[x0, y0], [x1, y1]] = bbox;
     const w = x1 - x0, h = y1 - y0;
     const scale = (1 - 2 * PADDING) * Math.min(VIEW_W / w, VIEW_H / h);
     const tx = (VIEW_W - scale * (x0 + x1)) / 2;
     const ty = (VIEW_H - scale * (y0 + y1)) / 2;
-    els.zoomG.style.transition = (animate && !prefersReducedMotion) ? 'transform 450ms ease' : 'none';
-    els.zoomG.style.transformOrigin = '0 0';
-    els.zoomG.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    setZoomTransform(`translate(${tx},${ty}) scale(${scale})`, animate);
   }
   function applyZoomReset(animate = true) {
-    els.zoomG.style.transition = (animate && !prefersReducedMotion) ? 'transform 450ms ease' : 'none';
-    els.zoomG.style.transformOrigin = '0 0';
-    els.zoomG.style.transform = 'translate(0px, 0px) scale(1)';
+    setZoomTransform('translate(0,0) scale(1)', animate);
+  }
+  function setZoomTransform(target, animate) {
+    const sel = d3.select(els.zoomG);
+    sel.interrupt();
+    if (animate && !prefersReducedMotion) {
+      sel.transition().duration(450).attr('transform', target);
+    } else {
+      sel.attr('transform', target);
+    }
   }
 
   // ── AK/HI special projection (lazy) ─────────────────────────
@@ -871,9 +881,8 @@ import Base from '../layouts/Base.astro';
     stroke: #000;
     stroke-width: 1.2;
   }
-  .map-svg [data-zoom] {
-    transform-box: fill-box;
-  }
+  /* No CSS transform on [data-zoom] — we drive it via the SVG `transform`
+     attribute so it always operates in viewBox coordinates. */
 
   .map-tooltip {
     position: absolute;
