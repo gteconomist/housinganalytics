@@ -41,10 +41,22 @@ const OUT_DIR    = join(ROOT, 'src', 'data', 'generated');
 const OUT_FILE   = join(OUT_DIR, 'places.json');
 
 const API_KEY = process.env.CENSUS_API_KEY || '';
+
+// All 50 states + DC. Declared as a `const` BEFORE `STATES` so the
+// `CENSUS_STATE=all` branch doesn't read undefined via var hoisting.
+// (43 isn't a real state FIPS — skipped. DC is 11.)
+const ALL_STATE_FIPS = [
+  '01','02','04','05','06','08','09','10','11','12','13','15','16','17','18',
+  '19','20','21','22','23','24','25','26','27','28','29','30','31','32','33',
+  '34','35','36','37','38','39','40','41','42','44','45','46','47','48',
+  '49','50','51','53','54','55','56',
+];
+
 const STATE_INPUT = (process.env.CENSUS_STATE || '13').trim();
 const STATES = STATE_INPUT.toLowerCase() === 'all'
   ? ALL_STATE_FIPS
   : STATE_INPUT.split(',').map(s => s.trim().padStart(2, '0')).filter(Boolean);
+
 const YEAR_CANDIDATES = (() => {
   const start = parseInt(process.env.CENSUS_YEAR || '2024', 10);
   return [start, start - 1, start - 2];
@@ -55,20 +67,6 @@ const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (housinganalytics.org build pipeline)',
   'Accept': 'application/json, text/plain, */*',
 };
-
-// All 50 states + DC (Puerto Rico has limited ACS coverage; skip for now).
-function makeAllStateFips() {
-  const fips = [
-    '01','02','04','05','06','08','09','10','11','12','13','15','16','17','18',
-    '19','20','21','22','23','24','25','26','27','28','29','30','31','32','33',
-    '34','35','36','37','38','39','40','41','42','43','44','45','46','47','48',
-    '49','50','51','53','54','55','56',
-  ];
-  // 11 = DC, 43 doesn't exist (skip), 51 = VA etc — keep as-is.
-  return fips.filter(f => f !== '43');
-}
-// eslint-disable-next-line no-var
-var ALL_STATE_FIPS = makeAllStateFips();
 
 // ── Variable routing by endpoint ──────────────────────────────────
 function endpointFor(code) {
