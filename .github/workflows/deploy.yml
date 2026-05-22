@@ -30,6 +30,10 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Build site
+        env:
+          # GitHub runners have 7 GB RAM. Default Node heap is too small for
+          # the astro build over 3,222 county pages with QCEW + OEWS payloads.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
 
       - name: Upload artifact
