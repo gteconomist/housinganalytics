@@ -29,10 +29,29 @@ export const VARIABLES = [
   { field: 'units_occupied',            label: 'Occupied Housing Units',                 acs: 'B25002_002E', group: 'occupancy' },
   { field: 'units_vacant',              label: 'Vacant Housing Units',                   acs: 'B25002_003E', group: 'occupancy' },
   { field: 'units_total',               label: 'Total Housing Units',                    acs: 'B25024_001E', group: 'structure' },
-  // Homeowner & rental vacancy rates — ACS publishes these as rates directly.
-  // Add these two columns to the spreadsheet to see the split on the KPI bar.
+  // Homeowner & rental vacancy rates — ACS publishes these in DP04 but the
+  // values in the spreadsheet for DP04_0004E / DP04_0005E are accidentally
+  // the owner/renter unit counts. build-data.mjs DERIVES these from the
+  // B25004 + tenure components below, overwriting whatever's in the
+  // spreadsheet columns. Keep the entries registered so the build still
+  // recognizes the columns (and ignores them after recomputation).
   { field: 'homeowner_vacancy_rate',    label: 'Homeowner Vacancy Rate',                 acs: 'DP04_0004E', group: 'occupancy' },
   { field: 'rental_vacancy_rate',       label: 'Rental Vacancy Rate',                    acs: 'DP04_0005E', group: 'occupancy' },
+
+  // ── Vacancy by type (B25004) — 7 disjoint vacancy categories ─────
+  // Powers the Section 2 vacancy composition donut, the structural-vs-
+  // frictional split, and the seasonal / distress callouts. Census defines
+  // the homeowner vacancy rate using B25004_004E (vacant for sale only)
+  // and the rental vacancy rate using B25004_002E + B25004_003E (vacant for
+  // rent + rented-not-yet-occupied).
+  { field: 'vacant_total',              label: 'Total Vacant Housing Units',             acs: 'B25004_001E', group: 'vacancy_type' },
+  { field: 'vacant_for_rent',           label: 'Vacant — For Rent',                      acs: 'B25004_002E', group: 'vacancy_type' },
+  { field: 'vacant_rented_not_occ',     label: 'Vacant — Rented, not yet occupied',      acs: 'B25004_003E', group: 'vacancy_type' },
+  { field: 'vacant_for_sale',           label: 'Vacant — For Sale Only',                 acs: 'B25004_004E', group: 'vacancy_type' },
+  { field: 'vacant_sold_not_occ',       label: 'Vacant — Sold, not yet occupied',        acs: 'B25004_005E', group: 'vacancy_type' },
+  { field: 'vacant_seasonal',           label: 'Vacant — Seasonal / Recreational',       acs: 'B25004_006E', group: 'vacancy_type' },
+  { field: 'vacant_migrant',            label: 'Vacant — For Migrant Workers',           acs: 'B25004_007E', group: 'vacancy_type' },
+  { field: 'vacant_other',              label: 'Vacant — Other ("structural distress")', acs: 'B25004_008E', group: 'vacancy_type' },
 
   // ── Structure type (B25024) ──────────────────────────────────────
   { field: 'structure_1_detached',      label: '1, Detached Unit',                       acs: 'B25024_002E', group: 'structure' },

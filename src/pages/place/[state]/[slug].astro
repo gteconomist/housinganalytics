@@ -249,6 +249,31 @@ const chartData = {
 // Section 4 chart data is filled below after topSectors is computed.
 chartData.industryTopSectors = { labels: [], emp: [], wage: [] };
 
+// Vacancy composition (Section 2). Render only the categories that actually
+// have units in this place — keeps the donut from showing zero-width slivers.
+chartData.vacancyComposition = (() => {
+  const buckets = [
+    ['For rent',                'vacant_for_rent'],
+    ['Rented, not occupied',    'vacant_rented_not_occ'],
+    ['For sale',                'vacant_for_sale'],
+    ['Sold, not occupied',      'vacant_sold_not_occ'],
+    ['Seasonal / recreational', 'vacant_seasonal'],
+    ['Migrant workers',         'vacant_migrant'],
+    ['Other',                   'vacant_other'],
+  ];
+  const labels = [], values = [];
+  for (const [label, field] of buckets) {
+    const v = county[field] ?? 0;
+    if (v > 0) { labels.push(label); values.push(v); }
+  }
+  return { labels, values };
+})();
+
+chartData.vacancyFrictionalStructural = {
+  labels: ['Frictional', 'Structural'],
+  values: [county.vacant_frictional ?? 0, county.vacant_structural ?? 0],
+};
+
 // Workforce housing range
 const mhi = county.hh_income_median;
 const workforceLow  = mhi ? mhi * 0.80 : null;
@@ -675,6 +700,66 @@ const occRows = (occupations?.rows ?? [])
         <small class="source">Source: ACS 5-year 2024, Table S2502.</small>
       </figure>
     </div>
+
+    {county.vacant_total != null && county.vacant_total > 0 && (
+      <Fragment>
+        <header class="section-head" style="margin-top: var(--space-7);">
+          <h3 style="font-size: var(--fs-lg);">Vacancy composition</h3>
+          <p class="muted">
+            All {fmtInt(county.vacant_total)} vacant units split into Census's seven categories.
+            <strong>Frictional</strong> vacancy (units actively on the market) reflects healthy churn.
+            <strong>Structural</strong> vacancy (seasonal, migrant, other) sits outside the market for
+            year-round residents — high values change how the headline vacancy rate should be read.
+          </p>
+        </header>
+
+        <div class="grid grid-2">
+          <figure class="card">
+            <h3>Vacant units by type</h3>
+            <canvas data-chart="vacancyComposition"></canvas>
+            <figcaption class="muted">
+              For sale {fmtPct(county.vacant_for_sale_share)} ·
+              For rent {fmtPct(county.vacant_for_rent_share)} ·
+              Seasonal {fmtPct(county.vacant_seasonal_share)} ·
+              Other {fmtPct(county.vacant_other_share)}.
+            </figcaption>
+            <small class="source">Source: ACS 5-year 2024, Table B25004.</small>
+          </figure>
+
+          <figure class="card">
+            <h3>Frictional vs structural</h3>
+            <canvas data-chart="vacancyFrictionalStructural"></canvas>
+            <figcaption class="muted">
+              {fmtPct(county.frictional_share)} of vacancy is frictional (for sale + for rent +
+              rented/sold not yet occupied); {fmtPct(county.structural_share)} is structural
+              (seasonal + migrant + other).
+            </figcaption>
+            <small class="source">Source: ACS 5-year 2024, Table B25004.</small>
+          </figure>
+        </div>
+
+        <div class="grid grid-2">
+          <div class={`stat-card ${county.seasonal_stock_share != null && county.seasonal_stock_share >= 10 ? 'stat-card--flag' : ''}`}>
+            <p class="stat-card__label">Seasonal / recreational share of all housing</p>
+            <p class="stat-card__value">{fmtPct(county.seasonal_stock_share)}</p>
+            <p class="stat-card__hint">
+              {county.seasonal_stock_share != null && county.seasonal_stock_share >= 10
+                ? <>⚑ Above the 10% threshold — meaningful pressure on year-round residents from second-home / short-term-rental demand.</>
+                : <>Share of {fmtInt(county.units_total)} total housing units held for seasonal or recreational use.</>}
+            </p>
+          </div>
+          <div class={`stat-card ${county.distress_stock_share != null && county.distress_stock_share >= 5 ? 'stat-card--flag' : ''}`}>
+            <p class="stat-card__label">"Other vacant" share of all housing</p>
+            <p class="stat-card__value">{fmtPct(county.distress_stock_share)}</p>
+            <p class="stat-card__hint">
+              {county.distress_stock_share != null && county.distress_stock_share >= 5
+                ? <>⚑ Above the 5% threshold — possible indicator of disinvestment, abandonment, or condemned stock.</>
+                : <>Census "Other vacant" — units off the market for reasons other than seasonal, migrant, sale, or rental.</>}
+            </p>
+          </div>
+        </div>
+      </Fragment>
+    )}
   </section>
 
   <!-- ── 3. Workforce Housing Needs Assessment ────────────────────── -->
@@ -1398,6 +1483,52 @@ const occRows = (occupations?.rows ?? [])
     options: countOpts({ rotation: 45 }),
   });
 
+  // ── Section 2: vacancy analytics ──────────────────────────────
+  if (chartData.vacancyComposition && chartData.vacancyComposition.labels.length) {
+    const vacancyColors = [
+      C.navy, C.blue, C.gold, C.amber, C.sage, C.teal, C.char,
+    ];
+    mk('vacancyComposition', {
+      type: 'doughnut',
+      data: {
+        labels: chartData.vacancyComposition.labels,
+        datasets: [{
+          data: chartData.vacancyComposition.values,
+          backgroundColor: vacancyColors.slice(0, chartData.vacancyComposition.labels.length),
+        }],
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom' },
+          datalabels: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                return `${ctx.label}: ${ctx.parsed.toLocaleString()} units (${pct}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  if (chartData.vacancyFrictionalStructural) {
+    mk('vacancyFrictionalStructural', {
+      type: 'bar',
+      data: {
+        labels: chartData.vacancyFrictionalStructural.labels,
+        datasets: [{
+          data: chartData.vacancyFrictionalStructural.values,
+          backgroundColor: [C.navy, C.gold],
+        }],
+      },
+      options: countOpts({ rotation: 0 }),
+    });
+  }
+
   // ── Section 4: top sectors by employment ──────────────────────
   if (chartData.industryTopSectors && chartData.industryTopSectors.labels.length) {
     mk('industryTopSectors', {
@@ -1522,6 +1653,24 @@ const occRows = (occupations?.rows ?? [])
   .grid-2 { grid-template-columns: 1fr 1fr; }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
   @media (max-width: 800px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  /* Vacancy stat callouts — used for seasonal share + distress share in
+     Section 2. .stat-card--flag highlights when a threshold is crossed. */
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-soft);
+    border-left: 4px solid var(--color-navy);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+  }
+  .stat-card--flag {
+    border-left-color: var(--color-orange-red, #e04f39);
+    background: #fdf3f0;
+  }
+  .stat-card__label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 var(--space-2); }
+  .stat-card__value { font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--color-navy); margin: 0 0 var(--space-2); }
+  .stat-card--flag .stat-card__value { color: var(--color-orange-red, #e04f39); }
+  .stat-card__hint  { font-size: var(--fs-sm); color: var(--text-body); margin: 0; }
 
   .card {
     background: var(--bg-card);

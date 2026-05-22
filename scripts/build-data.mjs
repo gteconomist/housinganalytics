@@ -305,6 +305,59 @@ function addDerived(c) {
     (c.edu_graduate ?? 0);
   c.bachelors_plus_rate = pct((c.edu_bachelors ?? 0) + (c.edu_graduate ?? 0), edu_total || null);
 
+  // ── Vacancy analytics (B25004 + tenure) ─────────────────────────
+  // Census formula for the official vacancy rates (HVR / RVR):
+  //   HVR = vacant_for_sale / (owner_occupied + vacant_for_sale)
+  //   RVR = vacant_for_rent / (renter_occupied + vacant_for_rent + rented_not_occ)
+  // These OVERRIDE whatever DP04_0004E / DP04_0005E held in the spreadsheet
+  // (those columns were accidentally loaded with owner/renter unit counts).
+  const v_total      = c.vacant_total           ?? 0;
+  const v_for_rent   = c.vacant_for_rent        ?? 0;
+  const v_rented_no  = c.vacant_rented_not_occ  ?? 0;
+  const v_for_sale   = c.vacant_for_sale        ?? 0;
+  const v_sold_no    = c.vacant_sold_not_occ    ?? 0;
+  const v_seasonal   = c.vacant_seasonal        ?? 0;
+  const v_migrant    = c.vacant_migrant         ?? 0;
+  const v_other      = c.vacant_other           ?? 0;
+  const owner_occ    = c.tenure_owner_occupied  ?? 0;
+  const renter_occ   = c.tenure_renter_occupied ?? 0;
+
+  c.homeowner_vacancy_rate = (owner_occ + v_for_sale) > 0
+    ? (v_for_sale / (owner_occ + v_for_sale)) * 100
+    : null;
+  c.rental_vacancy_rate = (renter_occ + v_for_rent + v_rented_no) > 0
+    ? (v_for_rent / (renter_occ + v_for_rent + v_rented_no)) * 100
+    : null;
+
+  // Frictional = normal market churn (homes actively for-rent / for-sale or
+  // already rented/sold but not yet occupied). Structural = units that are
+  // not really on the market for primary residents (seasonal, migrant, other).
+  c.vacant_frictional = v_for_rent + v_rented_no + v_for_sale + v_sold_no;
+  c.vacant_structural = v_seasonal + v_migrant + v_other;
+  c.frictional_share  = v_total > 0 ? (c.vacant_frictional / v_total) * 100 : null;
+  c.structural_share  = v_total > 0 ? (c.vacant_structural / v_total) * 100 : null;
+
+  // Per-bucket shares of total vacant (for the composition donut).
+  if (v_total > 0) {
+    c.vacant_for_rent_share      = (v_for_rent  / v_total) * 100;
+    c.vacant_rented_not_occ_share = (v_rented_no / v_total) * 100;
+    c.vacant_for_sale_share      = (v_for_sale  / v_total) * 100;
+    c.vacant_sold_not_occ_share  = (v_sold_no   / v_total) * 100;
+    c.vacant_seasonal_share      = (v_seasonal  / v_total) * 100;
+    c.vacant_migrant_share       = (v_migrant   / v_total) * 100;
+    c.vacant_other_share         = (v_other     / v_total) * 100;
+  } else {
+    c.vacant_for_rent_share = c.vacant_rented_not_occ_share = c.vacant_for_sale_share =
+    c.vacant_sold_not_occ_share = c.vacant_seasonal_share = c.vacant_migrant_share =
+    c.vacant_other_share = null;
+  }
+
+  // Shares of TOTAL housing stock — these are the "should I worry?" metrics
+  // analysts actually flag in housing studies. Above ~10% seasonal = real
+  // pressure on year-round residents; above ~5% other-vacant = disinvestment.
+  c.seasonal_stock_share = c.units_total > 0 ? (v_seasonal / c.units_total) * 100 : null;
+  c.distress_stock_share = c.units_total > 0 ? (v_other    / c.units_total) * 100 : null;
+
   return c;
 }
 counties.forEach(addDerived);
@@ -318,6 +371,10 @@ counties.forEach(addDerived);
 // state/national totals where available.
 const SUM_FIELDS = new Set([
   'population_total', 'units_occupied', 'units_vacant', 'units_total',
+  // Vacancy buckets (B25004) — sum at state / national; addDerived() will
+  // recompute HVR, RVR, and the share fields from the sums.
+  'vacant_total', 'vacant_for_rent', 'vacant_rented_not_occ', 'vacant_for_sale',
+  'vacant_sold_not_occ', 'vacant_seasonal', 'vacant_migrant', 'vacant_other',
   'structure_1_detached', 'structure_1_attached', 'structure_2', 'structure_3_4',
   'structure_5_9', 'structure_10_19', 'structure_20_49', 'structure_50_plus',
   'structure_mobile', 'structure_other',
