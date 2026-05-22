@@ -290,6 +290,29 @@ chartData.industryTopSectors = {
   emp:    topSectors.map(r => r.emp ?? 0),
   wage:   topSectors.map(r => r.avg_annual_pay ?? 0),
 };
+
+// ── Section 5: Wages by Occupation (BLS OEWS) ─────────────────────
+// county.occupations is null when OEWS didn't load (graceful degrade).
+const occupations = county.occupations;
+
+// Attach affordability per occupation row. Uses the same Section 3 formula
+// so the columns tie out across the page.
+function withOccAffordability(row) {
+  const inc = row.annual;
+  if (inc == null) return { ...row, affordablePrice: null, affordableRent: null };
+  const r = affordableHomePrice({ annualIncome: inc });
+  return {
+    ...row,
+    affordablePrice: r?.homePrice ?? null,
+    affordableRent:  (inc * 0.30) / 12,
+  };
+}
+// Sort by annual wage ascending (matches Alfie's reference report style:
+// low-wage essential workers up top, high-wage at the bottom).
+const occRows = (occupations?.rows ?? [])
+  .filter(r => r.annual != null)
+  .map(withOccAffordability)
+  .sort((a, b) => (a.annual ?? 0) - (b.annual ?? 0));
 ---
 
 <Base title={`${county.county_name}, ${county.state_name}`} county={county}>
@@ -906,6 +929,83 @@ chartData.industryTopSectors = {
           Affordable rent is 30% of monthly gross pay.
         </figcaption>
         <small class="source">Source: {industries.vintage_label ?? 'BLS QCEW Annual Averages'}; ACS 5-year 2024 (median home value).</small>
+      </figure>
+    </section>
+  )}
+
+  <!-- ── 5. Wages by Occupation (BLS OEWS) ────────────────────────── -->
+  {occupations && occRows.length > 0 && (
+    <section class="container report-section">
+      <header class="section-head">
+        <p class="eyebrow">Section 5</p>
+        <h2>Wages by Occupation</h2>
+        <p class="muted">
+          Selected essential-worker occupations — jobs, the 10-year change,
+          wages, and the housing each typical earner can afford. Wages are
+          MSA-level (or nonmetropolitan-area-level for rural counties);
+          counties inside the same area share the same wage profile.
+        </p>
+      </header>
+
+      <figure class="card">
+        <h3>Occupational wages and affordable housing</h3>
+        <div class="industry-table-wrap">
+          <table class="industry-table occ-table">
+            <thead>
+              <tr>
+                <th class="industry-table__name">Occupation</th>
+                <th>{occupations.year ?? ''} jobs</th>
+                <th>{occupations.prior_year ?? ''}–{occupations.year ?? ''} change</th>
+                <th>% change</th>
+                <th>Avg hourly wage</th>
+                <th>Avg annual wage</th>
+                <th>Affordable home price</th>
+                <th>Affordable monthly rent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {occRows.map(r => {
+                const chgCls = r.jobs_change == null ? '' : (r.jobs_change >= 0 ? 'pos' : 'neg');
+                const pctCls = r.jobs_pct_change == null ? '' : (r.jobs_pct_change >= 0 ? 'pos' : 'neg');
+                const fmtChg = (v) => v == null
+                  ? '—'
+                  : (v >= 0 ? fmtInt(v) : `(${fmtInt(Math.abs(v))})`);
+                const fmtPctChg = (v) => v == null
+                  ? '—'
+                  : (v >= 0 ? `${v.toFixed(0)}%` : `(${Math.abs(v).toFixed(0)}%)`);
+                return (
+                  <tr>
+                    <td class="industry-table__name">
+                      <span class="industry-table__title">{r.title}</span>
+                      <span class="industry-table__naics muted">
+                        SOC {r.soc}{r.soc_changed ? ' · prior-year code differs' : ''}
+                      </span>
+                    </td>
+                    <td>{fmtInt(r.jobs)}</td>
+                    <td class={chgCls}>{fmtChg(r.jobs_change)}</td>
+                    <td class={pctCls}>{fmtPctChg(r.jobs_pct_change)}</td>
+                    <td>{r.hourly != null ? `$${r.hourly.toFixed(2)}` : '—'}</td>
+                    <td>{fmtMoney(r.annual)}</td>
+                    <td>{fmtMoney(r.affordablePrice)}</td>
+                    <td>{fmtMoney(r.affordableRent)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <figcaption class="muted">
+          Affordable home price uses the same Section 3 formula (30% housing
+          budget, 30-year mortgage at 7%, 5% down, $2,500/yr T&amp;I, 0.5% PMI).
+          Affordable rent is 30% of monthly wages. Negative job-change values
+          are shown in red parentheses. A "prior-year code differs" note flags
+          occupations whose SOC code changed between the two vintages
+          (2010 SOC → 2018 SOC) — the change estimate is best-effort.
+        </figcaption>
+        <small class="source">
+          Source: {occupations.vintage_label ?? 'BLS OEWS'}. Wages reflect the
+          MSA or nonmetropolitan area containing this county.
+        </small>
       </figure>
     </section>
   )}
