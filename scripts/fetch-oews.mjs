@@ -242,9 +242,12 @@ if (areaDefBuf) {
     // numeric. AREA = 5-digit (CBSA) or 7-digit (OEWS-padded) numeric.
     const norm = s => String(s ?? '').trim().toLowerCase().replace(/[\s_]+/g, '_');
     let cArea = -1, cFips = -1;
+    // Prefer a column whose header contains "fips" — that's the 5-digit
+    // full county FIPS. Don't match "county code" alone (3-digit county-only
+    // suffix; multiple states share the same code).
     header.forEach((cell, idx) => {
       const n = norm(cell);
-      if (cFips < 0 && /\bfips\b|county_code|cnty_code|county.*fips|subarea.*fips/.test(n)) cFips = idx;
+      if (cFips < 0 && /fips/.test(n)) cFips = idx;
       if (cArea < 0 && /msa_code|cbsa_code|area_code|^code$|oews_area|\barea\b/.test(n) && !/title|name/.test(n)) cArea = idx;
     });
     // Value-pattern fallback if header detection missed something.
