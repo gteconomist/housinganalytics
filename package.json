@@ -8,7 +8,7 @@
     "hud": "node scripts/fetch-hud-ami.mjs",
     "gazetteer": "node scripts/fetch-gazetteer.mjs",
     "qcew": "node scripts/fetch-qcew.mjs",
-    "oews": "node scripts/fetch-oews.mjs",
+    "oews": "node --max-old-space-size=4096 scripts/fetch-oews.mjs",
     "data": "node scripts/build-data.mjs",
     "rankings": "node scripts/build-rankings.mjs",
     "dev": "npm run hud && npm run gazetteer && npm run qcew && npm run oews && npm run data && npm run rankings && astro dev",

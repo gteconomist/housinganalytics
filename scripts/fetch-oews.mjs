@@ -179,31 +179,23 @@ function findCol(header, ...candidates) {
   return -1;
 }
 
-// Read ALL data-bearing XLSX entries inside the zip and concatenate their data
-// rows. The OEWS zip contains separate workbooks for MSA + BOS + (sometimes)
-// aggregated views; we want every (area, occupation) row from each.
-//
-// Returns { header, dataRows } — the header from the first usable workbook
-// (column layout is consistent across them), and concatenated data rows.
-function readAllXlsxFromZip(zipBuf) {
-  let header = null;
-  const dataRows = [];
+// Walk every data-bearing XLSX entry in the zip, calling onWorkbook(name, rows)
+// for each. Releases each workbook's memory before reading the next, which
+// matters because the OEWS bundles can hold 200k+ rows × 32 cols.
+function forEachXlsxInZip(zipBuf, onWorkbook) {
   walkZip(zipBuf, (name, data) => {
     if (!/\.xlsx$/i.test(name) && !/\.xls$/i.test(name)) return;
-    // Skip layout / methodology helper workbooks.
     if (/layout|methods|technical|areadef/i.test(name)) return;
     let wb;
-    try { wb = XLSX.read(data, { type: 'buffer' }); }
+    try { wb = XLSX.read(data, { type: 'buffer', cellStyles: false, cellHTML: false, cellNF: false, cellDates: false }); }
     catch (e) { console.warn(`  Skipping ${name}: ${e.message}`); return; }
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: false });
     if (rows.length < 2) return;
-    if (!header) header = rows[0].map(c => String(c ?? ''));
-    // Skip the header row in subsequent files (column layout is identical).
-    for (let i = 1; i < rows.length; i++) dataRows.push(rows[i]);
-    console.log(`  Parsed ${name} (${(rows.length - 1).toLocaleString()} data rows)`);
+    onWorkbook(name, rows);
+    // Hint to GC by dropping references.
+    for (const k of Object.keys(wb.Sheets)) delete wb.Sheets[k];
   });
-  return { header, dataRows };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -323,48 +315,60 @@ async function fetchAndParseOews(year, isPrior) {
   ], `OEWS May ${year}`);
   if (!zipBuf) return { byArea: new Map(), year: null };
 
-  const { header, dataRows } = readAllXlsxFromZip(zipBuf);
-  if (!header || dataRows.length < 1) {
+  const byArea = new Map(); // areaCode -> Map(soc -> {emp, hMean, aMean})
+  let I = null;
+  let kept = 0;
+
+  forEachXlsxInZip(zipBuf, (name, rows) => {
+    if (!I) {
+      const header = rows[0].map(c => String(c ?? ''));
+      I = {
+        area:    findCol(header, 'AREA', 'area_code', 'area'),
+        type:    findCol(header, 'AREA_TYPE', 'area_type'),
+        soc:     findCol(header, 'OCC_CODE', 'occ_code', 'soc_code'),
+        title:   findCol(header, 'OCC_TITLE', 'occ_title'),
+        group:   findCol(header, 'O_GROUP', 'o_group', 'OCC_GROUP'),
+        emp:     findCol(header, 'TOT_EMP', 'tot_emp'),
+        hMean:   findCol(header, 'H_MEAN', 'h_mean'),
+        aMean:   findCol(header, 'A_MEAN', 'a_mean'),
+        hMedian: findCol(header, 'H_MEDIAN', 'h_pct50', 'h_median'),
+        aMedian: findCol(header, 'A_MEDIAN', 'a_pct50', 'a_median'),
+      };
+      console.log(`  Resolved OEWS columns: ${JSON.stringify(I)}`);
+      if (I.area < 0 || I.soc < 0 || I.emp < 0) {
+        console.warn('  Critical columns missing; aborting parse.');
+        return;
+      }
+    }
+    if (I.area < 0) return;
+
+    let kept_here = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r) continue;
+      let area = String(r[I.area] ?? '').replace(/\D/g, '');
+      if (!area) continue;
+      area = area.padStart(7, '0');
+      const soc = String(r[I.soc] ?? '').trim();
+      if (!soc || soc === '00-0000') continue;
+      const emp     = num(r[I.emp]);
+      const hMean   = num(r[I.hMean]);
+      const aMean   = num(r[I.aMean]);
+      const hMedian = num(r[I.hMedian]);
+      const aMedian = num(r[I.aMedian]);
+      let entry = byArea.get(area);
+      if (!entry) { entry = new Map(); byArea.set(area, entry); }
+      entry.set(soc, { emp, hMean, aMean, hMedian, aMedian });
+      kept++; kept_here++;
+    }
+    console.log(`  Parsed ${name} → ${kept_here.toLocaleString()} cells ingested.`);
+    // Drop the rows array reference so V8 can reclaim it before the next file.
+    rows.length = 0;
+  });
+
+  if (!I) {
     console.warn('  Could not find a usable XLSX inside the OEWS zip.');
     return { byArea: new Map(), year: null };
-  }
-  const I = {
-    area:    findCol(header, 'AREA', 'area_code', 'area'),
-    type:    findCol(header, 'AREA_TYPE', 'area_type'),
-    soc:     findCol(header, 'OCC_CODE', 'occ_code', 'soc_code'),
-    title:   findCol(header, 'OCC_TITLE', 'occ_title'),
-    group:   findCol(header, 'O_GROUP', 'o_group', 'OCC_GROUP'),
-    emp:     findCol(header, 'TOT_EMP', 'tot_emp'),
-    hMean:   findCol(header, 'H_MEAN', 'h_mean'),
-    aMean:   findCol(header, 'A_MEAN', 'a_mean'),
-    hMedian: findCol(header, 'H_MEDIAN', 'h_pct50', 'h_median'),
-    aMedian: findCol(header, 'A_MEDIAN', 'a_pct50', 'a_median'),
-  };
-  console.log(`  Resolved OEWS columns: ${JSON.stringify(I)}`);
-  if (I.area < 0 || I.soc < 0 || I.emp < 0) {
-    console.warn('  Critical columns missing; aborting parse.');
-    return { byArea: new Map(), year: null };
-  }
-
-  const byArea = new Map(); // areaCode -> Map(soc -> {emp, hMean, aMean})
-  let kept = 0;
-  for (let i = 0; i < dataRows.length; i++) {
-    const r = dataRows[i];
-    if (!r) continue;
-    let area = String(r[I.area] ?? '').replace(/\D/g, '');
-    if (!area) continue;
-    area = area.padStart(7, '0');
-    const soc = String(r[I.soc] ?? '').trim();
-    if (!soc || soc === '00-0000') continue;
-    const emp     = num(r[I.emp]);
-    const hMean   = num(r[I.hMean]);
-    const aMean   = num(r[I.aMean]);
-    const hMedian = num(r[I.hMedian]);
-    const aMedian = num(r[I.aMedian]);
-    let entry = byArea.get(area);
-    if (!entry) { entry = new Map(); byArea.set(area, entry); }
-    entry.set(soc, { emp, hMean, aMean, hMedian, aMedian });
-    kept++;
   }
   console.log(`  Indexed ${kept.toLocaleString()} (area, occupation) cells across ${byArea.size.toLocaleString()} areas.`);
   return { byArea, year: String(year) };
