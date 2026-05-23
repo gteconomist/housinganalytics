@@ -1921,8 +1921,10 @@ const occRows = (occupations?.rows ?? [])
 
   /* Make Chart.js canvases behave well in flex/grid containers */
   canvas { max-width: 100%; height: 280px !important; }
-  /* The tenure donut needs a square canvas to render as a circle. */
-  canvas[data-chart="tenure"] {
+  /* Donut charts need a square canvas to render as a circle, not a
+     football. Add any new doughnut chart ID to this selector list.   */
+  canvas[data-chart="tenure"],
+  canvas[data-chart="vacancyComposition"] {
     max-width: 280px;
     margin: 0 auto;
     display: block;
