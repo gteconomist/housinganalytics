@@ -249,12 +249,17 @@ import manifest from '../data/generated/manifest.json';
       : 'Add a county — e.g. Muscogee, Cook, Travis…';
   }
 
+  // Independent cities (Virginia + Baltimore + St. Louis + Carson City)
+  // are ACS county-equivalents — tag them so they don't look like the
+  // city search has leaked into the county picker.
+  const isIndependentCity = name => / (city|City)$/.test(name);
+
   function renderResults(matches) {
     if (!matches.length) { els.results.hidden = true; els.results.innerHTML = ''; return; }
     els.results.hidden = false;
     els.results.innerHTML = matches.slice(0, 8).map(c => `
       <li><button type="button" data-add="${c.geoid}">
-        <span>${c.name}</span>
+        <span>${c.name}${isIndependentCity(c.name) ? ' <em class="picker__tag">independent city</em>' : ''}</span>
         <span class="muted">${c.state}</span>
       </button></li>
     `).join('');
@@ -838,6 +843,21 @@ import manifest from '../data/generated/manifest.json';
     text-align: left; font-family: inherit; font-size: var(--fs-base);
   }
   .picker__results button:hover { background: var(--bg-section); }
+  .picker__tag {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 1px 6px;
+    font-size: var(--fs-xs);
+    font-style: normal;
+    font-weight: var(--fw-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-navy);
+    background: var(--color-cream);
+    border: 1px solid var(--border-soft);
+    border-radius: 3px;
+    vertical-align: middle;
+  }
   .picker__hint { font-size: var(--fs-xs); margin-top: var(--space-2); }
 
   .empty-state {

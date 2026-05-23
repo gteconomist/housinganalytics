@@ -90,12 +90,17 @@ import { fmtInt } from '../lib/format.js';
   const input = form.querySelector('input');
   const out   = form.querySelector('.search__results');
 
+  // Independent cities (Virginia + Baltimore + St. Louis + Carson City)
+  // are county-equivalents in the ACS, so they live in the county manifest.
+  // Tag them visually so users don't think the city search is leaking in.
+  const isIndependentCity = name => / (city|City)$/.test(name);
+
   function render(matches) {
     if (!matches.length) { out.hidden = true; out.innerHTML = ''; return; }
     out.hidden = false;
     out.innerHTML = matches.slice(0, 8).map(c => `
       <li><a href="/county/${c.state_slug}/${c.slug}">
-        <span>${c.name}</span>
+        <span>${c.name}${isIndependentCity(c.name) ? ' <em class="search__tag">independent city</em>' : ''}</span>
         <span class="muted">${c.state}</span>
       </a></li>
     `).join('');
@@ -163,6 +168,21 @@ import { fmtInt } from '../lib/format.js';
     text-decoration: none; color: var(--text-body);
   }
   .search__results a:hover { background: var(--bg-section); }
+  .search__tag {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 1px 6px;
+    font-size: var(--fs-xs);
+    font-style: normal;
+    font-weight: var(--fw-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-navy);
+    background: var(--color-cream);
+    border: 1px solid var(--border-soft);
+    border-radius: 3px;
+    vertical-align: middle;
+  }
 
   .search__hint {
     margin: var(--space-3) 0 0;
