@@ -10,6 +10,10 @@ dist/
 src/data/generated/
 public/data/
 
+# Cached raw Census API pull from build-places-xlsx.mjs (only useful for
+# iterating on the script — the published XLSX is the source of truth)
+scripts/.places-raw-cache.json
+
 # Editor / OS
 .DS_Store
 .vscode/
