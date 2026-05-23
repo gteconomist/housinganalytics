@@ -32,20 +32,12 @@ jobs:
       - name: Build site
         env:
           # GitHub-hosted Linux runners have 16 GB RAM. The astro build over
-          # 3,222 county pages + ~4,200 place pages with QCEW + OEWS payloads
-          # comfortably exceeds the old 6 GB ceiling, so give V8 12 GB and
-          # leave headroom for the OS and any spawned child processes.
-          NODE_OPTIONS: --max-old-space-size=12288
-          # Census API key for the place-level fetch step (fetch-acs-places.mjs).
-          # Configure as a repository secret at:
-          #   github.com/gteconomist/housinganalytics/settings/secrets/actions
-          # If the secret is missing the places step still runs but rate-limits
-          # may kick in at higher state counts.
-          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
-          # 2-digit state FIPS, or 'all'. Default '13' = Georgia pilot.
-          CENSUS_STATE: ${{ vars.CENSUS_STATE || '13' }}
-          # Population threshold for place inclusion (default 10000).
-          PLACE_MIN_POP: ${{ vars.PLACE_MIN_POP || '10000' }}
+          # 3,222 county pages + ~4,800 place pages with QCEW + OEWS payloads
+          # needs 13-14 GB at peak. 14 GB leaves ~2 GB for the OS and child
+          # processes, which is the practical ceiling on these runners.
+          # package.json's build script reads NODE_HEAP_MB (defaults to 8192
+          # for local Mac builds with 32 GB RAM); CI overrides it here.
+          NODE_HEAP_MB: 14336
         run: npm run build
 
       - name: Upload artifact

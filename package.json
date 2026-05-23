@@ -14,8 +14,8 @@
     "places-xlsx": "node scripts/build-places-xlsx.mjs",
     "data": "node scripts/build-data.mjs",
     "rankings": "node scripts/build-rankings.mjs",
-    "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && NODE_OPTIONS=--max-old-space-size=8192 astro dev",
-    "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && NODE_OPTIONS=--max-old-space-size=8192 astro build",
+    "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js dev",
+    "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js build",
     "preview": "astro preview",
     "astro": "astro"
   },
