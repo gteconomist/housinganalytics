@@ -69,6 +69,8 @@ import manifest from '../data/generated/manifest.json';
 
 <script type="application/json" id="counties-manifest" set:html={JSON.stringify(manifest.counties)}></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<!-- Export module: PNG buttons per chart (Excel/PDF come in a later phase). -->
+<script src="/js/export.js" defer is:inline></script>
 <script>
   // ─────────────────────────────────────────────────────────────
   // Compare page — client-side state + rendering

@@ -353,6 +353,20 @@ const occRows = (occupations?.rows ?? [])
         {fmtInt(county.units_total)} housing units
       </p>
 
+      <!-- Export toolbar — wired by /js/export.js -->
+      <div class="export-toolbar" data-export-toolbar aria-label="Download this profile">
+        <span class="export-toolbar__label">Download:</span>
+        <button type="button" data-export="xlsx" title="Download all data as Excel workbook">
+          Excel (.xlsx)
+        </button>
+        <button type="button" data-export="pdf" title="Download this profile as PDF">
+          PDF
+        </button>
+        <span class="muted" style="font-size: var(--fs-xs);">
+          Charts also have a PNG button (hover any chart).
+        </span>
+      </div>
+
       <div class="kpis">
         <div class="kpi"><div class="kpi__label">Median household income</div>
           <div class="kpi__value">{fmtMoney(county.hh_income_median)}</div>
@@ -1126,6 +1140,8 @@ const occRows = (occupations?.rows ?? [])
 <!-- ── Data + Chart.js init ──────────────────────────────────────── -->
 <script type="application/json" id="county-data" set:html={JSON.stringify({ county, chartData })}></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<!-- Export module: PNG buttons per chart + Excel/PDF buttons for [data-export-toolbar]. -->
+<script src="/js/export.js" defer is:inline></script>
 <script>
   const { county, chartData } = JSON.parse(document.getElementById('county-data').textContent);
 

@@ -180,3 +180,71 @@ hr {
   body { background: white; }
   nav, footer, .no-print { display: none !important; }
 }
+
+/* ── Export controls ───────────────────────────────────────────────────
+ * PNG download button overlaid on every chart figure; Excel/PDF toolbar
+ * on county profile pages. Wired by /js/export.js.
+ */
+.chart-png-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font: 500 11px/1 'Roboto', system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--color-navy);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+}
+figure.card:hover > .chart-png-btn,
+.chart-png-btn:focus-visible { opacity: 1; }
+.chart-png-btn:hover { background: var(--color-cream); }
+.chart-png-btn svg { display: block; }
+@media (hover: none) {
+  /* Touch devices: always show the button. */
+  .chart-png-btn { opacity: 1; }
+}
+
+.export-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: var(--space-4) 0 var(--space-2);
+}
+.export-toolbar__label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-right: var(--space-2);
+}
+.export-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font: 500 13px/1.2 'Roboto', system-ui, sans-serif;
+  color: var(--color-navy);
+  background: var(--color-white);
+  border: 1px solid var(--color-navy);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.export-toolbar button:hover:not(:disabled) {
+  background: var(--color-navy);
+  color: var(--color-white);
+}
+.export-toolbar button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
