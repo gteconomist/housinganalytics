@@ -2,56 +2,64 @@
 import Base from '../layouts/Base.astro';
 import manifest from '../data/generated/manifest.json';
 import { fmtInt } from '../lib/format.js';
+
+const countyCount = manifest.county_count;
+const placeCount  = manifest.place_count ?? 0;
+const placesVintage = manifest.places_vintage ?? 'ACS 5-year estimates';
 ---
 
 <Base title="housinganalytics.org — ACS housing data for every U.S. county"
-      description="County-level housing data for economic-development analysts, drawn from the American Community Survey.">
+      description="County- and city-level housing data for economic-development analysts, drawn from the American Community Survey, BLS QCEW, BLS OEWS, and HUD.">
 
   <section class="hero">
     <div class="container hero__inner">
       <p class="eyebrow">housinganalytics.org</p>
-      <h1>Housing data for every U.S. county, ready for your next study.</h1>
+      <h1>Housing data for every U.S. county and city, ready for your next study.</h1>
       <p class="hero__lede">
-        County profiles drawn from the American Community Survey, formatted for economic-development
-        analysts. {fmtInt(manifest.county_count)} counties · 50 states, plus D.C. and Puerto Rico ·
-        2024 ACS 5-year estimates.
+        housinganalytics.org turns the American Community Survey — and the federal labor and
+        housing data sets that go with it — into the figures, tables, and plain-language
+        summaries an economic-development analyst would otherwise spend days assembling per
+        community.
       </p>
-
-      <form class="search" role="search" data-county-search>
-        <input
-          type="search"
-          name="q"
-          placeholder="Search a county — e.g. Muscogee, Upson, Cook…"
-          autocomplete="off"
-          aria-label="Search counties" />
-        <ul class="search__results" hidden></ul>
-      </form>
-      {manifest.place_count > 0 && (
-        <p class="search__hint muted">
-          Looking for a city or town? <a href="/cities">Open the city search →</a>
-        </p>
-      )}
+      <p class="hero__lede">
+        Every page is structured the way a housing study is structured: a Community Profile,
+        a Residential Market Analysis, and a Workforce Housing Needs Assessment, with industry
+        and occupation wage detail layered in. {fmtInt(countyCount)} counties, {fmtInt(placeCount)}
+        cities and towns, all 50 states plus D.C. and Puerto Rico, refreshed annually as new
+        ACS, BLS, and HUD vintages publish.
+      </p>
     </div>
   </section>
 
   <section class="container">
     <h2>What you can do here</h2>
     <p class="section-lede muted">
-      Three ways to work with the same underlying ACS data set — pulled into the shape an
+      The same underlying data set, surfaced six different ways — pulled into the shape an
       economic-development analyst actually needs.
     </p>
 
     <ul class="feature-list">
       <li class="feature">
         <p class="feature__eyebrow">County profiles</p>
-        <h3><a href="#" data-feature-link="counties">A full housing profile for any of {fmtInt(manifest.county_count)} counties</a></h3>
+        <h3><a href="/counties">A full housing profile for any of {fmtInt(countyCount)} counties</a></h3>
         <p>
-          Search a county above to open its profile. Each one is structured to mirror the three
-          sections of a typical housing study — Community Profile, Residential Market Analysis,
-          and Workforce Housing Needs Assessment — plus a parametric affordability calculator
-          you can adjust on the page.
+          KPI tiles, a Community Data Summary table, tenure and stock breakdowns, value and rent
+          distributions, cost-burden detail, and a parametric affordability calculator you can
+          adjust on the page. Includes BLS QCEW industry employment and wages and BLS OEWS
+          occupation wages with affordability tied to each.
         </p>
-        <p class="feature__hint muted">Use the search box at the top of the page.</p>
+        <p class="feature__hint"><a href="/counties">Open the county search →</a></p>
+      </li>
+
+      <li class="feature">
+        <p class="feature__eyebrow">City profiles</p>
+        <h3><a href="/cities">A housing profile for any of {fmtInt(placeCount)} cities and towns</a></h3>
+        <p>
+          Demographics, housing stock, tenure, costs, rent and value distributions, cost burden,
+          and the same parametric affordability calculator at the Census place geography. HUD AMI
+          is inherited from the parent county. {placesVintage}.
+        </p>
+        <p class="feature__hint"><a href="/cities">Open the city search →</a></p>
       </li>
 
       <li class="feature">
@@ -59,8 +67,9 @@ import { fmtInt } from '../lib/format.js';
         <h3><a href="/compare">Side-by-side comparison of 2–6 counties</a></h3>
         <p>
           Pick a handful of counties and see every metric from the profile lined up next to
-          each other. The URL preserves your selection, so you can share or bookmark a specific
-          comparison.
+          each other — KPI strip, Community Data Summary, single-bar charts, and grouped or
+          small-multiple distributions. The URL preserves your selection so you can share or
+          bookmark a specific comparison.
         </p>
         <p class="feature__hint"><a href="/compare">Open the compare tool →</a></p>
       </li>
@@ -69,63 +78,37 @@ import { fmtInt } from '../lib/format.js';
         <p class="feature__eyebrow">Rankings</p>
         <h3><a href="/rankings">Sort every U.S. county on any metric</a></h3>
         <p>
-          Rank all 3,222 counties on any variable in the data set — median rent, vacancy rate,
-          cost-burdened share, owner-occupied share, and so on. Filter by state or population
-          tier, then export the current view to CSV.
+          Rank all {fmtInt(countyCount)} counties on any variable in the data set — median rent,
+          vacancy rate, cost-burdened share, owner-occupied share, and dozens more. Filter by
+          state or population tier, see the top 10 as a chart, and export the current view to CSV.
         </p>
         <p class="feature__hint"><a href="/rankings">Open the rankings explorer →</a></p>
       </li>
-    </ul>
 
-    <p class="coming-soon muted">
-      <strong>Coming next:</strong> one-click Word, PDF, and Excel export of any county or city profile,
-      formatted as a client-ready deliverable.
-    </p>
+      <li class="feature">
+        <p class="feature__eyebrow">National map</p>
+        <h3><a href="/map">Color every county on any metric</a></h3>
+        <p>
+          A choropleth of all {fmtInt(countyCount)} counties — pick a metric, zoom into a single
+          state, switch between national and within-state color scales, hover for values, click
+          through to a profile. Alaska and Hawaii are inset.
+        </p>
+        <p class="feature__hint"><a href="/map">Open the map →</a></p>
+      </li>
+
+      <li class="feature">
+        <p class="feature__eyebrow">Export</p>
+        <h3>One-click Excel &amp; PDF on every profile</h3>
+        <p>
+          Each county profile carries a download bar at the top. Pull the full data set as an
+          Excel workbook, or save the rendered profile as a client-ready PDF — chart images, KPI
+          tiles, tables, and footnotes all preserved. Individual charts also export to PNG.
+        </p>
+        <p class="feature__hint muted">Look for the download bar above the KPI tiles.</p>
+      </li>
+    </ul>
   </section>
 </Base>
-
-<script type="module" define:vars={{ counties: manifest.counties }}>
-  // Lightweight typeahead — counties only. Cities have their own page at /cities.
-  const form  = document.querySelector('[data-county-search]');
-  const input = form.querySelector('input');
-  const out   = form.querySelector('.search__results');
-
-  // Independent cities (Virginia + Baltimore + St. Louis + Carson City)
-  // are county-equivalents in the ACS, so they live in the county manifest.
-  // Tag them visually so users don't think the city search is leaking in.
-  const isIndependentCity = name => / (city|City)$/.test(name);
-
-  function render(matches) {
-    if (!matches.length) { out.hidden = true; out.innerHTML = ''; return; }
-    out.hidden = false;
-    out.innerHTML = matches.slice(0, 8).map(c => `
-      <li><a href="/county/${c.state_slug}/${c.slug}">
-        <span>${c.name}${isIndependentCity(c.name) ? ' <em class="search__tag">independent city</em>' : ''}</span>
-        <span class="muted">${c.state}</span>
-      </a></li>
-    `).join('');
-  }
-
-  input.addEventListener('input', e => {
-    const q = e.target.value.trim().toLowerCase();
-    if (q.length < 2) return render([]);
-    render(counties.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.state.toLowerCase().includes(q)
-    ));
-  });
-
-  input.addEventListener('blur', () => setTimeout(() => render([]), 200));
-
-  // "County profiles" feature headline scrolls back to the search box and focuses it.
-  document.querySelectorAll('[data-feature-link="counties"]').forEach(el => {
-    el.addEventListener('click', e => {
-      e.preventDefault();
-      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => input.focus(), 350);
-    });
-  });
-</script>
 
 <style>
   .hero {
@@ -133,72 +116,20 @@ import { fmtInt } from '../lib/format.js';
     padding: var(--space-9) 0 var(--space-7);
     border-bottom: 1px solid var(--border-soft);
   }
-  .hero h1 { max-width: 18ch; margin-bottom: var(--space-4); }
-  .hero__lede { max-width: 60ch; font-size: var(--fs-md); color: var(--text-muted); margin-bottom: var(--space-6); }
-
-  .search { position: relative; max-width: 560px; }
-  .search input {
-    width: 100%;
-    padding: var(--space-4) var(--space-5);
+  .hero h1 { max-width: 22ch; margin-bottom: var(--space-4); }
+  .hero__lede {
+    max-width: 70ch;
     font-size: var(--fs-md);
-    font-family: inherit;
-    border: 2px solid var(--color-navy);
-    border-radius: var(--radius-md);
-    background: var(--bg-page);
-    box-shadow: var(--shadow-soft);
+    color: var(--text-muted);
+    margin-bottom: var(--space-4);
   }
-  .search input:focus {
-    outline: 3px solid var(--color-gold);
-    outline-offset: 1px;
-  }
-  .search__results {
-    position: absolute; top: 100%; left: 0; right: 0;
-    list-style: none; margin: var(--space-2) 0 0; padding: 0;
-    background: var(--bg-page);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-card);
-    z-index: 10;
-  }
-  .search__results li { border-bottom: 1px solid var(--border-soft); }
-  .search__results li:last-child { border-bottom: none; }
-  .search__results a {
-    display: flex; justify-content: space-between; align-items: baseline;
-    padding: var(--space-3) var(--space-4);
-    text-decoration: none; color: var(--text-body);
-  }
-  .search__results a:hover { background: var(--bg-section); }
-  .search__tag {
-    display: inline-block;
-    margin-left: var(--space-2);
-    padding: 1px 6px;
-    font-size: var(--fs-xs);
-    font-style: normal;
-    font-weight: var(--fw-medium);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-navy);
-    background: var(--color-cream);
-    border: 1px solid var(--border-soft);
-    border-radius: 3px;
-    vertical-align: middle;
-  }
-
-  .search__hint {
-    margin: var(--space-3) 0 0;
-    font-size: var(--fs-sm);
-    max-width: 560px;
-  }
-  .search__hint a {
-    color: var(--color-navy);
-    font-weight: var(--fw-medium);
-  }
+  .hero__lede:last-of-type { margin-bottom: 0; }
 
   .container > h2 { margin: var(--space-7) 0 var(--space-3); }
   .section-lede { max-width: 70ch; margin: 0 0 var(--space-6); font-size: var(--fs-md); }
 
   .feature-list {
-    list-style: none; padding: 0; margin: 0;
+    list-style: none; padding: 0; margin: 0 0 var(--space-9);
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: var(--space-5);
@@ -227,13 +158,4 @@ import { fmtInt } from '../lib/format.js';
   .feature p { margin: 0 0 var(--space-3); }
   .feature__hint { font-size: var(--fs-sm); margin-top: var(--space-2); }
   .feature__hint a { color: var(--color-navy); font-weight: var(--fw-medium); }
-
-  .coming-soon {
-    margin: var(--space-7) 0 var(--space-7);
-    padding: var(--space-4) var(--space-5);
-    border-top: 1px solid var(--border-soft);
-    font-size: var(--fs-sm);
-    max-width: 80ch;
-  }
-  .coming-soon strong { color: var(--color-navy); }
 </style>

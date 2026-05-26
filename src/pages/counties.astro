@@ -1,0 +1,350 @@
+---
+import Base from '../layouts/Base.astro';
+import manifest from '../data/generated/manifest.json';
+import { fmtInt } from '../lib/format.js';
+
+const counties = manifest.counties ?? [];
+const countyCount = counties.length;
+
+// Pre-compute the per-state browse so the page doesn't have to do it in JS.
+const stateCounts = {};
+for (const c of counties) {
+  if (!stateCounts[c.state]) stateCounts[c.state] = { name: c.state, slug: c.state_slug, count: 0 };
+  stateCounts[c.state].count++;
+}
+const stateList = Object.values(stateCounts).sort((a, b) => a.name.localeCompare(b.name));
+---
+
+<Base title="Counties — housinganalytics.org"
+      description="Search a U.S. county for a full ACS housing profile. 3,222 counties · 50 states plus D.C. and Puerto Rico · 2024 ACS 5-year estimates.">
+
+  <section class="hero">
+    <div class="container hero__inner">
+      <p class="eyebrow">Counties</p>
+      <h1>Housing data for every U.S. county.</h1>
+      <p class="hero__lede">
+        County profiles drawn from the American Community Survey, formatted for economic-development
+        analysts. {fmtInt(countyCount)} counties · 50 states, plus D.C. and Puerto Rico ·
+        2024 ACS 5-year estimates.
+      </p>
+
+      <form class="search" role="search" data-county-search>
+        <input
+          type="search"
+          name="q"
+          placeholder="Search a county — e.g. Muscogee, Upson, Cook…"
+          autocomplete="off"
+          aria-label="Search counties" />
+        <ul class="search__results" hidden></ul>
+      </form>
+      {manifest.place_count > 0 && (
+        <p class="search__hint muted">
+          Looking for a city or town? <a href="/cities">Open the city search →</a>
+        </p>
+      )}
+    </div>
+  </section>
+
+  <section class="container">
+    <h2>What's in a county profile</h2>
+    <p class="section-lede muted">
+      Each profile is structured to mirror the three sections of a typical housing study —
+      Community Profile, Residential Market Analysis, and Workforce Housing Needs Assessment —
+      with industry and occupation wage detail layered on top.
+    </p>
+
+    <ul class="feature-list">
+      <li class="feature">
+        <p class="feature__eyebrow">ACS housing profile</p>
+        <h3><a href="#" data-feature-link="counties">A full housing profile for any of {fmtInt(countyCount)} counties</a></h3>
+        <p>
+          KPI tiles, a Community Data Summary table, tenure and stock breakdowns, value and rent
+          distributions, cost-burden detail, and a parametric affordability calculator you can
+          adjust on the page.
+        </p>
+        <p class="feature__hint muted">Use the search box at the top of the page.</p>
+      </li>
+
+      <li class="feature">
+        <p class="feature__eyebrow">BLS QCEW</p>
+        <h3>Industry employment &amp; wages</h3>
+        <p>
+          Section 4 lists the county's NAICS sectors and 3-digit subsectors with employment,
+          average annual pay, and the home price and rent each industry's wage can sustain at
+          the same 30%-of-income standard used elsewhere on the page.
+        </p>
+        <p class="feature__hint muted">Appears on every county profile.</p>
+      </li>
+
+      <li class="feature">
+        <p class="feature__eyebrow">BLS OEWS</p>
+        <h3>Occupation wages &amp; affordability</h3>
+        <p>
+          Section 5 shows 20 essential-worker occupations — teachers, nurses, police, retail,
+          food service, trades — with the current-year wage, the 10-year change, and the home
+          price and rent that wage will sustain in this county.
+        </p>
+        <p class="feature__hint muted">Appears on every county profile.</p>
+      </li>
+
+      <li class="feature">
+        <p class="feature__eyebrow">HUD AMI</p>
+        <h3>Workforce income brackets</h3>
+        <p>
+          Section 3 pairs ACS median household income with HUD Area Median Income at 80%, 100%,
+          and 120% for 1-, 2-, and 4-person households, so the workforce-housing discussion lines
+          up with the way regulators already define affordability.
+        </p>
+        <p class="feature__hint muted">Updated each spring from HUD's Section 8 limits.</p>
+      </li>
+
+      <li class="feature">
+        <p class="feature__eyebrow">Export</p>
+        <h3>One-click Excel &amp; PDF</h3>
+        <p>
+          Every county profile has a download bar at the top — pull the full data set as an
+          Excel workbook, or save the rendered profile as a client-ready PDF. Individual charts
+          also export to PNG.
+        </p>
+        <p class="feature__hint muted">Find the download bar above the KPI tiles.</p>
+      </li>
+
+      <li class="feature">
+        <p class="feature__eyebrow">Beyond a single county</p>
+        <h3>Compare, rank, and map</h3>
+        <p>
+          Once you've opened a profile, use Compare to put it next to 2–5 peer counties, Rankings
+          to sort every U.S. county on the metrics that matter, or the Map to color all 3,222
+          counties on the variable of your choice.
+        </p>
+        <p class="feature__hint">
+          <a href="/compare">Compare</a> · <a href="/rankings">Rankings</a> · <a href="/map">Map</a>
+        </p>
+      </li>
+    </ul>
+
+    <h2 class="states-h2">Browse by state</h2>
+    <p class="section-lede muted">
+      {fmtInt(countyCount)} counties across {fmtInt(stateList.length)} states &amp; territories.
+      Jump to a state, then pick a county.
+    </p>
+    <ul class="state-list">
+      {stateList.map(s => (
+        <li>
+          <a href={`#state-${s.slug}`} data-state-jump={s.slug}>
+            {s.name} <span class="muted">({s.count})</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+
+    {stateList.map(s => (
+      <section class="state-section" id={`state-${s.slug}`}>
+        <h3>{s.name}</h3>
+        <ul class="county-list">
+          {counties
+            .filter(c => c.state_slug === s.slug)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(c => (
+              <li>
+                <a href={`/county/${c.state_slug}/${c.slug}`}>
+                  {c.name}
+                  <span class="muted">{fmtInt(c.population_total)}</span>
+                </a>
+              </li>
+            ))}
+        </ul>
+      </section>
+    ))}
+  </section>
+</Base>
+
+<script type="module" define:vars={{ counties: manifest.counties }}>
+  // Lightweight typeahead — counties only. Cities have their own page at /cities.
+  const form  = document.querySelector('[data-county-search]');
+  const input = form.querySelector('input');
+  const out   = form.querySelector('.search__results');
+
+  // Independent cities (Virginia + Baltimore + St. Louis + Carson City)
+  // are county-equivalents in the ACS, so they live in the county manifest.
+  // Tag them visually so users don't think the city search is leaking in.
+  const isIndependentCity = name => / (city|City)$/.test(name);
+
+  function render(matches) {
+    if (!matches.length) { out.hidden = true; out.innerHTML = ''; return; }
+    out.hidden = false;
+    out.innerHTML = matches.slice(0, 8).map(c => `
+      <li><a href="/county/${c.state_slug}/${c.slug}">
+        <span>${c.name}${isIndependentCity(c.name) ? ' <em class="search__tag">independent city</em>' : ''}</span>
+        <span class="muted">${c.state}</span>
+      </a></li>
+    `).join('');
+  }
+
+  input.addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    if (q.length < 2) return render([]);
+    render(counties.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.state.toLowerCase().includes(q)
+    ));
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => render([]), 200));
+
+  // "County profiles" feature headline scrolls back to the search box and focuses it.
+  document.querySelectorAll('[data-feature-link="counties"]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => input.focus(), 350);
+    });
+  });
+</script>
+
+<style>
+  /* Hero + search reuse the same look as the rest of the site. */
+  .hero {
+    background: var(--bg-section);
+    padding: var(--space-9) 0 var(--space-7);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .hero h1 { max-width: 20ch; margin-bottom: var(--space-4); }
+  .hero__lede { max-width: 60ch; font-size: var(--fs-md); color: var(--text-muted); margin-bottom: var(--space-6); }
+
+  .search { position: relative; max-width: 560px; }
+  .search input {
+    width: 100%;
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--fs-md);
+    font-family: inherit;
+    border: 2px solid var(--color-navy);
+    border-radius: var(--radius-md);
+    background: var(--bg-page);
+    box-shadow: var(--shadow-soft);
+  }
+  .search input:focus {
+    outline: 3px solid var(--color-gold);
+    outline-offset: 1px;
+  }
+  .search__results {
+    position: absolute; top: 100%; left: 0; right: 0;
+    list-style: none; margin: var(--space-2) 0 0; padding: 0;
+    background: var(--bg-page);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    z-index: 10;
+  }
+  .search__results li { border-bottom: 1px solid var(--border-soft); }
+  .search__results li:last-child { border-bottom: none; }
+  .search__results a {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: var(--space-3) var(--space-4);
+    text-decoration: none; color: var(--text-body);
+  }
+  .search__results a:hover { background: var(--bg-section); }
+  .search__tag {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 1px 6px;
+    font-size: var(--fs-xs);
+    font-style: normal;
+    font-weight: var(--fw-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-navy);
+    background: var(--color-cream);
+    border: 1px solid var(--border-soft);
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+
+  .search__hint {
+    margin: var(--space-3) 0 0;
+    font-size: var(--fs-sm);
+    max-width: 560px;
+  }
+  .search__hint a {
+    color: var(--color-navy);
+    font-weight: var(--fw-medium);
+  }
+
+  .container > h2 { margin: var(--space-7) 0 var(--space-3); }
+  .container > h2.states-h2 { margin-top: var(--space-8); }
+  .section-lede { max-width: 70ch; margin: 0 0 var(--space-6); font-size: var(--fs-md); }
+
+  .feature-list {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--space-5);
+  }
+  .feature {
+    padding: var(--space-5) var(--space-5) var(--space-4);
+    border: 1px solid var(--border-soft);
+    border-left: 4px solid var(--color-gold);
+    background: var(--bg-card);
+  }
+  .feature__eyebrow {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-navy);
+    font-weight: var(--fw-medium);
+    margin: 0 0 var(--space-2);
+  }
+  .feature h3 {
+    margin: 0 0 var(--space-3);
+    font-size: var(--fs-lg);
+    line-height: 1.25;
+  }
+  .feature h3 a { color: var(--text-body); text-decoration: none; }
+  .feature h3 a:hover { color: var(--color-navy); text-decoration: underline; }
+  .feature p { margin: 0 0 var(--space-3); }
+  .feature__hint { font-size: var(--fs-sm); margin-top: var(--space-2); }
+  .feature__hint a { color: var(--color-navy); font-weight: var(--fw-medium); }
+
+  /* State jump-list — compact, multi-column on wide screens. */
+  .state-list {
+    list-style: none; padding: 0; margin: 0 0 var(--space-7);
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-2);
+  }
+  .state-list a {
+    display: block;
+    padding: var(--space-2) var(--space-3);
+    text-decoration: none;
+    color: var(--text-body);
+    border-radius: var(--radius-sm);
+  }
+  .state-list a:hover { background: var(--bg-section); color: var(--color-navy); }
+
+  /* Per-state county section. */
+  .state-section {
+    margin: var(--space-6) 0;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-soft);
+  }
+  .state-section h3 {
+    margin: 0 0 var(--space-3);
+    font-size: var(--fs-lg);
+    color: var(--color-navy);
+  }
+  .county-list {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-2) var(--space-4);
+  }
+  .county-list a {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: var(--space-2) var(--space-3);
+    text-decoration: none;
+    color: var(--text-body);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .county-list a:hover { background: var(--bg-section); color: var(--color-navy); }
+  .county-list .muted { font-size: var(--fs-sm); }
+</style>
