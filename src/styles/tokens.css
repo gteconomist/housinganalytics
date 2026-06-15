@@ -6,15 +6,19 @@
 
 :root {
   /* ── Brand palette ─────────────────────────────────────────────── */
-  /* Primary */
+  /* Primary — EIG (Economic Impact Group) brand.
+   * NOTE: graph/chart colors are deliberately pinned to the ORIGINAL
+   * literal hexes inside each page's chart <script> and in the
+   * --series-*/--chart-* tokens below, so the data visualizations keep
+   * their prior palette after this rebrand. */
   --color-white:       #FFFFFF;
-  --color-navy:        #003057;  /* primary brand color */
-  --color-gold:        #b3a369;  /* warm accent */
+  --color-navy:        #16181c;  /* EIG charcoal — primary brand (was GT navy #003057) */
+  --color-gold:        #f19623;  /* EIG amber accent (was GT gold #b3a369) */
 
   /* Secondary */
-  --color-cream:       #f9f6e5;  /* soft section background */
+  --color-cream:       #fbf6ee;  /* EIG cream — section + page background (was #f9f6e5) */
   --color-sage:        #d6dbd4;  /* card / separator */
-  --color-charcoal:    #545b5a;  /* muted text */
+  --color-charcoal:    #5f646c;  /* EIG muted text (was #545b5a) */
 
   /* Tertiary — chart series, KPI highlights, accents */
   --color-amber:       #eaa000;
@@ -26,13 +30,13 @@
   --color-red:         #e04f39;
 
   /* ── Semantic roles ────────────────────────────────────────────── */
-  --bg-page:           var(--color-white);
+  --bg-page:           var(--color-cream);   /* EIG: cream everywhere */
   --bg-section:        var(--color-cream);
   --bg-card:           var(--color-white);
   --bg-muted:          var(--color-sage);
 
   --text-primary:      var(--color-navy);
-  --text-body:         #1f2a36;
+  --text-body:         #1f2226;
   --text-muted:        var(--color-charcoal);
   --text-on-dark:      var(--color-white);
 
@@ -43,14 +47,15 @@
   --accent:            var(--color-gold);
   --accent-strong:     var(--color-amber);
 
-  /* Comparison series (county / state / national) */
-  --series-county:     var(--color-navy);
-  --series-state:      var(--color-gold);
-  --series-national:   var(--color-charcoal);
+  /* Comparison series (county / state / national) — pinned to original
+   * graph hexes so charts are unaffected by the EIG rebrand above. */
+  --series-county:     #003057;
+  --series-state:      #b3a369;
+  --series-national:   #545b5a;
 
   /* Chart categorical palette (use in order for stacked / multi-series) */
-  --chart-1: var(--color-navy);
-  --chart-2: var(--color-gold);
+  --chart-1: #003057;
+  --chart-2: #b3a369;
   --chart-3: var(--color-teal);
   --chart-4: var(--color-blue);
   --chart-5: var(--color-light-teal);
@@ -60,9 +65,9 @@
   --chart-9: var(--color-amber);
 
   /* ── Typography ────────────────────────────────────────────────── */
-  --font-sans: "Roboto", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font-sans: "Geist", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
   --font-serif: "Source Serif Pro", "Georgia", "Times New Roman", serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --fs-xs:   12px;
   --fs-sm:   14px;
@@ -193,7 +198,7 @@ hr {
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  font: 500 11px/1 'Roboto', system-ui, sans-serif;
+  font: 500 11px/1 'Geist', system-ui, sans-serif;
   letter-spacing: 0.04em;
   color: var(--color-navy);
   background: rgba(255, 255, 255, 0.92);
@@ -232,7 +237,7 @@ figure.card:hover > .chart-png-btn,
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  font: 500 13px/1.2 'Roboto', system-ui, sans-serif;
+  font: 500 13px/1.2 'Geist', system-ui, sans-serif;
   color: var(--color-navy);
   background: var(--color-white);
   border: 1px solid var(--color-navy);

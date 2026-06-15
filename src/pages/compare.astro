@@ -115,10 +115,10 @@ import manifest from '../data/generated/manifest.json';
   // ── Color palette (read from CSS variables) ───────────────────
   const css = getComputedStyle(document.documentElement);
   const C = {
-    navy:   css.getPropertyValue('--color-navy').trim(),
-    gold:   css.getPropertyValue('--color-gold').trim(),
+    navy:   '#003057',
+    gold:   '#b3a369',
     sage:   css.getPropertyValue('--color-sage').trim(),
-    char:   css.getPropertyValue('--color-charcoal').trim(),
+    char:   '#545b5a',
     teal:   css.getPropertyValue('--color-teal').trim(),
     blue:   css.getPropertyValue('--color-blue').trim(),
     purple: css.getPropertyValue('--color-purple').trim(),
@@ -128,7 +128,7 @@ import manifest from '../data/generated/manifest.json';
   // navy/blue/teal to remain readable.
   const seriesColors = [C.navy, C.gold, C.teal, C.blue, C.char, C.purple];
 
-  Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
+  Chart.defaults.font.family = "'Geist', system-ui, sans-serif";
   Chart.defaults.color = '#000';
   Chart.defaults.borderColor = '#e6e2d2';
   Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
@@ -150,7 +150,7 @@ import manifest from '../data/generated/manifest.json';
           if (!formatted) return;
           ctx.save();
           ctx.fillStyle = opts.color || C.navy;
-          ctx.font = '500 11px Roboto, system-ui, sans-serif';
+          ctx.font = '500 11px Geist, system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
           ctx.fillText(formatted, bar.x, bar.y - 4);

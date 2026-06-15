@@ -224,10 +224,10 @@ import Base from '../layouts/Base.astro';
   // ── Chart.js defaults to match the site house style ─────────
   const css = getComputedStyle(document.documentElement);
   const C = {
-    navy: css.getPropertyValue('--color-navy').trim(),
-    gold: css.getPropertyValue('--color-gold').trim(),
+    navy: '#003057',
+    gold: '#b3a369',
   };
-  Chart.defaults.font.family = "'Roboto', system-ui, sans-serif";
+  Chart.defaults.font.family = "'Geist', system-ui, sans-serif";
   Chart.defaults.color = '#000';
   Chart.defaults.borderColor = '#e6e2d2';
   Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
@@ -248,7 +248,7 @@ import Base from '../layouts/Base.astro';
           if (!formatted) return;
           ctx.save();
           ctx.fillStyle = opts.color || C.navy;
-          ctx.font = '500 11px Roboto, system-ui, sans-serif';
+          ctx.font = '500 11px Geist, system-ui, sans-serif';
           // Horizontal bars → labels at bar end. Vertical bars → above bar.
           if (chart.options.indexAxis === 'y') {
             ctx.textAlign = 'left';
@@ -664,7 +664,7 @@ import Base from '../layouts/Base.astro';
     line-height: 1.2;
   }
   .btn--primary { background: var(--color-navy); color: var(--color-white); }
-  .btn--primary:hover { background: #001f3a; }
+  .btn--primary:hover { background: #0c0d10; }
   .btn--ghost   { background: var(--bg-page); color: var(--color-navy); }
   .btn--ghost:hover { background: var(--bg-section); }
 

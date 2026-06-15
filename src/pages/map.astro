@@ -159,12 +159,12 @@ import Base from '../layouts/Base.astro';
   const css = getComputedStyle(document.documentElement);
   const cssVar = name => css.getPropertyValue(name).trim();
   const C = {
-    cream:   cssVar('--color-cream')   || '#f9f6e5',
-    navy:    cssVar('--color-navy')    || '#003057',
+    cream:   '#f9f6e5',
+    navy:    '#003057',
     red:     cssVar('--color-red')     || '#e04f39',
     teal:    cssVar('--color-teal')    || '#008c95',
     sage:    cssVar('--color-sage')    || '#d6dbd4',
-    gold:    cssVar('--color-gold')    || '#b3a369',
+    gold:    '#b3a369',
     white:   '#fff',
   };
   const RAMP = {
