@@ -32,13 +32,13 @@
   /* ── Semantic roles ────────────────────────────────────────────── */
   --bg-page:           var(--color-cream);   /* EIG: cream everywhere */
   --bg-section:        var(--color-cream);
-  --bg-card:           var(--color-white);
+  --bg-card:           #ffffff;
   --bg-muted:          var(--color-sage);
 
   --text-primary:      var(--color-navy);
   --text-body:         #1f2226;
   --text-muted:        var(--color-charcoal);
-  --text-on-dark:      var(--color-white);
+  --text-on-dark:      #ffffff;
 
   --border-soft:       #e6e2d2;
   --border-muted:      #d6dbd4;
