@@ -239,7 +239,7 @@ figure.card:hover > .chart-png-btn,
   padding: 6px 12px;
   font: 500 13px/1.2 'Geist', system-ui, sans-serif;
   color: var(--color-navy);
-  background: var(--color-white);
+  background: #ffffff;
   border: 1px solid var(--color-navy);
   border-radius: 3px;
   cursor: pointer;
@@ -247,7 +247,7 @@ figure.card:hover > .chart-png-btn,
 }
 .export-toolbar button:hover:not(:disabled) {
   background: var(--color-navy);
-  color: var(--color-white);
+  color: #ffffff;
 }
 .export-toolbar button:disabled {
   opacity: 0.6;
