@@ -224,12 +224,12 @@ import Base from '../layouts/Base.astro';
   // ── Chart.js defaults to match the site house style ─────────
   const css = getComputedStyle(document.documentElement);
   const C = {
-    navy: '#003057',
-    gold: '#b3a369',
+    navy: css.getPropertyValue('--color-navy').trim(),
+    gold: css.getPropertyValue('--color-gold').trim(),
   };
   Chart.defaults.font.family = "'Geist', system-ui, sans-serif";
   Chart.defaults.color = '#000';
-  Chart.defaults.borderColor = '#e6e2d2';
+  Chart.defaults.borderColor = '#e7ded0';
   Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
   Chart.defaults.elements.bar.borderRadius = 0;
 
@@ -782,7 +782,7 @@ import Base from '../layouts/Base.astro';
   .rank-th--county { text-align: left; }
   .rank-th.is-sorted {
     color: var(--color-navy);
-    background: #f1eedb;
+    background: #f4ecdf;
   }
   .sort-arrow { font-size: 10px; }
   .rank-table tbody td {
@@ -792,7 +792,7 @@ import Base from '../layouts/Base.astro';
     color: var(--text-primary);
   }
   .rank-table tbody td.is-sorted {
-    background: #fbfaf1;
+    background: #faf4ea;
     font-weight: var(--fw-semibold);
   }
   .rank-table tbody td.rank-num {

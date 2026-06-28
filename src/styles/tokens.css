@@ -15,54 +15,66 @@
   --color-navy:        #16181c;  /* EIG charcoal — primary brand (was GT navy #003057) */
   --color-gold:        #f19623;  /* EIG amber accent (was GT gold #b3a369) */
 
-  /* Secondary */
-  --color-cream:       #fbf6ee;  /* EIG cream — section + page background (was #f9f6e5) */
-  --color-sage:        #d6dbd4;  /* card / separator */
-  --color-charcoal:    #5f646c;  /* EIG muted text (was #545b5a) */
+  /* Secondary — LOCI warm neutrals (loci.online) */
+  --color-cream:       #fbf6ee;  /* LOCI --cream — section + page background */
+  --color-panel:       #faf4ea;  /* LOCI --panel — slightly warmer surface */
+  --color-panel-2:     #f4ecdf;  /* LOCI --panel2 — muted surface */
+  --color-sage:        #d6dbd4;  /* card / separator (legacy; healthy bucket) */
+  --color-hair:        #e7ded0;  /* LOCI --hair — warm hairline */
+  --color-line:        #f2ece1;  /* LOCI --line — faint warm divider */
+  --color-charcoal:    #5f646c;  /* LOCI --slate — muted text */
 
-  /* Tertiary — chart series, KPI highlights, accents */
-  --color-amber:       #eaa000;
-  --color-teal:        #008c95;
-  --color-blue:        #3a5dae;
-  --color-light-teal:  #64ccc9;
-  --color-purple:      #5f249f;
-  --color-lime:        #a4d233;
-  --color-red:         #e04f39;
+  /* Tertiary — LOCI accent palette (earthy; used for chart series + KPIs) */
+  --color-orange:      #f19623;  /* LOCI --orange (= --color-gold) */
+  --color-orange-d:    #c87d1c;  /* LOCI --orange-d — deep amber */
+  --color-brick:       #a8432f;  /* LOCI --red — brick red */
+  --color-green:       #3f7d52;  /* LOCI --green — forest green */
+  --color-bar:         #3a4049;  /* LOCI --bar — slate blue-grey */
+  --color-faint:       #9a948a;  /* LOCI --faint — warm light grey */
+  --color-slate:       #5f646c;  /* LOCI --slate */
+  /* Legacy aliases remapped to LOCI equivalents (kept so existing refs work) */
+  --color-amber:       var(--color-orange-d);
+  --color-teal:        var(--color-green);
+  --color-blue:        var(--color-bar);
+  --color-light-teal:  #7fa98a;  /* light forest tint */
+  --color-purple:      #8a6f5c;  /* warm brown (echoes EIG logo bar) */
+  --color-lime:        #c9a227;  /* muted gold */
+  --color-red:         var(--color-brick);
 
   /* ── Semantic roles ────────────────────────────────────────────── */
-  --bg-page:           var(--color-cream);   /* EIG: cream everywhere */
+  --bg-page:           var(--color-cream);   /* LOCI: cream everywhere */
   --bg-section:        var(--color-cream);
   --bg-card:           #ffffff;
-  --bg-muted:          var(--color-sage);
+  --bg-muted:          var(--color-panel-2);
 
   --text-primary:      var(--color-navy);
   --text-body:         #1f2226;
   --text-muted:        var(--color-charcoal);
   --text-on-dark:      #ffffff;
 
-  --border-soft:       #e6e2d2;
-  --border-muted:      #d6dbd4;
+  --border-soft:       var(--color-hair);
+  --border-muted:      var(--color-hair);
   --border-strong:     var(--color-navy);
 
   --accent:            var(--color-gold);
-  --accent-strong:     var(--color-amber);
+  --accent-strong:     var(--color-orange-d);
 
-  /* Comparison series (county / state / national) — pinned to original
-   * graph hexes so charts are unaffected by the EIG rebrand above. */
-  --series-county:     #003057;
-  --series-state:      #b3a369;
-  --series-national:   #545b5a;
+  /* Comparison series (county / state / national) — LOCI palette:
+   * focus area in charcoal, state in orange, national in warm grey. */
+  --series-county:     #16181c;
+  --series-state:      #f19623;
+  --series-national:   #9a948a;
 
-  /* Chart categorical palette (use in order for stacked / multi-series) */
-  --chart-1: #003057;
-  --chart-2: #b3a369;
-  --chart-3: var(--color-teal);
-  --chart-4: var(--color-blue);
-  --chart-5: var(--color-light-teal);
-  --chart-6: var(--color-purple);
-  --chart-7: var(--color-lime);
-  --chart-8: var(--color-red);
-  --chart-9: var(--color-amber);
+  /* Chart categorical palette (LOCI earthy hues; use in order) */
+  --chart-1: #16181c;  /* charcoal */
+  --chart-2: #f19623;  /* orange */
+  --chart-3: #3f7d52;  /* forest green */
+  --chart-4: #a8432f;  /* brick red */
+  --chart-5: #5f646c;  /* slate */
+  --chart-6: #c87d1c;  /* deep amber */
+  --chart-7: #3a4049;  /* blue-grey */
+  --chart-8: #9a948a;  /* warm grey */
+  --chart-9: #8a6f5c;  /* warm brown */
 
   /* ── Typography ────────────────────────────────────────────────── */
   --font-sans: "Geist", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;

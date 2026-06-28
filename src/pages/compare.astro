@@ -115,10 +115,10 @@ import manifest from '../data/generated/manifest.json';
   // ── Color palette (read from CSS variables) ───────────────────
   const css = getComputedStyle(document.documentElement);
   const C = {
-    navy:   '#003057',
-    gold:   '#b3a369',
+    navy:   css.getPropertyValue('--color-navy').trim(),
+    gold:   css.getPropertyValue('--color-gold').trim(),
     sage:   css.getPropertyValue('--color-sage').trim(),
-    char:   '#545b5a',
+    char:   css.getPropertyValue('--color-charcoal').trim(),
     teal:   css.getPropertyValue('--color-teal').trim(),
     blue:   css.getPropertyValue('--color-blue').trim(),
     purple: css.getPropertyValue('--color-purple').trim(),
@@ -130,7 +130,7 @@ import manifest from '../data/generated/manifest.json';
 
   Chart.defaults.font.family = "'Geist', system-ui, sans-serif";
   Chart.defaults.color = '#000';
-  Chart.defaults.borderColor = '#e6e2d2';
+  Chart.defaults.borderColor = '#e7ded0';
   Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
   Chart.defaults.elements.bar.borderRadius = 0;
 

@@ -46,11 +46,17 @@ const fullTitle = title.includes('housinganalytics')
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p class="muted">
-        Data: <a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">American Community Survey</a>, 2024 5-year estimates.
-      </p>
-      <p class="muted small">housinganalytics.org · built {new Date().getFullYear()}</p>
+    <div class="container site-footer__inner">
+      <div class="site-footer__text">
+        <p class="muted">
+          Data: <a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">American Community Survey</a>, 2024 5-year estimates.
+        </p>
+        <p class="muted small">housinganalytics.org · built {new Date().getFullYear()}</p>
+        <p class="muted small">A product of Economic Impact Group, LLC.</p>
+      </div>
+      <a class="site-footer__eig" href="https://economicimpact.com" target="_blank" rel="noreferrer" aria-label="Economic Impact Group, LLC">
+        <img src="/eig-logo-dark.png" alt="Economic Impact Group, LLC" width="190" height="70" />
+      </a>
     </div>
   </footer>
 </body>
@@ -98,7 +104,30 @@ const fullTitle = title.includes('housinganalytics')
     margin-top: var(--space-9);
     background: var(--bg-section);
   }
+  .site-footer__inner {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+  }
   .site-footer .small { margin-top: var(--space-2); }
+  .site-footer__eig {
+    display: inline-flex;
+    flex-shrink: 0;
+    text-decoration: none;
+    opacity: 0.92;
+    transition: opacity 0.15s ease;
+  }
+  .site-footer__eig:hover { opacity: 1; }
+  .site-footer__eig img {
+    display: block;
+    width: 190px;
+    height: auto;
+  }
+  @media (max-width: 640px) {
+    .site-footer__inner { align-items: flex-start; }
+  }
   @media (max-width: 640px) {
     .site-header__inner { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
     .site-nav { flex-wrap: wrap; gap: var(--space-3); }

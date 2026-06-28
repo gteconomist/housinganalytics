@@ -159,12 +159,12 @@ import Base from '../layouts/Base.astro';
   const css = getComputedStyle(document.documentElement);
   const cssVar = name => css.getPropertyValue(name).trim();
   const C = {
-    cream:   '#f9f6e5',
-    navy:    '#003057',
-    red:     cssVar('--color-red')     || '#e04f39',
-    teal:    cssVar('--color-teal')    || '#008c95',
+    cream:   cssVar('--color-cream')   || '#fbf6ee',
+    navy:    cssVar('--color-navy')    || '#16181c',
+    red:     cssVar('--color-red')     || '#a8432f',
+    teal:    cssVar('--color-teal')    || '#3f7d52',
     sage:    cssVar('--color-sage')    || '#d6dbd4',
-    gold:    '#b3a369',
+    gold:    cssVar('--color-gold')    || '#f19623',
     white:   '#fff',
   };
   const RAMP = {
@@ -172,8 +172,8 @@ import Base from '../layouts/Base.astro';
     'good-low':  [C.cream, C.red],
     'neutral':   [C.cream, C.teal],
   };
-  const NO_DATA       = '#ececec';   // counties with no metric value
-  const NEIGHBOR_GRAY = '#dcdcdc';   // counties in non-selected states when zoomed
+  const NO_DATA       = '#ece6da';   // counties with no metric value
+  const NEIGHBOR_GRAY = '#ddd6c8';   // counties in non-selected states when zoomed
 
   // ── Per-metric direction classifier ─────────────────────────
   const GOOD_HIGH = new Set([

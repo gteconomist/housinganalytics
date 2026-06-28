@@ -1170,12 +1170,12 @@ const occRows = (occupations?.rows ?? [])
   // Color palette pulled from CSS variables on the live element.
   const css = getComputedStyle(document.documentElement);
   const C = {
-    navy:    '#003057',
-    gold:    '#b3a369',
+    navy:    css.getPropertyValue('--color-navy').trim(),
+    gold:    css.getPropertyValue('--color-gold').trim(),
     amber:   css.getPropertyValue('--color-amber').trim(),
-    cream:   '#f9f6e5',
+    cream:   css.getPropertyValue('--color-cream').trim(),
     sage:    css.getPropertyValue('--color-sage').trim(),
-    char:    '#545b5a',
+    char:    css.getPropertyValue('--color-charcoal').trim(),
     // Tertiary — used only when a chart has > 4 series.
     teal:    css.getPropertyValue('--color-teal').trim(),
     blue:    css.getPropertyValue('--color-blue').trim(),
@@ -1188,7 +1188,7 @@ const occRows = (occupations?.rows ?? [])
   Chart.defaults.font.family = "'Geist', system-ui, sans-serif";
   // House style: all axis ticks, tick labels, and legend text in black.
   Chart.defaults.color = '#000';
-  Chart.defaults.borderColor = '#e6e2d2';
+  Chart.defaults.borderColor = '#e7ded0';
   // Square corners on bar elements (house style).
   Chart.defaults.elements.bar = Chart.defaults.elements.bar || {};
   Chart.defaults.elements.bar.borderRadius = 0;
@@ -1401,8 +1401,8 @@ const occRows = (occupations?.rows ?? [])
 
   // Renter cost burden: deliberate 3-stop visual signal —
   //   <30% income to housing  = sage  (#d6dbd4)  — healthy
-  //   30%–49.9%               = navy  (#003057)  — cost burdened
-  //   50%+                    = red   (#e04f39)  — severely cost burdened
+  //   30%–49.9%               = charcoal (#16181c)  — cost burdened
+  //   50%+                    = brick    (#a8432f)  — severely cost burdened
   mk('renterBurden', {
     type: 'bar',
     data: {
@@ -1682,12 +1682,12 @@ const occRows = (occupations?.rows ?? [])
     padding: var(--space-4) var(--space-5);
   }
   .stat-card--flag {
-    border-left-color: var(--color-orange-red, #e04f39);
-    background: #fdf3f0;
+    border-left-color: var(--color-brick, #a8432f);
+    background: #f7ece9;
   }
   .stat-card__label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 var(--space-2); }
   .stat-card__value { font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--color-navy); margin: 0 0 var(--space-1); }
-  .stat-card--flag .stat-card__value { color: var(--color-orange-red, #e04f39); }
+  .stat-card--flag .stat-card__value { color: var(--color-brick, #a8432f); }
   .stat-card__sub   { font-size: var(--fs-sm); color: var(--text-muted); margin: 0 0 var(--space-2); font-variant-numeric: tabular-nums; }
   .stat-card__hint  { font-size: var(--fs-sm); color: var(--text-body); margin: 0; }
 
@@ -1922,7 +1922,7 @@ const occRows = (occupations?.rows ?? [])
   .industry-table__naics { display: block; font-size: var(--fs-xs); }
   .industry-table tbody tr:last-child th,
   .industry-table tbody tr:last-child td { border-bottom: none; }
-  .industry-table .pos { color: #1f6b3b; }
+  .industry-table .pos { color: #3f7d52; }
   .industry-table .neg { color: var(--color-red); }
 
   /* Section 5 occ-table: 8 columns must fit. Allow headers to wrap on the
