@@ -27,10 +27,11 @@ const fullTitle = title.includes('housinganalytics')
 <body>
   <header class="site-header">
     <div class="container site-header__inner">
-      <a class="brand" href="/" aria-label="housinganalytics.org — home">
+      <a class="brand" href="https://economicimpact.com" target="_blank" rel="noopener" aria-label="Economic Impact Group — economicimpact.com">
         <img class="brand__logo" src="/eig-logo-white.png" alt="Economic Impact Group" width="238" height="88" />
       </a>
       <nav class="site-nav" aria-label="Primary">
+        <a href="/">Home</a>
         <a href="/counties">Counties</a>
         <a href="/cities">Cities</a>
         <a href="/compare">Compare</a>
@@ -46,17 +47,24 @@ const fullTitle = title.includes('housinganalytics')
   </main>
 
   <footer class="site-footer">
-    <div class="container site-footer__inner">
-      <div class="site-footer__text">
-        <p class="muted">
-          Data: <a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">American Community Survey</a>, 2024 5-year estimates.
-        </p>
-        <p class="muted small">housinganalytics.org · built {new Date().getFullYear()}</p>
-        <p class="muted small">A product of Economic Impact Group, LLC.</p>
+    <div class="container">
+      <div class="site-footer__inner">
+        <div class="site-footer__text">
+          <p class="muted">
+            Data: <a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">American Community Survey</a>, 2024 5-year estimates.
+          </p>
+          <p class="muted small">housinganalytics.org · built {new Date().getFullYear()}</p>
+          <p class="muted small">A product of Economic Impact Group, LLC.</p>
+        </div>
+        <a class="site-footer__eig" href="https://economicimpact.com" target="_blank" rel="noreferrer" aria-label="Economic Impact Group, LLC">
+          <img src="/eig-logo-dark.png" alt="Economic Impact Group, LLC" width="190" height="70" />
+        </a>
       </div>
-      <a class="site-footer__eig" href="https://economicimpact.com" target="_blank" rel="noreferrer" aria-label="Economic Impact Group, LLC">
-        <img src="/eig-logo-dark.png" alt="Economic Impact Group, LLC" width="190" height="70" />
-      </a>
+      <p class="site-footer__disclaimer muted small">
+        <strong>Disclaimer.</strong> Charts and analysis are provided for informational purposes only.
+        Data is pulled directly from official statistical agencies but is not independently validated by
+        Economic Impact Group, LLC; please consult the original source for any decisions that depend on accuracy.
+      </p>
     </div>
   </footer>
 </body>
@@ -72,7 +80,7 @@ const fullTitle = title.includes('housinganalytics')
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-4) var(--space-5);
+    padding: var(--space-5) var(--space-5);
   }
   .brand {
     display: inline-flex;
@@ -80,12 +88,12 @@ const fullTitle = title.includes('housinganalytics')
     text-decoration: none;
   }
   .brand__logo {
-    height: 30px;
+    height: 48px;
     width: auto;
     display: block;
   }
   @media (max-width: 640px) {
-    .brand__logo { height: 26px; }
+    .brand__logo { height: 38px; }
   }
   .site-nav {
     display: flex;
@@ -117,6 +125,14 @@ const fullTitle = title.includes('housinganalytics')
     flex-wrap: wrap;
   }
   .site-footer .small { margin-top: var(--space-2); }
+  .site-footer__disclaimer {
+    margin: var(--space-5) 0 0;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-soft);
+    max-width: 90ch;
+    line-height: var(--lh-base);
+  }
+  .site-footer__disclaimer strong { color: var(--text-primary); }
   .site-footer__eig {
     display: inline-flex;
     flex-shrink: 0;
