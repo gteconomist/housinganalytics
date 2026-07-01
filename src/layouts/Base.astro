@@ -27,8 +27,8 @@ const fullTitle = title.includes('housinganalytics')
 <body>
   <header class="site-header">
     <div class="container site-header__inner">
-      <a class="brand" href="/">
-        <span class="brand__mark">housing<span>analytics</span>.org</span>
+      <a class="brand" href="/" aria-label="housinganalytics.org — home">
+        <img class="brand__logo" src="/eig-logo-white.png" alt="Economic Impact Group" width="238" height="88" />
       </a>
       <nav class="site-nav" aria-label="Primary">
         <a href="/counties">Counties</a>
@@ -75,13 +75,18 @@ const fullTitle = title.includes('housinganalytics')
     padding: var(--space-4) var(--space-5);
   }
   .brand {
-    color: var(--text-on-dark);
+    display: inline-flex;
+    align-items: center;
     text-decoration: none;
-    font-weight: var(--fw-bold);
-    font-size: var(--fs-lg);
-    letter-spacing: -0.02em;
   }
-  .brand span { color: var(--color-gold); }
+  .brand__logo {
+    height: 30px;
+    width: auto;
+    display: block;
+  }
+  @media (max-width: 640px) {
+    .brand__logo { height: 26px; }
+  }
   .site-nav {
     display: flex;
     gap: var(--space-5);

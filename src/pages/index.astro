@@ -11,151 +11,358 @@ const placesVintage = manifest.places_vintage ?? 'ACS 5-year estimates';
 <Base title="housinganalytics.org — ACS housing data for every U.S. county"
       description="County- and city-level housing data for economic-development analysts, drawn from the American Community Survey, BLS QCEW, BLS OEWS, and HUD.">
 
+  <!-- ── Hero ─────────────────────────────────────────────── -->
   <section class="hero">
     <div class="container hero__inner">
-      <p class="eyebrow">housinganalytics.org</p>
-      <h1>Housing data for every U.S. county and city, ready for your next study.</h1>
+      <p class="eyebrow eyebrow--onDark">Housing data for economic development</p>
+      <h1 class="hero__title">What can a community afford &mdash; and who can afford to live there?</h1>
       <p class="hero__lede">
-        housinganalytics.org turns the American Community Survey — and the federal labor and
-        housing data sets that go with it — into the figures, tables, and plain-language
-        summaries an economic-development analyst would otherwise spend days assembling per
-        community.
+        housinganalytics.org turns the American Community Survey &mdash; and the federal labor
+        and housing data that go with it &mdash; into the figures, tables, and plain-language
+        summaries an economic-development analyst would otherwise spend days assembling, one
+        community at a time.
       </p>
-      <p class="hero__lede">
-        Every page is structured the way a housing study is structured: a Community Profile,
-        a Residential Market Analysis, and a Workforce Housing Needs Assessment, with industry
-        and occupation wage detail layered in. {fmtInt(countyCount)} counties, {fmtInt(placeCount)}
-        cities and towns, all 50 states plus D.C. and Puerto Rico, refreshed annually as new
-        ACS, BLS, and HUD vintages publish.
-      </p>
+      <div class="hero__cta">
+        <a class="btn btn--primary" href="/counties">Explore counties <span aria-hidden="true">&rarr;</span></a>
+        <a class="btn btn--ghost" href="/cities">Browse cities &amp; towns</a>
+      </div>
     </div>
   </section>
 
-  <section class="container">
-    <h2>What you can do here</h2>
+  <!-- ── Stat band ────────────────────────────────────────── -->
+  <section class="stats">
+    <div class="container stats__inner">
+      <div class="stat">
+        <span class="stat__num">{fmtInt(countyCount)}</span>
+        <span class="stat__label">Counties profiled</span>
+      </div>
+      <div class="stat">
+        <span class="stat__num">{fmtInt(placeCount)}</span>
+        <span class="stat__label">Cities &amp; towns</span>
+      </div>
+      <div class="stat">
+        <span class="stat__num">52</span>
+        <span class="stat__label">States &amp; territories</span>
+      </div>
+      <div class="stat">
+        <span class="stat__num">4</span>
+        <span class="stat__label">Federal data sources</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── What you can do ──────────────────────────────────── -->
+  <section class="container do">
+    <p class="eyebrow">What you can do</p>
+    <h2 class="do__head">Everything housinganalytics does</h2>
     <p class="section-lede muted">
-      The same underlying data set, surfaced six different ways — pulled into the shape an
+      One underlying data set, surfaced six ways &mdash; each pulled into the shape an
       economic-development analyst actually needs.
     </p>
 
-    <ul class="feature-list">
+    <ol class="feature-list">
       <li class="feature">
-        <p class="feature__eyebrow">County profiles</p>
-        <h3><a href="/counties">A full housing profile for any of {fmtInt(countyCount)} counties</a></h3>
-        <p>
-          KPI tiles, a Community Data Summary table, tenure and stock breakdowns, value and rent
-          distributions, cost-burden detail, and a parametric affordability calculator you can
-          adjust on the page. Includes BLS QCEW industry employment and wages and BLS OEWS
-          occupation wages with affordability tied to each.
-        </p>
-        <p class="feature__hint"><a href="/counties">Open the county search →</a></p>
+        <span class="feature__num">01</span>
+        <div class="feature__body">
+          <p class="feature__eyebrow">County profiles</p>
+          <h3><a href="/counties">A full housing profile for any of {fmtInt(countyCount)} counties</a></h3>
+          <p>
+            KPI tiles, a Community Data Summary table, tenure and stock breakdowns, value and
+            rent distributions, cost-burden detail, and a parametric affordability calculator you
+            adjust on the page &mdash; with BLS QCEW industry employment and wages and BLS OEWS
+            occupation wages tied to affordability.
+          </p>
+          <p class="feature__hint"><a href="/counties">Open the county search &rarr;</a></p>
+        </div>
       </li>
 
       <li class="feature">
-        <p class="feature__eyebrow">City profiles</p>
-        <h3><a href="/cities">A housing profile for any of {fmtInt(placeCount)} cities and towns</a></h3>
-        <p>
-          Demographics, housing stock, tenure, costs, rent and value distributions, cost burden,
-          and the same parametric affordability calculator at the Census place geography. HUD AMI
-          is inherited from the parent county. {placesVintage}.
-        </p>
-        <p class="feature__hint"><a href="/cities">Open the city search →</a></p>
+        <span class="feature__num">02</span>
+        <div class="feature__body">
+          <p class="feature__eyebrow">City &amp; town profiles</p>
+          <h3><a href="/cities">The same profile for any of {fmtInt(placeCount)} cities and towns</a></h3>
+          <p>
+            Demographics, housing stock, tenure, costs, rent and value distributions, cost burden,
+            and the same affordability calculator at the Census place geography. HUD Area Median
+            Income is inherited from the parent county. {placesVintage}.
+          </p>
+          <p class="feature__hint"><a href="/cities">Open the city search &rarr;</a></p>
+        </div>
       </li>
 
       <li class="feature">
-        <p class="feature__eyebrow">Compare</p>
-        <h3><a href="/compare">Side-by-side comparison of 2–6 counties</a></h3>
-        <p>
-          Pick a handful of counties and see every metric from the profile lined up next to
-          each other — KPI strip, Community Data Summary, single-bar charts, and grouped or
-          small-multiple distributions. The URL preserves your selection so you can share or
-          bookmark a specific comparison.
-        </p>
-        <p class="feature__hint"><a href="/compare">Open the compare tool →</a></p>
+        <span class="feature__num">03</span>
+        <div class="feature__body">
+          <p class="feature__eyebrow">Compare</p>
+          <h3><a href="/compare">Line up 2&ndash;6 counties side by side</a></h3>
+          <p>
+            Pick a handful of counties and see every metric from the profile next to each other
+            &mdash; KPI strip, Community Data Summary, single-bar charts, and grouped or
+            small-multiple distributions. The URL preserves your selection so you can share or
+            bookmark a specific comparison.
+          </p>
+          <p class="feature__hint"><a href="/compare">Open the compare tool &rarr;</a></p>
+        </div>
       </li>
 
       <li class="feature">
-        <p class="feature__eyebrow">Rankings</p>
-        <h3><a href="/rankings">Sort every U.S. county on any metric</a></h3>
-        <p>
-          Rank all {fmtInt(countyCount)} counties on any variable in the data set — median rent,
-          vacancy rate, cost-burdened share, owner-occupied share, and dozens more. Filter by
-          state or population tier, see the top 10 as a chart, and export the current view to CSV.
-        </p>
-        <p class="feature__hint"><a href="/rankings">Open the rankings explorer →</a></p>
+        <span class="feature__num">04</span>
+        <div class="feature__body">
+          <p class="feature__eyebrow">Rankings</p>
+          <h3><a href="/rankings">Sort every U.S. county on any metric</a></h3>
+          <p>
+            Rank all {fmtInt(countyCount)} counties on any variable in the data set &mdash; median
+            rent, vacancy rate, cost-burdened share, owner-occupied share, and dozens more. Filter
+            by state or population tier, see the top 10 as a chart, and export the current view to CSV.
+          </p>
+          <p class="feature__hint"><a href="/rankings">Open the rankings explorer &rarr;</a></p>
+        </div>
       </li>
 
       <li class="feature">
-        <p class="feature__eyebrow">National map</p>
-        <h3><a href="/map">Color every county on any metric</a></h3>
-        <p>
-          A choropleth of all {fmtInt(countyCount)} counties — pick a metric, zoom into a single
-          state, switch between national and within-state color scales, hover for values, click
-          through to a profile. Alaska and Hawaii are inset.
-        </p>
-        <p class="feature__hint"><a href="/map">Open the map →</a></p>
+        <span class="feature__num">05</span>
+        <div class="feature__body">
+          <p class="feature__eyebrow">National map</p>
+          <h3><a href="/map">Color every county on any metric</a></h3>
+          <p>
+            A choropleth of all {fmtInt(countyCount)} counties &mdash; pick a metric, zoom into a
+            single state, switch between national and within-state color scales, hover for values,
+            and click through to a profile. Alaska and Hawaii are inset.
+          </p>
+          <p class="feature__hint"><a href="/map">Open the map &rarr;</a></p>
+        </div>
       </li>
 
       <li class="feature">
-        <p class="feature__eyebrow">Export</p>
-        <h3>One-click Excel &amp; PDF on every profile</h3>
-        <p>
-          Each county profile carries a download bar at the top. Pull the full data set as an
-          Excel workbook, or save the rendered profile as a client-ready PDF — chart images, KPI
-          tiles, tables, and footnotes all preserved. Individual charts also export to PNG.
-        </p>
-        <p class="feature__hint muted">Look for the download bar above the KPI tiles.</p>
+        <span class="feature__num">06</span>
+        <div class="feature__body">
+          <p class="feature__eyebrow">Export</p>
+          <h3>Client-ready Excel, Word &amp; PDF on every profile</h3>
+          <p>
+            Each profile carries a download bar at the top. Pull the full data set as an Excel
+            workbook, generate a formatted Word report, or save the rendered profile as a
+            client-ready PDF &mdash; chart images, KPI tiles, tables, and footnotes preserved.
+            Individual charts also export to PNG.
+          </p>
+          <p class="feature__hint muted">Look for the download bar above the KPI tiles.</p>
+        </div>
       </li>
-    </ul>
+    </ol>
+  </section>
+
+  <!-- ── Data foundation ──────────────────────────────────── -->
+  <section class="foundation">
+    <div class="container foundation__inner">
+      <div class="foundation__intro">
+        <p class="eyebrow">Built on authoritative data</p>
+        <h2>Federal sources, structured like a housing study</h2>
+        <p class="muted">
+          Every page follows the shape of a professional housing study &mdash; a Community
+          Profile, a Residential Market Analysis, and a Workforce Housing Needs Assessment
+          &mdash; refreshed annually as new vintages publish.
+        </p>
+      </div>
+      <ul class="sources">
+        <li><span class="sources__tag">ACS</span> American Community Survey &mdash; 2024 5-year estimates</li>
+        <li><span class="sources__tag">QCEW</span> BLS Quarterly Census of Employment &amp; Wages</li>
+        <li><span class="sources__tag">OEWS</span> BLS Occupational Employment &amp; Wage Statistics</li>
+        <li><span class="sources__tag">HUD</span> Area Median Income &amp; Fair Market Rents</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── Closing CTA ──────────────────────────────────────── -->
+  <section class="closer">
+    <div class="container closer__inner">
+      <h2 class="closer__title">Start with a county.</h2>
+      <p class="closer__lede">
+        Search any of {fmtInt(countyCount)} counties or {fmtInt(placeCount)} cities and have a
+        full housing profile in seconds.
+      </p>
+      <div class="hero__cta">
+        <a class="btn btn--primary" href="/counties">Find a county <span aria-hidden="true">&rarr;</span></a>
+        <a class="btn btn--ghost" href="/map">Open the map</a>
+      </div>
+    </div>
   </section>
 </Base>
 
 <style>
-  .hero {
-    background: var(--bg-section);
-    padding: var(--space-9) 0 var(--space-7);
-    border-bottom: 1px solid var(--border-soft);
-  }
-  .hero h1 { max-width: 22ch; margin-bottom: var(--space-4); }
-  .hero__lede {
-    max-width: 70ch;
-    font-size: var(--fs-md);
-    color: var(--text-muted);
-    margin-bottom: var(--space-4);
-  }
-  .hero__lede:last-of-type { margin-bottom: 0; }
+  /* ── Shared ── */
+  .eyebrow--onDark { color: var(--color-gold); }
+  .section-lede { max-width: 68ch; margin: 0 0 var(--space-6); font-size: var(--fs-md); }
 
-  .container > h2 { margin: var(--space-7) 0 var(--space-3); }
-  .section-lede { max-width: 70ch; margin: 0 0 var(--space-6); font-size: var(--fs-md); }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-sm);
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    transition: transform 0.12s ease, background-color 0.15s ease, color 0.15s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn--primary {
+    color: #16181c;
+    background: linear-gradient(180deg, #f6b35a 0%, #d88514 100%);
+    border-color: #d88514;
+  }
+  .btn--primary:hover { color: #16181c; }
+  .btn--ghost {
+    color: var(--text-on-dark);
+    border-color: rgba(255,255,255,0.35);
+    background: transparent;
+  }
+  .btn--ghost:hover { border-color: var(--color-gold); color: var(--color-gold); }
+
+  /* ── Hero (dark) ── */
+  .hero {
+    background: var(--color-navy);
+    color: var(--text-on-dark);
+    padding: var(--space-9) 0 var(--space-8);
+  }
+  .hero__title {
+    color: #ffffff;
+    max-width: 20ch;
+    font-size: clamp(2rem, 4.6vw, var(--fs-3xl));
+    line-height: 1.08;
+    margin: var(--space-3) 0 var(--space-5);
+  }
+  .hero__lede {
+    max-width: 62ch;
+    font-size: var(--fs-md);
+    color: var(--color-hair);
+    margin-bottom: var(--space-6);
+  }
+  .hero__cta { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+
+  /* ── Stat band (dark, continues hero) ── */
+  .stats {
+    background: var(--color-navy-2);
+    color: var(--text-on-dark);
+    border-top: 1px solid #2d3038;
+    border-bottom: 4px solid var(--color-gold);
+  }
+  .stats__inner {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-5);
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat__num {
+    font-size: var(--fs-2xl);
+    font-weight: var(--fw-bold);
+    line-height: 1;
+    color: var(--color-gold);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat__label {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-faint);
+  }
+  @media (max-width: 640px) {
+    .stats__inner { grid-template-columns: repeat(2, 1fr); gap: var(--space-5) var(--space-4); }
+  }
+
+  /* ── What you can do ── */
+  .do { padding-top: var(--space-8); }
+  .do__head { margin: var(--space-2) 0 var(--space-3); }
 
   .feature-list {
-    list-style: none; padding: 0; margin: 0 0 var(--space-9);
+    list-style: none; padding: 0; margin: 0 0 var(--space-8);
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: var(--space-5);
   }
   .feature {
-    padding: var(--space-5) var(--space-5) var(--space-4);
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-5);
     border: 1px solid var(--border-soft);
-    border-left: 4px solid var(--color-gold);
     background: var(--bg-card);
+    border-radius: var(--radius-md);
+  }
+  .feature__num {
+    font-family: var(--font-mono);
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    color: var(--color-gold);
+    line-height: 1;
+    flex-shrink: 0;
   }
   .feature__eyebrow {
     font-size: var(--fs-xs);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-navy);
-    font-weight: var(--fw-medium);
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    font-weight: var(--fw-semibold);
     margin: 0 0 var(--space-2);
   }
-  .feature h3 {
-    margin: 0 0 var(--space-3);
-    font-size: var(--fs-lg);
-    line-height: 1.25;
-  }
-  .feature h3 a { color: var(--text-body); text-decoration: none; }
-  .feature h3 a:hover { color: var(--color-navy); text-decoration: underline; }
+  .feature h3 { margin: 0 0 var(--space-3); font-size: var(--fs-lg); line-height: 1.25; }
+  .feature h3 a { color: var(--text-primary); text-decoration: none; }
+  .feature h3 a:hover { text-decoration: underline; text-decoration-color: var(--color-gold); }
   .feature p { margin: 0 0 var(--space-3); }
+  .feature p:last-child { margin-bottom: 0; }
   .feature__hint { font-size: var(--fs-sm); margin-top: var(--space-2); }
-  .feature__hint a { color: var(--color-navy); font-weight: var(--fw-medium); }
+  .feature__hint a { color: var(--color-navy); font-weight: var(--fw-semibold); text-decoration-color: var(--color-gold); }
+
+  /* ── Data foundation (panel) ── */
+  .foundation {
+    background: var(--color-panel-2);
+    border-top: 1px solid var(--border-soft);
+    border-bottom: 1px solid var(--border-soft);
+    padding: var(--space-8) 0;
+  }
+  .foundation__inner {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: var(--space-8);
+    align-items: center;
+  }
+  .foundation__intro h2 { margin: var(--space-2) 0 var(--space-3); }
+  .foundation__intro p { max-width: 52ch; }
+  .sources { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-3); }
+  .sources li {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-soft);
+    font-size: var(--fs-sm);
+    color: var(--text-body);
+  }
+  .sources__tag {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-bold);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.06em;
+    color: #16181c;
+    background: var(--color-gold);
+    padding: 3px 8px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    min-width: 3.6em;
+    text-align: center;
+  }
+  @media (max-width: 720px) {
+    .foundation__inner { grid-template-columns: 1fr; gap: var(--space-6); }
+  }
+
+  /* ── Closing CTA (dark) ── */
+  .closer {
+    background: var(--color-navy);
+    color: var(--text-on-dark);
+    padding: var(--space-8) 0;
+    margin-bottom: calc(var(--space-9) * -1);
+  }
+  .closer__title { color: #ffffff; font-size: var(--fs-2xl); margin: 0 0 var(--space-3); }
+  .closer__lede { color: var(--color-hair); max-width: 56ch; font-size: var(--fs-md); margin: 0 0 var(--space-6); }
 </style>

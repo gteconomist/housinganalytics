@@ -13,6 +13,7 @@
    * their prior palette after this rebrand. */
   --color-white:       #FFFFFF;
   --color-navy:        #16181c;  /* EIG charcoal — primary brand (was GT navy #003057) */
+  --color-navy-2:      #1e2025;  /* EIG deep charcoal — secondary dark surface */
   --color-gold:        #f19623;  /* EIG amber accent (was GT gold #b3a369) */
 
   /* Secondary — LOCI warm neutrals (loci.online) */
