@@ -167,10 +167,12 @@ import Base from '../layouts/Base.astro';
     gold:    cssVar('--color-gold')    || '#f19623',
     white:   '#fff',
   };
+  // Earth-tone ramps (no grayscale): green = higher-is-better,
+  // brick = higher-is-worse, amber = no inherent direction.
   const RAMP = {
-    'good-high': [C.cream, C.navy],
+    'good-high': [C.cream, C.teal],
     'good-low':  [C.cream, C.red],
-    'neutral':   [C.cream, C.teal],
+    'neutral':   [C.cream, C.gold],
   };
   const NO_DATA       = '#ece6da';   // counties with no metric value
   const NEIGHBOR_GRAY = '#ddd6c8';   // counties in non-selected states when zoomed

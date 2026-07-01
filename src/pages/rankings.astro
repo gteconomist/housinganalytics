@@ -224,8 +224,9 @@ import Base from '../layouts/Base.astro';
   // ── Chart.js defaults to match the site house style ─────────
   const css = getComputedStyle(document.documentElement);
   const C = {
-    navy: css.getPropertyValue('--color-navy').trim(),
-    gold: css.getPropertyValue('--color-gold').trim(),
+    navy:  css.getPropertyValue('--color-navy').trim(),
+    gold:  css.getPropertyValue('--color-gold').trim(),
+    green: css.getPropertyValue('--color-green').trim() || '#3f7d52',
   };
   Chart.defaults.font.family = "'Geist', system-ui, sans-serif";
   Chart.defaults.color = '#000';
@@ -425,7 +426,7 @@ import Base from '../layouts/Base.astro';
         datasets: [{
           label: metric.label,
           data: values,
-          backgroundColor: C.navy,
+          backgroundColor: C.green,
         }],
       },
       options: {
