@@ -22,6 +22,10 @@ import Base from '../layouts/Base.astro';
     <div class="step">
       <p class="step__num">Step 1</p>
       <h2>Choose the target community</h2>
+      <div class="toggle" role="group" aria-label="Target type">
+        <button type="button" class="toggle__btn is-active" data-mode="city">City</button>
+        <button type="button" class="toggle__btn" data-mode="county">County</button>
+      </div>
       <div class="search" data-target-search>
         <input type="search" placeholder="Search a city — e.g. Chamblee, Savannah, Austin…"
                autocomplete="off" aria-label="Search for the target community" />
@@ -57,7 +61,7 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
-  <script src="/js/xlsx.full.min.js" is:inline></script>
+  <script src="/js/exceljs.min.js" is:inline></script>
   <script src="/js/master-generator.js" is:inline></script>
   <script is:inline>
     (async function () {
@@ -75,7 +79,9 @@ import Base from '../layouts/Base.astro';
         $('.gen').innerHTML = '<p class="muted">The generator data isn’t built yet. Run <code>npm run master-geo</code> and redeploy.</p>';
         return;
       }
-      const places = index.places;
+      const lists = { city: index.places || [], county: index.counties || [] };
+      let mode = 'city';
+      const activeList = () => lists[mode];
 
       function score(p, q) {
         const n = p.name.toLowerCase(), s = (p.state_name || '').toLowerCase();
@@ -83,7 +89,7 @@ import Base from '../layouts/Base.astro';
         if (s.startsWith(q)) return 2; if (s.includes(q)) return 3; return 9;
       }
       function match(q) {
-        return places.map((p) => ({ p, s: score(p, q) })).filter((x) => x.s < 9)
+        return activeList().map((p) => ({ p, s: score(p, q) })).filter((x) => x.s < 9)
           .sort((a, b) => a.s - b.s || a.p.name.localeCompare(b.p.name)).slice(0, 10).map((x) => x.p);
       }
       function wireSearch(box, onPick) {
@@ -96,7 +102,7 @@ import Base from '../layouts/Base.astro';
           out.innerHTML = m.map((p) => `<li><a href="#" data-geoid="${p.geoid}"><span>${p.name}</span><span class="muted">${p.state_name || ''}</span></a></li>`).join('');
           out.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => {
             e.preventDefault();
-            onPick(places.find((p) => p.geoid === a.dataset.geoid));
+            onPick(activeList().find((p) => p.geoid === a.dataset.geoid));
             out.hidden = true; out.innerHTML = ''; input.value = '';
           }));
         });
@@ -116,13 +122,29 @@ import Base from '../layouts/Base.astro';
         peers.delete(p.geoid);
         renderChips();
       });
-      $('[data-target-clear]').addEventListener('click', () => {
-        target = null;
+      function resetAll() {
+        target = null; peers.clear();
         $('[data-target-card]').hidden = true;
         $('[data-target-search]').hidden = false;
+        $('[data-target-search]').querySelector('input').value = '';
+        $('[data-peer-search]').querySelector('input').value = '';
+        $('[data-peer-chips]').innerHTML = '';
         $('[data-peer-step]').hidden = true;
         $('[data-gen-step]').hidden = true;
-      });
+      }
+      $('[data-target-clear]').addEventListener('click', resetAll);
+
+      // Mode toggle (City / County)
+      document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+        if (b.dataset.mode === mode) return;
+        mode = b.dataset.mode;
+        document.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('is-active', x === b));
+        const noun = mode === 'county' ? 'county' : 'city';
+        $('[data-target-search]').querySelector('input').placeholder =
+          mode === 'county' ? 'Search a county — e.g. DeKalb County, Fulton County…' : 'Search a city — e.g. Chamblee, Savannah, Austin…';
+        $('[data-peer-search]').querySelector('input').placeholder = `Search a comparison ${noun}…`;
+        resetAll();
+      }));
 
       // Step 2
       function renderChips() {
@@ -141,7 +163,7 @@ import Base from '../layouts/Base.astro';
         const btn = $('[data-generate]'); btn.disabled = true;
         statusEl.textContent = 'Assembling data and building your workbook…';
         try {
-          await window.MasterGen.generate(target.geoid, [...peers.keys()], index, schema);
+          await window.MasterGen.generate(target.geoid, [...peers.keys()], index, schema, mode);
           statusEl.textContent = 'Done — your download should have started.';
         } catch (e) {
           statusEl.textContent = 'Something went wrong: ' + e.message;
@@ -162,6 +184,11 @@ import Base from '../layouts/Base.astro';
   .step__num { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-navy); font-weight: var(--fw-medium); margin: 0 0 var(--space-2); }
   .step h2 { margin: 0 0 var(--space-4); font-size: var(--fs-xl); }
   .section-lede { margin: 0 0 var(--space-4); font-size: var(--fs-sm); max-width: 60ch; }
+
+  .toggle { display: inline-flex; margin: 0 0 var(--space-4); border: 2px solid var(--color-navy); border-radius: var(--radius-md); overflow: hidden; }
+  .toggle__btn { padding: var(--space-2) var(--space-5); font: inherit; font-weight: var(--fw-medium); font-size: var(--fs-sm); background: var(--bg-page); color: var(--color-navy); border: none; cursor: pointer; }
+  .toggle__btn + .toggle__btn { border-left: 2px solid var(--color-navy); }
+  .toggle__btn.is-active { background: var(--color-navy); color: #ffffff; }
 
   .search { position: relative; max-width: 520px; }
   .search input { width: 100%; padding: var(--space-4) var(--space-5); font-size: var(--fs-md); font-family: inherit;

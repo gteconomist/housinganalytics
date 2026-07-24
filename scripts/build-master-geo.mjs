@@ -90,7 +90,7 @@ async function run() {
   if (!KEY) throw new Error('CENSUS_API_KEY not set');
   mkdirSync(GEO_DIR, { recursive: true });
   const places = JSON.parse(readFileSync(resolve(XWALK_DIR, 'crosswalk-places.json'), 'utf8'));
-  const { cbsa_name } = JSON.parse(readFileSync(resolve(XWALK_DIR, 'crosswalk-cbsa.json'), 'utf8'));
+  const { cbsa_name, county2cbsa } = JSON.parse(readFileSync(resolve(XWALK_DIR, 'crosswalk-cbsa.json'), 'utf8'));
 
   // Collect the per-level raw vals across vintages, then assemble + write.
   const levels = {
@@ -119,31 +119,35 @@ async function run() {
     console.log(`  vintage ${y}: place ${Object.keys(levels.place.by).length}, county ${Object.keys(levels.county.by).length}, cbsa ${Object.keys(levels.cbsa.by).length}, state ${Object.keys(levels.state.by).length}`);
   }
 
-  // Which counties / cbsas / states are actually referenced by our places
-  const usedCounty = new Set(), usedCbsa = new Set(), usedState = new Set(STATES);
-  for (const p of Object.values(places)) { if (p.county_fips) usedCounty.add(p.county_fips); if (p.cbsa) usedCbsa.add(p.cbsa); }
-
+  const stripState = (n) => (n || '').replace(/,\s*[^,]+$/, '').trim();
   const write = (prefix, gid, name, by) =>
     writeFileSync(resolve(GEO_DIR, `${prefix}-${gid}.json`), JSON.stringify({ geoid: gid, name, byVintage: assembleGeo(by) }));
 
+  // Write ALL geographies (every place we have + every county / CBSA / state)
+  // so any city OR county can be a target and its context always resolves.
   let counts = { place: 0, county: 0, cbsa: 0, state: 0 };
   for (const gid of Object.keys(places)) {
     const rec = levels.place.by[gid]; if (!rec) continue;
     write('place', gid, places[gid].name, rec.v); counts.place++;
   }
-  for (const gid of usedCounty) { const rec = levels.county.by[gid]; if (rec) { write('county', gid, rec.name, rec.v); counts.county++; } }
-  for (const gid of usedCbsa) { const rec = levels.cbsa.by[gid]; if (rec) { write('cbsa', gid, cbsa_name[gid] || rec.name, rec.v); counts.cbsa++; } }
-  for (const gid of usedState) { const rec = levels.state.by[gid]; if (rec) { write('state', gid, rec.name, rec.v); counts.state++; } }
+  for (const gid of Object.keys(levels.county.by)) { write('county', gid, levels.county.by[gid].name, levels.county.by[gid].v); counts.county++; }
+  for (const gid of Object.keys(levels.cbsa.by)) { write('cbsa', gid, cbsa_name[gid] || levels.cbsa.by[gid].name, levels.cbsa.by[gid].v); counts.cbsa++; }
+  for (const gid of Object.keys(levels.state.by)) { write('state', gid, levels.state.by[gid].name, levels.state.by[gid].v); counts.state++; }
 
-  // index: place picker + crosswalk (only places we actually wrote data for)
-  const index = Object.values(places)
+  // index: city picker (places) + county picker (counties) + crosswalk
+  const cityIndex = Object.values(places)
     .filter((p) => levels.place.by[p.geoid])
     .map((p) => ({ geoid: p.geoid, name: p.name, state_fips: p.state_fips, county_fips: p.county_fips,
-      county_name: levels.county.by[p.county_fips]?.name || null, cbsa: p.cbsa, cbsa_title: p.cbsa_title,
+      county_name: stripState(levels.county.by[p.county_fips]?.name) || null, cbsa: p.cbsa, cbsa_title: p.cbsa_title,
       state_name: levels.state.by[p.state_fips]?.name || null, pop: p.pop }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const countyIndex = Object.keys(levels.county.by)
+    .map((gid) => ({ geoid: gid, name: stripState(levels.county.by[gid].name), state_fips: gid.slice(0, 2),
+      state_name: levels.state.by[gid.slice(0, 2)]?.name || null,
+      cbsa: county2cbsa[gid]?.cbsa || null, cbsa_title: county2cbsa[gid]?.cbsa_title || null }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.state_name?.localeCompare(b.state_name));
   mkdirSync(OUT_DIR, { recursive: true });
-  writeFileSync(resolve(OUT_DIR, 'index.json'), JSON.stringify({ vintages: VINTAGES, generated_states: STATES, places: index }));
+  writeFileSync(resolve(OUT_DIR, 'index.json'), JSON.stringify({ vintages: VINTAGES, generated_states: STATES, places: cityIndex, counties: countyIndex }));
 
   // schema.json — tab/section/field layout the browser generator uses to build
   // the workbook (keeps the on-site generator in sync with build-master-xlsx.mjs).
