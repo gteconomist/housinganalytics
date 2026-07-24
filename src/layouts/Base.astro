@@ -135,13 +135,16 @@ const fullTitle = title.includes('housinganalytics')
   .site-nav a:hover {
     border-bottom-color: var(--color-gold);
   }
-  .site-auth {
+  /* The auth links are injected by JS (see script below), so they never get
+     Astro's scoped-style marker. These rules MUST be :global() or they won't
+     apply to the injected <a>/<span>. */
+  :global(.site-auth) {
     display: inline-flex;
     align-items: center;
     gap: var(--space-3);
     margin-left: var(--space-3);
   }
-  .site-auth__who {
+  :global(.site-auth__who) {
     color: #cbd5e0;
     font-size: var(--fs-xs);
     max-width: 18ch;
@@ -149,18 +152,18 @@ const fullTitle = title.includes('housinganalytics')
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .site-auth__btn {
+  :global(.site-auth__btn) {
     color: #ffffff !important;
-    text-decoration: none;
+    text-decoration: none !important;
     font-size: var(--fs-sm);
     font-weight: var(--fw-medium);
-    border: 1.5px solid var(--color-gold);
+    border: 1.5px solid var(--color-gold) !important;
     border-radius: var(--radius-sm);
     padding: 4px 14px;
     line-height: 1.4;
     white-space: nowrap;
   }
-  .site-auth__btn:hover {
+  :global(.site-auth__btn:hover) {
     background: var(--color-gold);
     color: var(--color-navy) !important;
   }
