@@ -45,7 +45,8 @@ export function assemble(raw) {
   return { geos, vintages, records };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Path-safe "run directly" check (works when the repo path contains spaces).
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const raw = JSON.parse(readFileSync(resolve(OUT_DIR, 'acs-raw.json'), 'utf8'));
   const assembled = assemble(raw);
   const path = resolve(OUT_DIR, 'master-sheet-data.json');

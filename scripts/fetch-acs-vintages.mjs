@@ -17,6 +17,7 @@
 // geography carries an explicit API selector, which is unambiguous.
 // ---------------------------------------------------------------------------
 
+import './lib/load-env.mjs'; // populates process.env from repo-root .env (CENSUS_API_KEY)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -111,7 +112,9 @@ export async function fetchAll(geos = GEOS, { verbose = true } = {}) {
 }
 
 // Run directly: node scripts/fetch-acs-vintages.mjs
-if (import.meta.url === `file://${process.argv[1]}`) {
+// (fileURLToPath decodes %20 etc., so this holds even when the repo path
+//  contains spaces — e.g. ".../Housing Analytics/...")
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   console.log(`Fetching ${ALL_VARS.length} ACS vars x ${VINTAGES.length} vintages x ${GEOS.length} geographies...`);
   const data = await fetchAll();
   mkdirSync(OUT_DIR, { recursive: true });

@@ -1,0 +1,194 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="Community Data Sheet generator — housinganalytics.org"
+      description="Generate a multi-community housing & demographic data sheet (Excel) for any U.S. city — with its county, metro, and state, plus the comparison communities you choose.">
+
+  <section class="hero">
+    <div class="container hero__inner">
+      <p class="eyebrow">Data sheet generator</p>
+      <h1>Build a community data sheet.</h1>
+      <p class="hero__lede">
+        Pick a target community and the peers you want to compare it to. We'll assemble a
+        multi-tab Excel workbook — demographics, income, education, and housing across the last
+        three ACS 5-year vintages (2015 / 2020 / 2024) — for your city, its county, metro area,
+        and state, plus every comparison community you choose.
+      </p>
+    </div>
+  </section>
+
+  <section class="container gen">
+    <!-- Step 1: target -->
+    <div class="step">
+      <p class="step__num">Step 1</p>
+      <h2>Choose the target community</h2>
+      <div class="search" data-target-search>
+        <input type="search" placeholder="Search a city — e.g. Chamblee, Savannah, Austin…"
+               autocomplete="off" aria-label="Search for the target community" />
+        <ul class="search__results" hidden></ul>
+      </div>
+      <div class="target-card" data-target-card hidden>
+        <div>
+          <p class="target-card__name" data-target-name></p>
+          <p class="target-card__geo muted" data-target-geo></p>
+        </div>
+        <button type="button" class="link-btn" data-target-clear>Change</button>
+      </div>
+    </div>
+
+    <!-- Step 2: peers -->
+    <div class="step" data-peer-step hidden>
+      <p class="step__num">Step 2</p>
+      <h2>Add comparison communities</h2>
+      <p class="section-lede muted">Add as many as you like. The target is always included in the comparison block.</p>
+      <div class="search" data-peer-search>
+        <input type="search" placeholder="Search a comparison city…" autocomplete="off" aria-label="Search for a comparison community" />
+        <ul class="search__results" hidden></ul>
+      </div>
+      <ul class="chips" data-peer-chips></ul>
+    </div>
+
+    <!-- Step 3: generate -->
+    <div class="step" data-gen-step hidden>
+      <p class="step__num">Step 3</p>
+      <h2>Generate the workbook</h2>
+      <button type="button" class="btn" data-generate>Generate Excel sheet</button>
+      <p class="gen-status muted" data-status role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.20.3/xlsx.full.min.js" is:inline></script>
+  <script src="/js/master-generator.js" is:inline></script>
+  <script is:inline>
+    (async function () {
+      const $ = (s, r = document) => r.querySelector(s);
+      const statusEl = $('[data-status]');
+      let index = null, schema = null, target = null;
+      const peers = new Map(); // geoid -> place
+
+      try {
+        [index, schema] = await Promise.all([
+          fetch('/data/master/index.json').then((r) => r.json()),
+          fetch('/data/master/schema.json').then((r) => r.json()),
+        ]);
+      } catch (e) {
+        $('.gen').innerHTML = '<p class="muted">The generator data isn’t built yet. Run <code>npm run master-geo</code> and redeploy.</p>';
+        return;
+      }
+      const places = index.places;
+
+      function score(p, q) {
+        const n = p.name.toLowerCase(), s = (p.state_name || '').toLowerCase();
+        if (n.startsWith(q)) return 0; if (n.includes(q)) return 1;
+        if (s.startsWith(q)) return 2; if (s.includes(q)) return 3; return 9;
+      }
+      function match(q) {
+        return places.map((p) => ({ p, s: score(p, q) })).filter((x) => x.s < 9)
+          .sort((a, b) => a.s - b.s || a.p.name.localeCompare(b.p.name)).slice(0, 10).map((x) => x.p);
+      }
+      function wireSearch(box, onPick) {
+        const input = $('input', box), out = $('.search__results', box);
+        input.addEventListener('input', () => {
+          const q = input.value.trim().toLowerCase();
+          if (q.length < 2) { out.hidden = true; out.innerHTML = ''; return; }
+          const m = match(q);
+          out.hidden = !m.length;
+          out.innerHTML = m.map((p) => `<li><a href="#" data-geoid="${p.geoid}"><span>${p.name}</span><span class="muted">${p.state_name || ''}</span></a></li>`).join('');
+          out.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => {
+            e.preventDefault();
+            onPick(places.find((p) => p.geoid === a.dataset.geoid));
+            out.hidden = true; out.innerHTML = ''; input.value = '';
+          }));
+        });
+        input.addEventListener('blur', () => setTimeout(() => { out.hidden = true; }, 200));
+      }
+
+      // Step 1
+      wireSearch($('[data-target-search]'), (p) => {
+        target = p;
+        $('[data-target-name]').textContent = p.name;
+        const geo = [p.county_name, p.cbsa_title ? p.cbsa_title + ' (MSA)' : null, p.state_name].filter(Boolean).join('  ·  ');
+        $('[data-target-geo]').textContent = 'Auto-included: ' + geo;
+        $('[data-target-card]').hidden = false;
+        $('[data-target-search]').hidden = true;
+        $('[data-peer-step]').hidden = false;
+        $('[data-gen-step]').hidden = false;
+        peers.delete(p.geoid);
+        renderChips();
+      });
+      $('[data-target-clear]').addEventListener('click', () => {
+        target = null;
+        $('[data-target-card]').hidden = true;
+        $('[data-target-search]').hidden = false;
+        $('[data-peer-step]').hidden = true;
+        $('[data-gen-step]').hidden = true;
+      });
+
+      // Step 2
+      function renderChips() {
+        const ul = $('[data-peer-chips]');
+        ul.innerHTML = [...peers.values()].map((p) => `<li class="chip">${p.name}<button type="button" data-remove="${p.geoid}" aria-label="Remove">×</button></li>`).join('');
+        ul.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { peers.delete(b.dataset.remove); renderChips(); }));
+      }
+      wireSearch($('[data-peer-search]'), (p) => {
+        if (target && p.geoid === target.geoid) return;
+        peers.set(p.geoid, p); renderChips();
+      });
+
+      // Step 3
+      $('[data-generate]').addEventListener('click', async () => {
+        if (!target) return;
+        const btn = $('[data-generate]'); btn.disabled = true;
+        statusEl.textContent = 'Assembling data and building your workbook…';
+        try {
+          await window.MasterGen.generate(target.geoid, [...peers.keys()], index, schema);
+          statusEl.textContent = 'Done — your download should have started.';
+        } catch (e) {
+          statusEl.textContent = 'Something went wrong: ' + e.message;
+        } finally { btn.disabled = false; }
+      });
+    })();
+  </script>
+</Base>
+
+<style>
+  .hero { background: var(--bg-section); padding: var(--space-9) 0 var(--space-7); border-bottom: 1px solid var(--border-soft); }
+  .hero h1 { max-width: 20ch; margin-bottom: var(--space-4); }
+  .hero__lede { max-width: 66ch; font-size: var(--fs-md); color: var(--text-muted); }
+
+  .gen { padding-top: var(--space-7); padding-bottom: var(--space-9); max-width: 760px; }
+  .step { margin-bottom: var(--space-8); padding-top: var(--space-5); border-top: 1px solid var(--border-soft); }
+  .step:first-child { border-top: none; padding-top: 0; }
+  .step__num { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-navy); font-weight: var(--fw-medium); margin: 0 0 var(--space-2); }
+  .step h2 { margin: 0 0 var(--space-4); font-size: var(--fs-xl); }
+  .section-lede { margin: 0 0 var(--space-4); font-size: var(--fs-sm); max-width: 60ch; }
+
+  .search { position: relative; max-width: 520px; }
+  .search input { width: 100%; padding: var(--space-4) var(--space-5); font-size: var(--fs-md); font-family: inherit;
+    border: 2px solid var(--color-navy); border-radius: var(--radius-md); background: var(--bg-page); box-shadow: var(--shadow-soft); }
+  .search input:focus { outline: 3px solid var(--color-gold); outline-offset: 1px; }
+  .search__results { position: absolute; top: 100%; left: 0; right: 0; list-style: none; margin: var(--space-2) 0 0; padding: 0;
+    background: var(--bg-page); border: 1px solid var(--border-soft); border-radius: var(--radius-md); box-shadow: var(--shadow-card); z-index: 10; }
+  .search__results li { border-bottom: 1px solid var(--border-soft); }
+  .search__results li:last-child { border-bottom: none; }
+  .search__results a { display: flex; justify-content: space-between; align-items: baseline; padding: var(--space-3) var(--space-4); text-decoration: none; color: var(--text-body); }
+  .search__results a:hover { background: var(--bg-section); }
+
+  .target-card { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4);
+    padding: var(--space-4) var(--space-5); border: 1px solid var(--border-soft); border-left: 4px solid var(--color-gold); background: var(--bg-card); max-width: 520px; }
+  .target-card__name { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-medium); color: var(--text-primary); }
+  .target-card__geo { margin: var(--space-1) 0 0; font-size: var(--fs-sm); }
+  .link-btn { background: none; border: none; color: var(--color-navy); font: inherit; font-weight: var(--fw-medium); cursor: pointer; text-decoration: underline; }
+
+  .chips { list-style: none; padding: 0; margin: var(--space-4) 0 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .chip { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+    background: var(--bg-section); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); font-size: var(--fs-sm); }
+  .chip button { background: none; border: none; font-size: 1.1em; line-height: 1; cursor: pointer; color: var(--text-muted); padding: 0; }
+  .chip button:hover { color: var(--color-orange-red, #e04f39); }
+
+  .btn { display: inline-block; padding: var(--space-4) var(--space-6); font-size: var(--fs-md); font-family: inherit; font-weight: var(--fw-medium);
+    background: var(--color-navy); color: #ffffff; border: none; border-radius: var(--radius-md); cursor: pointer; }
+  .btn:hover { background: var(--color-navy-dark, #002240); }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+  .gen-status { margin: var(--space-3) 0 0; font-size: var(--fs-sm); }
+</style>

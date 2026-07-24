@@ -14,13 +14,19 @@
     "places-xlsx": "node scripts/build-places-xlsx.mjs",
     "data": "node scripts/build-data.mjs",
     "rankings": "node scripts/build-rankings.mjs",
+    "acs-vintages": "node scripts/fetch-acs-vintages.mjs",
+    "master-data": "node scripts/build-master-sheet.mjs",
+    "master-xlsx": "node scripts/build-master-xlsx.mjs",
+    "master-geo": "node scripts/build-master-geo.mjs",
+    "master": "npm run acs-vintages && npm run master-data && npm run master-xlsx",
+    "validate-master": "node scripts/validate.mjs",
     "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js dev",
     "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js build",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^4.16.18",
+    "astro": "^7.1.3",
     "chart.js": "^4.4.7",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
