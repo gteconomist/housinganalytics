@@ -39,6 +39,7 @@ const fullTitle = title.includes('housinganalytics')
         <a href="/rankings">Rankings</a>
         <a href="/map">Map</a>
         <a href="/about">About</a>
+        <span class="site-auth" data-auth-slot></span>
       </nav>
     </div>
   </header>
@@ -68,6 +69,28 @@ const fullTitle = title.includes('housinganalytics')
       </p>
     </div>
   </footer>
+
+  <!-- Sign in / Sign out. Cloudflare Access exposes the signed-in identity at
+       /cdn-cgi/access/get-identity and a logout URL at /cdn-cgi/access/logout.
+       We ask who's logged in and show the right control on every page. -->
+  <script is:inline>
+    (async function () {
+      const slot = document.querySelector('[data-auth-slot]');
+      if (!slot) return;
+      try {
+        const r = await fetch('/cdn-cgi/access/get-identity', { cache: 'no-store' });
+        if (!r.ok) throw new Error('not signed in');
+        const id = await r.json();
+        const email = id && id.email ? id.email : '';
+        slot.innerHTML =
+          (email ? '<span class="site-auth__who">' + email + '</span>' : '') +
+          '<a class="site-auth__btn" href="/cdn-cgi/access/logout">Sign out</a>';
+      } catch (e) {
+        // Not authenticated (or running locally without Access) — offer sign-in.
+        slot.innerHTML = '<a class="site-auth__btn" href="/counties">Sign in</a>';
+      }
+    })();
+  </script>
 </body>
 </html>
 
@@ -111,6 +134,34 @@ const fullTitle = title.includes('housinganalytics')
   }
   .site-nav a:hover {
     border-bottom-color: var(--color-gold);
+  }
+  .site-auth {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-left: var(--space-3);
+  }
+  .site-auth__who {
+    color: #cbd5e0;
+    font-size: var(--fs-xs);
+    max-width: 18ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .site-auth__btn {
+    color: #ffffff !important;
+    text-decoration: none;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: var(--radius-sm);
+    padding: 3px 12px;
+    line-height: 1.4;
+  }
+  .site-auth__btn:hover {
+    border-color: var(--color-gold);
+    background: rgba(179, 163, 105, 0.18);
   }
   .site-footer {
     border-top: 1px solid var(--border-soft);
