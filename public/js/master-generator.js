@@ -4,7 +4,7 @@
  * bundle). Shading/fills/borders in the EIG palette; number formats per field.
  */
 (function () {
-  const BASE = '/data/master';
+  const BASE = '/master-data';
 
   // EIG palette (ARGB) + shared styles
   const NAVY = 'FF003057', GOLD = 'FFB3A369', CREAM = 'FFF9F6E5', CREAM2 = 'FFEFE9D6',

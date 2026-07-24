@@ -30,7 +30,12 @@ const FIELD = Object.fromEntries(FIELDS.map((f) => [f.id, f]));
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const XWALK_DIR = resolve(ROOT, 'scripts/.master-crosswalk');
-const OUT_DIR = resolve(ROOT, 'public/data/master');
+// Served from /master-data (NOT under the gated /data/* prefix). The PAGE
+// (/master-sheet) is gated by Cloudflare Access so a login is required to use
+// the tool, but the browser must be able to fetch this JSON directly — a
+// fetch() to an Access-gated path returns a login redirect, not the data. This
+// is public Census data, so serving it un-gated is fine.
+const OUT_DIR = resolve(ROOT, 'public/master-data');
 const GEO_DIR = resolve(OUT_DIR, 'geo');
 
 const KEY = process.env.CENSUS_API_KEY;

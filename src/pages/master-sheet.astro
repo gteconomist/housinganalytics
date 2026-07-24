@@ -72,8 +72,8 @@ import Base from '../layouts/Base.astro';
 
       try {
         [index, schema] = await Promise.all([
-          fetch('/data/master/index.json').then((r) => r.json()),
-          fetch('/data/master/schema.json').then((r) => r.json()),
+          fetch('/master-data/index.json').then((r) => r.json()),
+          fetch('/master-data/schema.json').then((r) => r.json()),
         ]);
       } catch (e) {
         $('.gen').innerHTML = '<p class="muted">The generator data isn’t built yet. Run <code>npm run master-geo</code> and redeploy.</p>';
