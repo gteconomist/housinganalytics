@@ -93,7 +93,7 @@ function assembleGeo(byVintageVals) {
 
 async function run() {
   if (!KEY) throw new Error('CENSUS_API_KEY not set');
-  mkdirSync(GEO_DIR, { recursive: true });
+  mkdirSync(resolve(OUT_DIR, 'states'), { recursive: true });
   const places = JSON.parse(readFileSync(resolve(XWALK_DIR, 'crosswalk-places.json'), 'utf8'));
   const { cbsa_name, county2cbsa } = JSON.parse(readFileSync(resolve(XWALK_DIR, 'crosswalk-cbsa.json'), 'utf8'));
 
@@ -125,19 +125,33 @@ async function run() {
   }
 
   const stripState = (n) => (n || '').replace(/,\s*[^,]+$/, '').trim();
-  const write = (prefix, gid, name, by) =>
-    writeFileSync(resolve(GEO_DIR, `${prefix}-${gid}.json`), JSON.stringify({ geoid: gid, name, byVintage: assembleGeo(by) }));
 
-  // Write ALL geographies (every place we have + every county / CBSA / state)
-  // so any city OR county can be a target and its context always resolves.
-  let counts = { place: 0, county: 0, cbsa: 0, state: 0 };
+  // BUNDLE geographies into FEW files. GitHub Pages will not reliably serve tens
+  // of thousands of tiny files (the per-geo approach produced ~11k and Pages
+  // silently dropped them), so consolidate to one bundle per state
+  // (states/<fips>.json = that state's places + counties) plus national
+  // cbsas.json and us-states.json. ~55 files total. The browser fetches only the
+  // few bundles a given generation needs.
+  const stateBundles = {};
+  const ensure = (st) => (stateBundles[st] ||= { places: {}, counties: {} });
   for (const gid of Object.keys(places)) {
     const rec = levels.place.by[gid]; if (!rec) continue;
-    write('place', gid, places[gid].name, rec.v); counts.place++;
+    ensure(gid.slice(0, 2)).places[gid] = { name: places[gid].name, byVintage: assembleGeo(rec.v) };
   }
-  for (const gid of Object.keys(levels.county.by)) { write('county', gid, levels.county.by[gid].name, levels.county.by[gid].v); counts.county++; }
-  for (const gid of Object.keys(levels.cbsa.by)) { write('cbsa', gid, cbsa_name[gid] || levels.cbsa.by[gid].name, levels.cbsa.by[gid].v); counts.cbsa++; }
-  for (const gid of Object.keys(levels.state.by)) { write('state', gid, levels.state.by[gid].name, levels.state.by[gid].v); counts.state++; }
+  for (const gid of Object.keys(levels.county.by)) {
+    ensure(gid.slice(0, 2)).counties[gid] = { name: levels.county.by[gid].name, byVintage: assembleGeo(levels.county.by[gid].v) };
+  }
+  let counts = { states: 0, places: 0, counties: 0, cbsas: 0 };
+  for (const [st, bundle] of Object.entries(stateBundles)) {
+    writeFileSync(resolve(OUT_DIR, `states/${st}.json`), JSON.stringify(bundle));
+    counts.states++; counts.places += Object.keys(bundle.places).length; counts.counties += Object.keys(bundle.counties).length;
+  }
+  const cbsas = {};
+  for (const gid of Object.keys(levels.cbsa.by)) { cbsas[gid] = { name: cbsa_name[gid] || levels.cbsa.by[gid].name, byVintage: assembleGeo(levels.cbsa.by[gid].v) }; counts.cbsas++; }
+  writeFileSync(resolve(OUT_DIR, 'cbsas.json'), JSON.stringify(cbsas));
+  const usStates = {};
+  for (const gid of Object.keys(levels.state.by)) usStates[gid] = { name: levels.state.by[gid].name, byVintage: assembleGeo(levels.state.by[gid].v) };
+  writeFileSync(resolve(OUT_DIR, 'us-states.json'), JSON.stringify(usStates));
 
   // index: city picker (places) + county picker (counties) + crosswalk
   const cityIndex = Object.values(places)
@@ -167,7 +181,7 @@ async function run() {
     })),
   };
   writeFileSync(resolve(OUT_DIR, 'schema.json'), JSON.stringify(schema));
-  console.log('Wrote', counts.place, 'places,', counts.county, 'counties,', counts.cbsa, 'cbsas,', counts.state, 'states + index.json + schema.json');
+  console.log('Wrote', counts.states, 'state bundles (', counts.places, 'places +', counts.counties, 'counties ),', counts.cbsas, 'cbsas + us-states.json + index.json + schema.json');
 }
 
 run();

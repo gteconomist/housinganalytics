@@ -28,37 +28,46 @@
   const stripState = (n) => (n || '').replace(/,\s*[^,]+$/, '').trim();
 
   async function getJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(`Not found: ${url}`); return r.json(); }
-  const geoFile = (prefix, gid) => getJSON(`${BASE}/geo/${prefix}-${gid}.json`);
+  // Data is bundled: one file per state (places + counties) plus national
+  // cbsas.json and us-states.json. Cache each bundle after first fetch.
+  const _cache = {};
+  const cached = (key, fn) => (_cache[key] || (_cache[key] = fn()));
+  const stateBundle = (fips) => cached('st' + fips, () => getJSON(`${BASE}/states/${fips}.json`));
+  const cbsaBundle = () => cached('cbsas', () => getJSON(`${BASE}/cbsas.json`));
+  const usStates = () => cached('usstates', () => getJSON(`${BASE}/us-states.json`));
 
   // ---- data path: assemble the model. mode = 'city' | 'county'. ----
   async function buildModel(targetGeoid, peerGeoids, index, mode) {
     const list = mode === 'county' ? index.counties : index.places;
-    const pfx = mode === 'county' ? 'county' : 'place';
+    const key = mode === 'county' ? 'counties' : 'places';
     const byGeoid = Object.fromEntries(list.map((p) => [p.geoid, p]));
     const t = byGeoid[targetGeoid];
     if (!t) throw new Error('Unknown target');
     const vintages = index.vintages;
     const records = {};
 
-    const target = await geoFile(pfx, t.geoid);
-    records.target = { role: 'target', label: clean(t.name), byVintage: target.byVintage };
+    const tBundle = await stateBundle(t.state_fips);
+    const targetRec = tBundle[key][t.geoid];
+    if (!targetRec) throw new Error('No data for target');
+    records.target = { role: 'target', label: clean(t.name), byVintage: targetRec.byVintage };
 
+    // City targets also show their parent county; a county target IS the county.
     if (mode !== 'county' && t.county_fips) {
-      try { const c = await geoFile('county', t.county_fips);
-        records.county = { role: 'county', label: stripState(c.name), byVintage: c.byVintage }; } catch (e) {}
+      const c = tBundle.counties[t.county_fips];
+      if (c) records.county = { role: 'county', label: stripState(c.name), byVintage: c.byVintage };
     }
     if (t.cbsa) {
-      try { const c = await geoFile('cbsa', t.cbsa);
-        records.msa = { role: 'msa', label: (t.cbsa_title || c.name) + ' (MSA)', byVintage: c.byVintage }; } catch (e) {}
+      try { const cb = (await cbsaBundle())[t.cbsa];
+        if (cb) records.msa = { role: 'msa', label: (t.cbsa_title || cb.name) + ' (MSA)', byVintage: cb.byVintage }; } catch (e) {}
     }
     if (t.state_fips) {
-      try { const s = await geoFile('state', t.state_fips);
-        records.state = { role: 'state', label: s.name, byVintage: s.byVintage }; } catch (e) {}
+      try { const s = (await usStates())[t.state_fips];
+        if (s) records.state = { role: 'state', label: s.name, byVintage: s.byVintage }; } catch (e) {}
     }
     for (const gid of peerGeoids) {
       const p = byGeoid[gid]; if (!p) continue;
-      try { const g = await geoFile(pfx, gid);
-        records['peer_' + gid] = { role: 'peer', label: clean(p.name), byVintage: g.byVintage }; } catch (e) {}
+      try { const b = await stateBundle(p.state_fips); const rec = b[key][gid];
+        if (rec) records['peer_' + gid] = { role: 'peer', label: clean(p.name), byVintage: rec.byVintage }; } catch (e) {}
     }
     return { vintages, records };
   }
