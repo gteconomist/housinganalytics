@@ -6,8 +6,9 @@ interface Props {
   title: string;
   description?: string;
   county?: { name: string; state_name: string };
+  marketing?: boolean;
 }
-const { title, description, county } = Astro.props;
+const { title, description, county, marketing = false } = Astro.props;
 const fullTitle = title.includes('housinganalytics')
   ? title
   : `${title} — housinganalytics.org`;
@@ -25,11 +26,19 @@ const fullTitle = title.includes('housinganalytics')
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
 </head>
 <body>
-  <header class="site-header">
+  <header class:list={["site-header", marketing && "site-header--mkt"]}>
     <div class="container site-header__inner">
-      <a class="brand" href="https://economicimpact.com" target="_blank" rel="noopener" aria-label="Economic Impact Group — economicimpact.com">
-        <img class="brand__logo" src="/eig-logo-white.png" alt="Economic Impact Group" width="238" height="88" />
+      <a class="brand" href={marketing ? "/" : "https://economicimpact.com"} target={marketing ? undefined : "_blank"} rel={marketing ? undefined : "noopener"} aria-label="Economic Impact Group — economicimpact.com">
+        <img class="brand__logo" src={marketing ? "/eig-logo-dark.png" : "/eig-logo-white.png"} alt="Economic Impact Group" width="238" height="88" />
       </a>
+      {marketing && (
+        <nav class="mkt-nav" aria-label="Primary">
+          <a href="/about">About</a>
+          <a class="mkt-login" href="/counties">Log in</a>
+          <a class="mkt-req" href="mailto:alfie@economicimpact.com?subject=housinganalytics.org%20access%20request">Request access</a>
+        </nav>
+      )}
+      {!marketing && (
       <nav class="site-nav" aria-label="Primary">
         <a href="/">Home</a>
 
@@ -71,6 +80,7 @@ const fullTitle = title.includes('housinganalytics')
         <a href="/about">About</a>
         <span class="site-auth" data-auth-slot></span>
       </nav>
+      )}
     </div>
   </header>
   <script is:inline>
@@ -170,10 +180,20 @@ const fullTitle = title.includes('housinganalytics')
     text-decoration: none;
   }
   .brand__logo {
-    height: 48px;
+    height: 54px;
     width: auto;
     display: block;
   }
+  /* Marketing (landing) header variant — light, big dark logo, sales CTAs. */
+  .site-header--mkt { background: #ffffff; }
+  .site-header--mkt .brand__logo { height: 64px; }
+  .mkt-nav { display: flex; align-items: center; gap: 22px; margin-left: auto; }
+  .mkt-nav a[href="/about"] { color: var(--text-body); font-weight: 600; font-size: 14.5px; text-decoration: none; }
+  .mkt-nav a[href="/about"]:hover { color: var(--accent-strong); }
+  .mkt-login { color: var(--text-primary); font-weight: 600; font-size: 14.5px; text-decoration: none; padding: 9px 8px; }
+  .mkt-login:hover { color: var(--accent-strong); }
+  .mkt-req { background: var(--accent); color: #231603; font-weight: 700; font-size: 14px; padding: 10px 18px; border-radius: 10px; text-decoration: none; white-space: nowrap; }
+  .mkt-req:hover { background: var(--accent-strong); }
   @media (max-width: 640px) {
     .brand__logo { height: 38px; }
   }
