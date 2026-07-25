@@ -32,17 +32,66 @@ const fullTitle = title.includes('housinganalytics')
       </a>
       <nav class="site-nav" aria-label="Primary">
         <a href="/">Home</a>
-        <a href="/counties">Counties</a>
-        <a href="/cities">Cities</a>
+
+        <div class="nav-group" data-nav-group>
+          <button type="button" class="nav-group__btn" aria-expanded="false" aria-haspopup="true">Explore</button>
+          <div class="nav-group__menu">
+            <a href="/counties">Counties</a>
+            <a href="/cities">Cities</a>
+          </div>
+        </div>
+
+        <div class="nav-group" data-nav-group>
+          <button type="button" class="nav-group__btn" aria-expanded="false" aria-haspopup="true">Rankings</button>
+          <div class="nav-group__menu">
+            <a href="/rankings">County rankings</a>
+            <a href="/city-rankings">City rankings</a>
+          </div>
+        </div>
+
+        <div class="nav-group" data-nav-group>
+          <button type="button" class="nav-group__btn" aria-expanded="false" aria-haspopup="true">Maps</button>
+          <div class="nav-group__menu">
+            <a href="/map">County map</a>
+            <a href="/city-map">City map</a>
+          </div>
+        </div>
+
         <a href="/compare">Compare</a>
         <a href="/master-sheet">Data Sheet</a>
-        <a href="/rankings">Rankings</a>
-        <a href="/map">Map</a>
         <a href="/about">About</a>
         <span class="site-auth" data-auth-slot></span>
       </nav>
     </div>
   </header>
+  <script is:inline>
+    (function () {
+      var groups = Array.prototype.slice.call(document.querySelectorAll('[data-nav-group]'));
+      function closeAll(except) {
+        groups.forEach(function (g) {
+          if (g === except) return;
+          var b = g.querySelector('.nav-group__btn'); var m = g.querySelector('.nav-group__menu');
+          if (b) b.setAttribute('aria-expanded', 'false');
+          if (m) m.classList.remove('is-open');
+        });
+      }
+      groups.forEach(function (g) {
+        var btn = g.querySelector('.nav-group__btn');
+        var menu = g.querySelector('.nav-group__menu');
+        if (!btn || !menu) return;
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          var open = menu.classList.toggle('is-open');
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          closeAll(g);
+        });
+      });
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest || !e.target.closest('[data-nav-group]')) closeAll(null);
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(null); });
+    })();
+  </script>
 
   <main>
     <slot />
@@ -135,6 +184,33 @@ const fullTitle = title.includes('housinganalytics')
   .site-nav a:hover {
     border-bottom-color: var(--color-gold);
   }
+
+  /* Grouped dropdown menus (Explore / Rankings / Maps). */
+  .nav-group { position: relative; display: inline-flex; }
+  .nav-group__btn {
+    background: none; border: 0; cursor: pointer; font-family: inherit;
+    color: #ffffff; font-size: var(--fs-sm); font-weight: var(--fw-medium);
+    letter-spacing: 0.02em; padding: 0 0 2px;
+    border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .nav-group__btn::after { content: '\25BE'; font-size: 0.7em; opacity: 0.8; }
+  .nav-group__btn:hover,
+  .nav-group__btn[aria-expanded="true"] { border-bottom-color: var(--color-gold); }
+  .nav-group__menu {
+    position: absolute; top: 100%; left: 0; z-index: 40;
+    display: none; min-width: 180px; margin-top: 8px; padding: 6px;
+    background: var(--color-navy, #16181c); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: var(--radius-sm, 6px); box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    flex-direction: column; gap: 2px;
+  }
+  .nav-group:hover .nav-group__menu,
+  .nav-group:focus-within .nav-group__menu,
+  .nav-group__menu.is-open { display: flex; }
+  .nav-group__menu a {
+    color: #ffffff !important; text-decoration: none; font-size: var(--fs-sm);
+    padding: 6px 10px; border-radius: 4px; border-bottom: 0 !important; white-space: nowrap;
+  }
+  .nav-group__menu a:hover { background: rgba(255,255,255,0.10); border-bottom-color: transparent !important; }
   /* The auth links are injected by JS (see script below), so they never get
      Astro's scoped-style marker. These rules MUST be :global() or they won't
      apply to the injected <a>/<span>. */

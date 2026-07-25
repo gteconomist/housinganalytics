@@ -34,6 +34,7 @@ import Base from '../layouts/Base.astro';
             <g data-dots></g>
           </g>
         </svg>
+        <div class="map-loading" data-loading>Loading map…</div>
         <div class="map-tooltip" data-tooltip hidden></div>
       </div>
 
@@ -63,6 +64,7 @@ import Base from '../layouts/Base.astro';
       legendLo:  document.querySelector('[data-legend-lo]'),
       legendHi:  document.querySelector('[data-legend-hi]'),
       source:  document.querySelector('[data-source]'),
+      loading: document.querySelector('[data-loading]'),
     };
 
     const VIEW_W = 975, VIEW_H = 610;
@@ -100,6 +102,7 @@ import Base from '../layouts/Base.astro';
       ]);
     } catch (e) {
       els.source.textContent = 'Could not load map data: ' + e.message;
+      els.loading.textContent = 'Could not load map data: ' + e.message;
       throw e;
     }
 
@@ -257,7 +260,9 @@ import Base from '../layouts/Base.astro';
     els.metric.addEventListener('change', () => { currentMetric = els.metric.value; render(); });
     els.state.addEventListener('change', () => zoomToState(els.state.value));
 
-    render();
+    // Base outline is already painted above; defer the ~4,800-dot pass one frame
+    // so the country shows immediately, then drop the loading overlay.
+    requestAnimationFrame(() => { render(); els.loading.hidden = true; });
   </script>
 
   <style>
@@ -267,6 +272,9 @@ import Base from '../layouts/Base.astro';
     .ctrl { display: flex; flex-direction: column; gap: var(--space-1); }
     .ctrl label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
     .ctrl select { padding: .4rem .6rem; border: 1px solid var(--color-sage, #d6dbd4); border-radius: 6px; background: #fff; min-width: 220px; }
+    .map-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: #fbf9f4; color: var(--color-navy, #16181c); font-size: var(--fs-sm, .9rem); font-weight: 600; z-index: 6; }
+    .map-loading[hidden] { display: none; }
     .map-wrap { position: relative; border: 1px solid var(--color-sage, #d6dbd4); border-radius: 10px; background: #fbf9f4; overflow: hidden; }
     .map-svg { display: block; width: 100%; height: auto; }
     .map-tooltip { position: absolute; pointer-events: none; background: rgba(22,24,28,.94); color: #fff; padding: .5rem .65rem; border-radius: 6px; font-size: var(--fs-xs); line-height: 1.35; max-width: 260px; z-index: 5; }
