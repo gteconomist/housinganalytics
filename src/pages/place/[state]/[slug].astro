@@ -2,6 +2,8 @@
 import Base from '../../../layouts/Base.astro';
 import manifest from '../../../data/generated/manifest.json';
 import { fmtMoney, fmtInt, fmtPct, fmtRatio, affordableHomePrice } from '../../../lib/format.js';
+import IndexBadge from '../../../components/IndexBadge.astro';
+import hsiPlaces from '../../../data/generated/hsi-places.json';
 
 // Generate one static page per place at build time.
 //
@@ -28,6 +30,8 @@ const { geoid } = Astro.props;
 const place = (await import(`../../../data/generated/places/${geoid}.json`)).default;
 // Alias so the (county-shaped) template code below keeps working unchanged.
 const county = place;
+const hsi = hsiPlaces.places[geoid] ?? null;
+const hsiCount = hsiPlaces.city_count;
 const state    = county._context.state;
 const national = county._context.national;
 
@@ -379,6 +383,12 @@ const occRows = (occupations?.rows ?? [])
           Charts also have a PNG button (hover any chart).
         </span>
       </div>
+
+      {hsi && (
+        <div class="county-hero__hsi">
+          <IndexBadge score={hsi.score} rank={hsi.rank} countyCount={hsiCount} lowConfidence={hsi.low_confidence} universeLabel="U.S. cities" />
+        </div>
+      )}
 
       <div class="kpis">
         <div class="kpi"><div class="kpi__label">Median household income</div>

@@ -4,7 +4,7 @@
  * Score is a 0–100 national percentile (100 = most stressed); rank is the
  * county's national position (1 = most stressed). Purely presentational.
  */
-const { score = null, rank = null, countyCount = null, lowConfidence = false } = Astro.props;
+const { score = null, rank = null, countyCount = null, lowConfidence = false, universeLabel = 'U.S. counties' } = Astro.props;
 const hasData = score != null && rank != null;
 // Severity band drives the accent color + plain-language label.
 function band(s) {
@@ -31,7 +31,7 @@ const pctTop = (hasData && countyCount) ? Math.max(1, Math.round((rank / countyC
       </div>
       <div class="hsi-badge__meta">
         <div class="hsi-badge__rank">#{rank.toLocaleString()}{countyCount ? ` of ${countyCount.toLocaleString()}` : ''}</div>
-        <div class="hsi-badge__sub muted">{pctTop ? `More stressed than ${score}% of U.S. counties` : 'National percentile'}</div>
+        <div class="hsi-badge__sub muted">{pctTop ? `More stressed than ${score}% of ${universeLabel}` : 'National percentile'}</div>
       </div>
     </div>
     <div class="hsi-badge__bar" role="img" aria-label={`Housing Stress Index ${score} of 100`}>
