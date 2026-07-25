@@ -3,7 +3,7 @@
 // in the pilot states, stores RAW counts per geography (affordability math runs
 // client-side), bundles one file per state into public/analysis-data/.
 // Env: CENSUS_API_KEY, STATES (comma FIPS, default pilot GA,NC,TN).
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve as _resolve } from 'node:path';
 
@@ -84,6 +84,10 @@ function stripState(n){ return (n||'').replace(/,\s*[^,]+$/,'').trim(); }
 
 async function run(){
   if(!KEY) throw new Error('CENSUS_API_KEY not set');
+  let CHAS={};
+  const chasPath=_resolve(__dirname,'..','src/data/generated/chas.json');
+  if(existsSync(chasPath)){ try{ CHAS=JSON.parse(readFileSync(chasPath,'utf8')).geos||{}; console.log(`CHAS: merged ${Object.keys(CHAS).length} geos`);}catch(e){console.warn('CHAS load failed:',e.message);} }
+  else console.log('CHAS: chas.json not found — bundles built ACS-only');
   mkdirSync(_resolve(OUT,'states'),{recursive:true});
   const placeIndex=[], countyIndex=[]; let stateName={};
   // state names once
@@ -105,7 +109,8 @@ async function run(){
       }
       for(const [gid,{name,vars}] of merged){
         const model=buildModel(vars);
-        if(model.tenure.total<1) continue; // skip empty
+        if(model.tenure.total<1) continue;
+        model.chas = CHAS[gid] || null; // skip empty
         const tgt = level==='place'?bundle.places:bundle.counties;
         tgt[gid]={name:stripState(name),model};
         const idxRec={geoid:gid,name:stripState(name),state_fips:st,state_name:stateName[st]||null};

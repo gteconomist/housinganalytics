@@ -155,6 +155,20 @@
       `A household at this area's median income (${fmt$(model.mhi)}) can afford ≈${fmt$(affMed)}/mo in rent. ACS-period median rent here was ${fmt$(model.medRent)}; median home value ${fmt$(model.medValue)}.`;
   }
 
+  function chasSection(chas){
+    const rows=[['≤ 30% AMI','Extremely low income','eli'],['≤ 50% AMI','Very low income','vli'],['≤ 80% AMI','Low income','li']]
+      .map(function(t){ var c=chas[t[2]]; if(!c) return '';
+        return '<tr><td><b>'+t[0]+'</b><br><span style="color:#777;font-size:11px">'+t[1]+'</span></td>'+
+          '<td class="n">'+fmtN(c.hh)+'</td><td class="n">'+fmtN(c.affordable)+'</td>'+
+          '<td class="n" style="font-weight:600;color:#003057">'+fmtN(c.affAndAvail)+'</td>'+
+          '<td class="n" style="color:#e04f39;font-weight:700">'+(c.shortage>0?'-':'')+fmtN(Math.abs(c.shortage))+'</td></tr>';
+      }).join('');
+    return '<h3 class="hg-h3">Affordable <em>and available</em> — the headline shortage <span class="hg-pill">HUD CHAS</span></h3>'+
+      '<p class="hg-sub">Renter units affordable to each income tier, minus those already occupied by higher-income households. This is the figure behind “City X is short N affordable units.” Source: HUD CHAS 2018–2022 (Table 15C), by HAMFI income tier.</p>'+
+      '<table class="hg-tbl"><thead><tr><th>Renter income (AMI)</th><th class="n">Households</th><th class="n">Affordable units</th><th class="n">Affordable &amp; available</th><th class="n">Shortage</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<p class="hg-note"><b>Why this is the credible number:</b> “available” removes affordable units occupied by higher-income renters. Look at the ≤ 80% row — there can be more <i>affordable</i> units than households, yet still a shortage once the unavailable ones are removed, which a simple affordability count misses. CHAS is 2018–2022 (HUD’s latest); the cost-burden and price-point figures above are ACS 2020–2024. (Vacant-for-rent affordable units are a small pending addition.)</p>';
+  }
+
   function render(root, model, meta) {
     root.innerHTML = TEMPLATE(meta);
     const A = readAssumptions(root);
@@ -205,7 +219,9 @@
     <div data-gapchart></div>
     <table class="hg-tbl"><thead><tr><th>Income tier</th><th class="n">Aff. rent</th><th class="n">Renter HH</th><th class="n">Aff. units</th><th class="n">Gap</th><th></th></tr></thead><tbody data-gaprows></tbody></table>
     <p class="hg-src" data-medline></p>
-    <p class="hg-note"><b>Affordable vs. affordable-and-available:</b> this counts affordable units; the headline-grade figure removes units occupied by higher-income households (HUD CHAS refinement — coming). Small places carry ±10–20% ACS margins of error.</p>
+    <p class="hg-note"><b>Affordable vs. affordable-and-available:</b> this counts affordable units; the headline-grade figure removes units occupied by higher-income households (shown next, from HUD CHAS). Small places carry ±10–20% ACS margins of error.</p>
+
+    ${meta.model && meta.model.chas ? chasSection(meta.model.chas) : ''}
 
     <h3 class="hg-h3">Ownership: what's within reach at each income</h3>
     <table class="hg-tbl"><thead><tr><th>Income tier</th><th class="n">Aff. price</th><th class="n">Owner HH</th><th class="n">Units ≤ price</th><th class="n">Share of stock</th></tr></thead><tbody data-ownrows></tbody></table>
