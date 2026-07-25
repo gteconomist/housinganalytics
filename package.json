@@ -20,12 +20,13 @@
     "master-geo": "node scripts/build-master-geo.mjs",
     "master": "npm run acs-vintages && npm run master-data && npm run master-xlsx",
     "validate-master": "node scripts/validate.mjs",
-    "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js dev",
-    "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js build",
+    "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && npm run rankings-places && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js dev",
+    "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && npm run rankings-places && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js build",
     "preview": "astro preview",
     "astro": "astro",
     "index": "node scripts/build-index.mjs",
-    "index-places": "node scripts/build-index-places.mjs"
+    "index-places": "node scripts/build-index-places.mjs",
+    "rankings-places": "node scripts/build-places-rankings.mjs"
   },
   "dependencies": {
     "astro": "^4.16.18",
