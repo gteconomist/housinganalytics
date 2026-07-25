@@ -1,0 +1,67 @@
+---
+import Base from '../layouts/Base.astro';
+import manifest from '../data/generated/manifest.json';
+import { fmtInt } from '../lib/format.js';
+const cityCount = (manifest.places ?? []).length;
+---
+<Base title="Analysis — housinganalytics.org"
+      description="Original analysis on the housinganalytics.org data: composite indices and housing studies that go beyond the raw ACS figures.">
+  <section class="container narrow">
+    <p class="eyebrow">Analysis</p>
+    <h1>Analysis &amp; studies</h1>
+    <p>
+      The rest of the site answers <em>“what is it?”</em> — the profiles, rankings, and maps report the
+      numbers. This section is where those numbers become analysis: composite indices, cross-cutting
+      studies, and methods that combine many metrics into something you can put at the top of a brief,
+      a council presentation, or a grant narrative.
+    </p>
+    <p>
+      Everything here is transparent by design. Each study documents its inputs, method, and assumptions
+      so you can defend the number — not just quote it.
+    </p>
+
+    <h2>Available now</h2>
+    <ul class="study-list">
+      <li class="study">
+        <a class="study__title" href="/analysis/housing-stress-index">Housing Stress Index →</a>
+        <p class="study__desc">
+          A single 0–100 score combining renter and owner cost burden, rent-to-income, and
+          price-to-income into one measure of housing-affordability stress — computed for all
+          {fmtInt(manifest.county_count)} counties and {fmtInt(cityCount)} cities. Live on the rankings,
+          maps, and every county and city profile.
+        </p>
+      </li>
+    </ul>
+
+    <h2>In development</h2>
+    <ul class="study-list">
+      <li class="study study--soon">
+        <span class="study__title">Housing shortage by income cohort</span>
+        <p class="study__desc">
+          How large the affordable-housing gap is at each income band — where the shortfall of units
+          actually falls across the income distribution, rather than as a single county-wide figure.
+        </p>
+      </li>
+    </ul>
+
+    <aside class="disclaimer" role="note" aria-label="Disclaimer">
+      <p class="disclaimer__label">Disclaimer</p>
+      <p class="disclaimer__body">
+        Indices and studies are provided for informational purposes only. They are derived from official
+        statistical sources but are not independently validated by Economic Impact Group, LLC. Composite
+        measures reflect deliberate methodological choices; consult each study’s method notes before
+        relying on a figure.
+      </p>
+    </aside>
+  </section>
+
+  <style>
+    .study-list { list-style: none; padding: 0; margin: var(--space-3) 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); }
+    .study { border: 1px solid var(--color-sage, #d6dbd4); border-left: 4px solid var(--color-teal, #3f7d52); border-radius: 10px; padding: var(--space-4) var(--space-5); background: var(--color-cream, #fbf6ee); }
+    .study--soon { border-left-color: var(--color-gold, #f19623); opacity: 0.92; }
+    .study__title { display: inline-block; font-size: var(--fs-lg, 1.15rem); font-weight: 700; margin-bottom: var(--space-1); color: var(--color-navy, #16181c); text-decoration: none; }
+    a.study__title:hover { color: var(--color-teal, #3f7d52); }
+    .study--soon .study__title::after { content: ' · in development'; font-size: var(--fs-xs); font-weight: 600; color: var(--color-gold, #f19623); text-transform: uppercase; letter-spacing: .04em; }
+    .study__desc { margin: 0; color: var(--color-navy, #16181c); opacity: .85; }
+  </style>
+</Base>

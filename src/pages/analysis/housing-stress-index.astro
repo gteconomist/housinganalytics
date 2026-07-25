@@ -1,0 +1,121 @@
+---
+import Base from '../../layouts/Base.astro';
+import manifest from '../../data/generated/manifest.json';
+import { fmtInt } from '../../lib/format.js';
+const cityCount = (manifest.places ?? []).length;
+---
+<Base title="Housing Stress Index — methodology — housinganalytics.org"
+      description="How the Housing Stress Index is built: components, weights, national z-scoring, winsorization, and the 0–100 percentile scale. Computed for every U.S. county and city.">
+  <section class="container narrow">
+    <p class="eyebrow"><a href="/analysis">Analysis</a> · Methodology</p>
+    <h1>Housing Stress Index</h1>
+    <p>
+      The Housing Stress Index (HSI) condenses five housing-affordability measures into a single
+      <strong>0–100 score</strong>, where higher means more stressed. It is computed independently for all
+      {fmtInt(manifest.county_count)} U.S. counties and all {fmtInt(cityCount)} cities and towns over
+      5,000 people, and it appears on the rankings tables, the maps, and every county and city profile.
+    </p>
+
+    <h2>How to read it</h2>
+    <p>
+      The score is a <strong>national percentile within its own universe</strong>. A county scoring 82 is
+      more housing-stressed than 82% of U.S. counties; a city scoring 82 is more stressed than 82% of
+      cities. Because counties and cities are ranked against different sets, a county’s 82 and a city’s 82
+      are <em>not</em> directly comparable. Each place also carries a <strong>rank</strong> — rank 1 is the
+      single most-stressed county (or city).
+    </p>
+
+    <h2>Components</h2>
+    <p>
+      Five measures, each already published on the profiles, each oriented so that a higher value means
+      more stress. All are from the ACS 5-year estimates.
+    </p>
+    <table class="method-table">
+      <thead><tr><th>Component</th><th>Weight</th><th>What it captures</th></tr></thead>
+      <tbody>
+        <tr><td>Renter cost burden (30%+ of income)</td><td>0.28</td><td>Core affordability pressure on renters</td></tr>
+        <tr><td>Renter severe cost burden (50%+)</td><td>0.14</td><td>Depth of acute renter stress</td></tr>
+        <tr><td>Owner cost burden (30%+ of income)</td><td>0.14</td><td>Affordability pressure on owners</td></tr>
+        <tr><td>Rent-to-income ratio</td><td>0.22</td><td>Market rent relative to local incomes</td></tr>
+        <tr><td>Price-to-income ratio</td><td>0.22</td><td>Home prices relative to local incomes</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Method</h2>
+    <ol class="method-steps">
+      <li><strong>Standardize.</strong> Each component is converted to a national <em>z-score</em> across
+        all places in its universe (counties, or cities) — its distance from the national mean in standard
+        deviations. This puts percentages and ratios on one comparable scale.</li>
+      <li><strong>Winsorize.</strong> Each z-score is clipped to ±3, so a single small-sample extreme
+        cannot dominate the result. This matters most for the smallest counties, whose ACS estimates carry
+        large sampling error.</li>
+      <li><strong>Weighted sum.</strong> The clipped z-scores are combined using the weights above into a
+        single composite value. A place missing a component contributes a neutral zero for it.</li>
+      <li><strong>Percentile &amp; rank.</strong> The composite is converted to a 0–100 national
+        percentile (100 = most stressed) and a dense rank (1 = most stressed). Percentile — not a raw
+        min–max rescale — so a handful of extreme places cannot compress everyone else into a narrow band.</li>
+    </ol>
+
+    <h2>What it deliberately leaves out</h2>
+    <p>
+      Two measures that an affordability index might plausibly include are excluded on purpose, and the
+      exclusions are recorded in the published data:
+    </p>
+    <ul>
+      <li><strong>Vacancy rate</strong> — directionally ambiguous. High vacancy can signal distress and
+        abandonment <em>or</em> slack, cheaper supply; low vacancy signals a tight, stressed market.
+        Including it would muddy the interpretation of the score.</li>
+      <li><strong>Owner-occupancy trend</strong> — requires multiple ACS vintages, which this
+        cross-sectional index does not yet use. It is a candidate for a future trend-aware revision.</li>
+    </ul>
+    <p class="note">
+      The original v4 concept for this index also listed vacancy and an owner-occupancy change term. Both
+      were dropped during the build for the reasons above; this page is the record of that decision.
+    </p>
+
+    <h2>Caveats</h2>
+    <ul>
+      <li><strong>It is a relative measure.</strong> A score is a percentile within counties or within
+        cities — it says where a place sits <em>among its peers</em>, not against a fixed threshold. If
+        national housing stress rose everywhere, the ranking could barely move.</li>
+      <li><strong>Small samples.</strong> The smallest counties carry larger ACS sampling error; the index
+        flags a place <code>low_confidence</code> when it has fewer than three of the five components, or
+        (for counties) a population under 1,000. The cities universe has no places under 5,000 people, so
+        this rarely applies there.</li>
+      <li><strong>Component overlap.</strong> Renter cost burden (30%+) and severe renter cost burden
+        (50%+) overlap by construction; severe burden is weighted separately to emphasize acute stress.</li>
+      <li><strong>The weights are a judgment.</strong> They reflect a defensible default, not a law of
+        nature. They are documented here precisely so the choice is open to scrutiny.</li>
+    </ul>
+
+    <h2>Reproducibility</h2>
+    <p>
+      The index is computed at build time — <code>scripts/build-index.mjs</code> for counties and
+      <code>scripts/build-index-places.mjs</code> for cities — with every weight in a single block at the
+      top of each script. The full per-place breakdown, including each component’s z-score and its
+      contribution to the composite, is emitted alongside the site data, so any score can be traced back
+      to its inputs.
+    </p>
+
+    <aside class="disclaimer" role="note" aria-label="Disclaimer">
+      <p class="disclaimer__label">Disclaimer</p>
+      <p class="disclaimer__body">
+        The Housing Stress Index is a composite measure provided for informational purposes only. It is
+        derived from ACS 5-year estimates but is not independently validated by Economic Impact Group, LLC,
+        and reflects deliberate methodological choices described above. Consult the original ACS sources for
+        decisions that depend on precise figures.
+      </p>
+    </aside>
+  </section>
+
+  <style>
+    .method-table { width: 100%; border-collapse: collapse; margin: var(--space-3) 0 var(--space-6); font-size: var(--fs-sm); }
+    .method-table th, .method-table td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--color-sage, #d6dbd4); vertical-align: top; }
+    .method-table th { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+    .method-table td:nth-child(2), .method-table th:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .method-steps { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-3) 0 var(--space-6); padding-left: 1.2rem; }
+    .method-steps li { padding-left: .3rem; }
+    .note { font-size: var(--fs-sm); opacity: .8; border-left: 3px solid var(--color-gold, #f19623); padding-left: var(--space-3); }
+    code { background: rgba(0,0,0,.05); padding: .05em .35em; border-radius: 4px; font-size: .9em; }
+  </style>
+</Base>
