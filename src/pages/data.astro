@@ -1,0 +1,81 @@
+---
+import Base from '../layouts/Base.astro';
+import manifest from '../data/generated/manifest.json';
+import { fmtInt } from '../lib/format.js';
+const compiled = new Date(manifest.generated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+const datasets = [
+  { name: 'American Community Survey (ACS), 5-year', powers: 'County & city profiles, rankings, maps, and the Housing Stress Index', edition: '2024 5-year (2020–2024)', source: 'U.S. Census Bureau', href: 'https://www.census.gov/programs-surveys/acs' },
+  { name: 'ACS 5-year — multiple vintages', powers: 'Trend columns in the Community Data Sheet generator', edition: '2015–19 through 2020–24', source: 'U.S. Census Bureau API', href: 'https://www.census.gov/data/developers/data-sets/acs/acs-5-year.html' },
+  { name: 'Quarterly Census of Employment & Wages (QCEW)', powers: 'Industry employment & average wages on county profiles', edition: 'Latest annual', source: 'U.S. Bureau of Labor Statistics', href: 'https://www.bls.gov/cew/' },
+  { name: 'Occupational Employment & Wage Statistics (OEWS)', powers: 'Occupational wages on county profiles', edition: 'Latest release', source: 'U.S. Bureau of Labor Statistics', href: 'https://www.bls.gov/oes/' },
+  { name: 'HUD Income Limits (Area Median Income)', powers: 'AMI thresholds and affordability context', edition: 'FY2026', source: 'U.S. Dept. of Housing & Urban Development', href: 'https://www.huduser.gov/portal/datasets/il.html' },
+  { name: 'Census Gazetteer', powers: 'Land area, population density, and city-map centroids', edition: '2023', source: 'U.S. Census Bureau', href: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html' },
+  { name: 'Housing Stress Index', powers: 'The 0–100 composite on rankings, maps, and profiles', edition: 'Derived — recomputed every build', source: 'housinganalytics.org', href: '/analysis/housing-stress-index' },
+];
+---
+<Base title="Data & sources — housinganalytics.org"
+      description="Every dataset behind housinganalytics.org: what it powers, which edition, its official source, and when the site data was last compiled.">
+  <section class="container narrow">
+    <p class="eyebrow">Data</p>
+    <h1>Data &amp; sources</h1>
+    <p>
+      Everything on housinganalytics.org is built from official federal statistics — no proprietary or
+      modeled data. This page lists every source, the edition in use, and what each one powers, so you can
+      cite the site with confidence and check currency at a glance.
+    </p>
+    <p class="freshness">
+      Core county and city data compiled <strong>{compiled}</strong> ·
+      {fmtInt(manifest.county_count)} counties · {fmtInt(manifest.place_count)} cities and towns.
+    </p>
+
+    <table class="data-table">
+      <thead>
+        <tr><th>Dataset</th><th>Powers</th><th>Edition</th><th>Source</th></tr>
+      </thead>
+      <tbody>
+        {datasets.map(d => (
+          <tr>
+            <td class="data-table__name">{d.name}</td>
+            <td>{d.powers}</td>
+            <td class="data-table__ed">{d.edition}</td>
+            <td><a href={d.href} target={d.href.startsWith('http') ? '_blank' : null} rel={d.href.startsWith('http') ? 'noopener' : null}>{d.source}</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+
+    <h2>How current is it?</h2>
+    <p>
+      The ACS 5-year is the most recent release (2020–2024); it is the authoritative source for
+      small-area housing and income data and is refreshed annually. QCEW, OEWS, HUD Income Limits, and the
+      Gazetteer are pulled at their latest published editions. The site is rebuilt whenever a source
+      updates — the “compiled” date above reflects the current build.
+    </p>
+
+    <h2>Methodology &amp; citation</h2>
+    <p>
+      Derived measures document their own method: see the
+      <a href="/analysis/housing-stress-index">Housing Stress Index methodology</a> for how the composite
+      is built, and <a href="/about">About</a> for how the profiles are structured. When citing, name the
+      underlying source (e.g. “ACS 2024 5-year”) alongside housinganalytics.org.
+    </p>
+
+    <aside class="disclaimer" role="note" aria-label="Disclaimer">
+      <p class="disclaimer__label">Disclaimer</p>
+      <p class="disclaimer__body">
+        Data is pulled directly from official statistical agencies but is not independently validated by
+        Economic Impact Group, LLC. Consult the original source for any decision that depends on accuracy.
+      </p>
+    </aside>
+  </section>
+
+  <style>
+    .freshness { font-size: var(--fs-sm); background: var(--color-cream, #fbf6ee); border-left: 3px solid var(--color-teal, #3f7d52); padding: var(--space-3) var(--space-4); border-radius: 6px; }
+    .data-table { width: 100%; border-collapse: collapse; margin: var(--space-4) 0 var(--space-6); font-size: var(--fs-sm); }
+    .data-table th, .data-table td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--color-sage, #d6dbd4); vertical-align: top; }
+    .data-table th { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+    .data-table__name { font-weight: 600; }
+    .data-table__ed { white-space: nowrap; }
+    @media (max-width: 640px) { .data-table, .data-table thead, .data-table tbody, .data-table th, .data-table td, .data-table tr { display: block; } .data-table thead { display: none; } .data-table tr { border: 1px solid var(--color-sage,#d6dbd4); border-radius: 8px; margin-bottom: var(--space-3); padding: var(--space-2); } .data-table td { border: 0; padding: .25rem .4rem; } }
+  </style>
+</Base>

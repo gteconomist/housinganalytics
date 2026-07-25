@@ -58,7 +58,13 @@ const fullTitle = title.includes('housinganalytics')
         </div>
 
         <a href="/compare">Compare</a>
-        <a href="/master-sheet">Data Sheet</a>
+        <div class="nav-group" data-nav-group>
+          <button type="button" class="nav-group__btn" aria-expanded="false" aria-haspopup="true">Data</button>
+          <div class="nav-group__menu">
+            <a href="/master-sheet">Data Sheet</a>
+            <a href="/data">Sources &amp; freshness</a>
+          </div>
+        </div>
 
         <div class="nav-group" data-nav-group>
           <button type="button" class="nav-group__btn" aria-expanded="false" aria-haspopup="true">Analysis</button>
