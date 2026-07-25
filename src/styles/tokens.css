@@ -12,33 +12,33 @@
    * --series-*/--chart-* tokens below, so the data visualizations keep
    * their prior palette after this rebrand. */
   --color-white:       #FFFFFF;
-  --color-navy:        #16181c;  /* EIG charcoal — primary brand (was GT navy #003057) */
-  --color-navy-2:      #1e2025;  /* EIG deep charcoal — secondary dark surface */
-  --color-gold:        #f19623;  /* EIG amber accent (was GT gold #b3a369) */
+  --color-navy:        #231f20;  /* EIG charcoal — primary brand (was GT navy #003057) */
+  --color-navy-2:      #2e292a;  /* EIG deep charcoal — secondary dark surface */
+  --color-gold:        #f7941e;  /* EIG amber accent (was GT gold #b3a369) */
 
   /* Secondary — LOCI warm neutrals (loci.online) */
-  --color-cream:       #fbf6ee;  /* LOCI --cream — section + page background */
-  --color-panel:       #faf4ea;  /* LOCI --panel — slightly warmer surface */
-  --color-panel-2:     #f4ecdf;  /* LOCI --panel2 — muted surface */
-  --color-sage:        #d6dbd4;  /* card / separator (legacy; healthy bucket) */
-  --color-hair:        #e7ded0;  /* LOCI --hair — warm hairline */
-  --color-line:        #f2ece1;  /* LOCI --line — faint warm divider */
-  --color-charcoal:    #5f646c;  /* LOCI --slate — muted text */
+  --color-cream:       #f7f6f4;  /* LOCI --cream — section + page background */
+  --color-panel:       #f1efec;  /* LOCI --panel — slightly warmer surface */
+  --color-panel-2:     #eae7e3;  /* LOCI --panel2 — muted surface */
+  --color-sage:        #d7d4cf;  /* card / separator (legacy; healthy bucket) */
+  --color-hair:        #e4e2df;  /* LOCI --hair — warm hairline */
+  --color-line:        #edebe8;  /* LOCI --line — faint warm divider */
+  --color-charcoal:    #6d6e71;  /* LOCI --slate — muted text */
 
   /* Tertiary — LOCI accent palette (earthy; used for chart series + KPIs) */
-  --color-orange:      #f19623;  /* LOCI --orange (= --color-gold) */
-  --color-orange-d:    #c87d1c;  /* LOCI --orange-d — deep amber */
+  --color-orange:      #f7941e;  /* LOCI --orange (= --color-gold) */
+  --color-orange-d:    #c9740f;  /* LOCI --orange-d — deep amber */
   --color-brick:       #a8432f;  /* LOCI --red — brick red */
   --color-green:       #3f7d52;  /* LOCI --green — forest green */
   --color-bar:         #3a4049;  /* LOCI --bar — slate blue-grey */
-  --color-faint:       #9a948a;  /* LOCI --faint — warm light grey */
+  --color-faint:       #a7a9ac;  /* LOCI --faint — warm light grey */
   --color-slate:       #5f646c;  /* LOCI --slate */
   /* Legacy aliases remapped to LOCI equivalents (kept so existing refs work) */
   --color-amber:       var(--color-orange-d);
   --color-teal:        var(--color-green);
   --color-blue:        var(--color-bar);
   --color-light-teal:  #7fa98a;  /* light forest tint */
-  --color-purple:      #8a6f5c;  /* warm brown (echoes EIG logo bar) */
+  --color-purple:      #9c867a;  /* warm brown (echoes EIG logo bar) */
   --color-lime:        #c9a227;  /* muted gold */
   --color-red:         var(--color-brick);
 
@@ -62,17 +62,17 @@
 
   /* Comparison series (county / state / national) — LOCI palette:
    * focus area in charcoal, state in orange, national in warm grey. */
-  --series-county:     #16181c;
-  --series-state:      #f19623;
-  --series-national:   #9a948a;
+  --series-county:     #231f20;
+  --series-state:      #f7941e;
+  --series-national:   #9c867a;
 
   /* Chart categorical palette (LOCI earthy hues; use in order) */
-  --chart-1: #16181c;  /* charcoal */
-  --chart-2: #f19623;  /* orange */
+  --chart-1: #231f20;  /* charcoal */
+  --chart-2: #f7941e;  /* orange */
   --chart-3: #3f7d52;  /* forest green */
   --chart-4: #a8432f;  /* brick red */
   --chart-5: #5f646c;  /* slate */
-  --chart-6: #c87d1c;  /* deep amber */
+  --chart-6: #c9740f;  /* deep amber */
   --chart-7: #3a4049;  /* blue-grey */
   --chart-8: #9a948a;  /* warm grey */
   --chart-9: #8a6f5c;  /* warm brown */
