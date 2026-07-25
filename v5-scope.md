@@ -97,8 +97,8 @@ Priority order for v5:
 2. **Cities parity.** Cities should be as full and rich as counties wherever the data allows; parity is a goal of every v5 feature, not an afterthought (see §4).
 3. **Income-cohort study.** Ships in both forms: a full study under `/analysis`, and a linked per-profile panel on county and city profiles, like the HSI badge.
 
-**Still open:**
-4. **When to move to Model C** (tool-first pages with a geography toggle) — gated on how stable the geography set is (counties, cities, and whether states/metros join). Revisit once cities parity lands.
+**Recommendation (trigger-based, agreed direction):**
+4. **When to move to Model C.** Rule: *don't write the third copy of a tool — toggle instead.* With two geographies the per-geography pages are cheap; the tipping point is States or Metros arriving as browsable tools, which under Model A would force a third copy of every tool page. Sequence: (1) finish cities parity in the grouped menu (v5.0–v5.1); (2) a dedicated "unify" step collapses Rankings / Maps / Compare into toggle-driven pages on the two at-parity geographies, keeping old URLs as redirects (`/city-rankings` → `/rankings?geo=cities`); (3) add States/Metros as toggle options. Converting two stable, at-parity geographies is the lowest-risk moment and solves the map's two-render-mode problem (polygons vs dots) once.
 
 ---
 
