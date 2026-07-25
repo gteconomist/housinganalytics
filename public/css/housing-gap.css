@@ -28,3 +28,9 @@
 .hg-assump input[type=range]{accent-color:#003057}
 .hg-assump output{font-weight:700;color:#003057;font-size:14px}
 @media(max-width:720px){.hg-tiles{grid-template-columns:repeat(2,1fr)}}
+.hg-market{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.hg-mcard{border:1px solid #d6dbd4;border-left:4px solid #008c95;border-radius:10px;padding:13px;background:#f9f6e5}
+.hg-mv{font-size:22px;font-weight:800;color:#003057;line-height:1.1}
+.hg-ml{font-size:11.5px;color:#545b5a;margin-top:3px}
+.muted{color:#888}
+@media(max-width:600px){.hg-market{grid-template-columns:1fr}}

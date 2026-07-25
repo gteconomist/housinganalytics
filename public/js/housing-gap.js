@@ -151,8 +151,26 @@
       tile(fmt$(c.afford[3].price), 'affordable home price at ~$62.5k income', false);
     // overlay affordability-at-median line
     const affMed=A.front*model.mhi/12;
+    var mkt=model.market, mc=root.querySelector('[data-market-ctx]');
+    if(mc && mkt){
+      var rentInc = mkt.rent? Math.round(mkt.rent*12/A.front):null;
+      var denomM=(1-A.down)*(mortConst(A.rate)+A.pmi/12)+A.ti/12;
+      var priceInc = mkt.price? Math.round(mkt.price*denomM*12/A.front):null;
+      mc.innerHTML = 'At today\'s market, renting the typical unit takes about <b>'+(rentInc?fmt$(rentInc):'—')+'</b> in household income; buying the median home takes about <b>'+(priceInc?fmt$(priceInc):'—')+'</b> at '+(A.rate*100).toFixed(2)+'%. This area\'s median household income is <b>'+fmt$(model.mhi)+'</b>.';
+    }
     root.querySelector('[data-medline]').innerHTML =
       `A household at this area's median income (${fmt$(model.mhi)}) can afford ≈${fmt$(affMed)}/mo in rent. ACS-period median rent here was ${fmt$(model.medRent)}; median home value ${fmt$(model.medValue)}.`;
+  }
+
+  function marketPanel(mkt){
+    if(!mkt) return '';
+    return '<h3 class="hg-h3">Where the market is right now <span class="hg-pill" style="background:#008c95">live</span></h3>'+
+      '<p class="hg-sub">Current asking rents and sale prices — the timeliness layer. Dated and kept separate from the ACS/CHAS structural counts above.</p>'+
+      '<div class="hg-market">'+
+        '<div class="hg-mcard"><div class="hg-mv">'+(mkt.rent?fmt$(mkt.rent)+'/mo':'—')+'</div><div class="hg-ml">Typical rent — '+(mkt.cbsaTitle||'metro')+'<br><span class="muted">Zillow ZORI · '+(mkt.rentAsOf||'')+'</span></div></div>'+
+        '<div class="hg-mcard"><div class="hg-mv">'+(mkt.price?fmt$(mkt.price):'—')+'</div><div class="hg-ml">Median sale price<br><span class="muted">Redfin · '+(mkt.priceAsOf||'')+'</span></div></div>'+
+      '</div>'+
+      '<p class="hg-src" data-market-ctx></p>';
   }
 
   function chasSection(chas){
@@ -213,6 +231,8 @@
       ${slider('front','Housing % of income',25,40,1,30,'%')}
     </div>
     <table class="hg-tbl"><thead><tr><th class="n">Income</th><th class="n">Budget /mo</th><th class="n">Affordable rent</th><th class="n">Affordable home price</th></tr></thead><tbody data-afford></tbody></table>
+
+    ${meta.model && meta.model.market ? marketPanel(meta.model.market) : ''}
 
     <h3 class="hg-h3">Rental gap by price point <span class="hg-pill">the "short N units" number</span></h3>
     <p class="hg-legend"><span class="hg-sq" style="background:#003057"></span>Renter households (cumulative) &nbsp; <span class="hg-sq" style="background:#b3a369"></span>Affordable rental units (cumulative)</p>
