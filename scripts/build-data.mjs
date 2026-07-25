@@ -735,6 +735,9 @@ for (const p of places) {
     p.land_area_sqmi = null;
     p.population_density = null;
   }
+  // Centroid (lat/lng) for the city map — from the Gazetteer place file.
+  p.lat = gaz?.lat ?? null;
+  p.lng = gaz?.lng ?? null;
   // Sections 4 & 5 explicitly null — the place template should not render them.
   p.industries = null;
   p.occupations = null;

@@ -54,7 +54,7 @@ const metricsSorted = [...METRICS].sort((a, b) => {
 });
 const metricFields = metricsSorted.map(m => m.field);
 const idCols = ['geoid', 'place_name', 'state_name', 'state_fips', 'slug', 'state_slug', 'pop_tier'];
-const HEADERS = [...idCols, ...metricFields, 'hsi_score', 'hsi_rank'];
+const HEADERS = [...idCols, ...metricFields, 'hsi_score', 'hsi_rank', 'lat', 'lng'];
 
 const rows = [];
 let skipped = 0;
@@ -82,6 +82,7 @@ for (const file of files) {
   }
   const h = hsi.places[c.geoid];
   row.push(h ? h.score : null, h ? h.rank : null);
+  row.push(Number.isFinite(c.lat) ? c.lat : null, Number.isFinite(c.lng) ? c.lng : null);
   rows.push(row);
 }
 

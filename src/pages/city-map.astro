@@ -1,0 +1,280 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="City map — housinganalytics.org"
+      description="Proportional-dot map of ~4,800 U.S. cities on any housing metric, including the Housing Stress Index. Size shows population; color shows the metric. Hover for values, click through to the city profile.">
+
+  <section class="map-hero">
+    <div class="container">
+      <p class="eyebrow">City map</p>
+      <h1>U.S. city map &amp; metric explorer</h1>
+      <p class="map-hero__lede muted">
+        Every city and town over 5,000 people, placed at its centroid. Dot size shows population;
+        color shows the metric you pick — including the Housing Stress Index. Hover for values,
+        click a dot to open the city profile.
+      </p>
+
+      <div class="map-controls">
+        <div class="ctrl ctrl--metric">
+          <label for="metric-select">Color cities by</label>
+          <select id="metric-select" data-metric></select>
+        </div>
+        <div class="ctrl ctrl--state">
+          <label for="state-select">Zoom to state</label>
+          <select id="state-select" data-state>
+            <option value="">Whole country</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="map-wrap">
+        <svg class="map-svg" viewBox="0 0 975 610" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Proportional-dot map of U.S. cities">
+          <g data-zoom>
+            <g data-base></g>
+            <g data-dots></g>
+          </g>
+        </svg>
+        <div class="map-tooltip" data-tooltip hidden></div>
+      </div>
+
+      <div class="map-legend" data-legend hidden>
+        <div class="legend-bar" data-legend-bar></div>
+        <div class="legend-scale"><span data-legend-lo></span><span data-legend-hi></span></div>
+        <div class="legend-size muted">Dot size ∝ population</div>
+      </div>
+
+      <small class="source" data-source>Source: ACS 5-year. City centroids: U.S. Census Gazetteer. State boundaries: us-atlas.</small>
+    </div>
+  </section>
+
+  <script>
+    import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
+    import * as topojson from 'https://cdn.jsdelivr.net/npm/topojson-client@3/+esm';
+
+    const els = {
+      metric:  document.querySelector('[data-metric]'),
+      state:   document.querySelector('[data-state]'),
+      zoom:    document.querySelector('[data-zoom]'),
+      base:    document.querySelector('[data-base]'),
+      dots:    document.querySelector('[data-dots]'),
+      tooltip: document.querySelector('[data-tooltip]'),
+      legend:  document.querySelector('[data-legend]'),
+      legendBar: document.querySelector('[data-legend-bar]'),
+      legendLo:  document.querySelector('[data-legend-lo]'),
+      legendHi:  document.querySelector('[data-legend-hi]'),
+      source:  document.querySelector('[data-source]'),
+    };
+
+    const VIEW_W = 975, VIEW_H = 610;
+
+    // Brand-ish ramps. Stress/"bad-high" goes teal→gold→red; neutral goes pale→teal.
+    const RAMP_DIVERGE = d3.interpolateRgbBasis(['#3f7d52', '#e8c86b', '#a8432f']); // good→bad
+    const RAMP_NEUTRAL = d3.interpolateRgbBasis(['#e9efe9', '#7fae86', '#3f7d52']);
+    const NO_DATA = '#c9c9c1';
+
+    // Direction: which metrics are "higher is worse" vs "higher is better".
+    const GOOD_HIGH = new Set([
+      'hh_income_median','hh_income_mean','per_capita_income','income_median_owner','income_median_renter',
+      'income_median_under25','income_median_25_44','income_median_45_64','income_median_65_plus',
+      'earners_0_income','earners_1_income','earners_2_income','earners_3_plus_income','earners_nonfamily_income',
+      'homeownership_rate','bachelors_plus_rate','hud_ami_4p_100','hud_ami_4p_80','hud_ami_4p_120',
+      'population_total','hsi_rank',
+    ]);
+    const GOOD_LOW = new Set([
+      'vacancy_rate','homeowner_vacancy_rate','rental_vacancy_rate',
+      'renter_cost_burden_rate','renter_severe_cost_burden_rate','owner_cost_burden_rate',
+      'poverty_rate','price_to_income_ratio','rent_to_income_ratio','aging_stock_share','renter_rate',
+      'hsi_score',
+    ]);
+    function directionFor(field) {
+      if (GOOD_HIGH.has(field)) return 'good-high';
+      if (GOOD_LOW.has(field))  return 'good-low';
+      return 'neutral';
+    }
+
+    let DATA, STATES_TOPO;
+    try {
+      [DATA, STATES_TOPO] = await Promise.all([
+        fetch('/data/places-rankings.json').then(r => { if (!r.ok) throw new Error('places-rankings ' + r.status); return r.json(); }),
+        fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-albers-10m.json').then(r => { if (!r.ok) throw new Error('atlas ' + r.status); return r.json(); }),
+      ]);
+    } catch (e) {
+      els.source.textContent = 'Could not load map data: ' + e.message;
+      throw e;
+    }
+
+    const COL = {};
+    DATA.headers.forEach((h, i) => (COL[h] = i));
+    const METRIC_BY_FIELD = {};
+    DATA.metrics.forEach(m => (METRIC_BY_FIELD[m.field] = m));
+
+    // Rows that actually have a centroid — everything the map can draw.
+    const CITIES = DATA.rows.filter(r => {
+      const lat = r[COL.lat], lng = r[COL.lng];
+      return lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng);
+    });
+
+    // Same framing as the us-atlas *-albers-10m files (975×610, scale 1300).
+    const projection = d3.geoAlbersUsa().scale(1300).translate([VIEW_W / 2, VIEW_H / 2]);
+    // Precompute projected screen coords once (geoAlbersUsa returns null off-US).
+    for (const r of CITIES) {
+      const xy = projection([r[COL.lng], r[COL.lat]]);
+      r.__xy = xy; // [x,y] or null
+    }
+
+    // ── Base: state outlines + nation ────────────────────────────
+    const path = d3.geoPath(); // identity — albers file is pre-projected
+    const statesMesh = topojson.mesh(STATES_TOPO, STATES_TOPO.objects.states, (a, b) => a !== b);
+    const nation = topojson.feature(STATES_TOPO, STATES_TOPO.objects.nation);
+    d3.select(els.base).append('path').attr('d', path(nation)).attr('fill', '#f4f1ea').attr('stroke', '#cfc9ba').attr('stroke-width', 0.7);
+    d3.select(els.base).append('path').attr('d', path(statesMesh)).attr('fill', 'none').attr('stroke', '#cfc9ba').attr('stroke-width', 0.5);
+
+    // ── Radius scale by population ───────────────────────────────
+    const popMax = d3.max(CITIES, r => r[COL.population_total] || 0) || 1;
+    const rScale = d3.scaleSqrt().domain([0, popMax]).range([1.4, 14]);
+
+    // ── Metric picker ────────────────────────────────────────────
+    const byGroup = new Map();
+    for (const m of DATA.metrics) { if (!byGroup.has(m.group)) byGroup.set(m.group, []); byGroup.get(m.group).push(m); }
+    for (const [group, metrics] of byGroup) {
+      const og = document.createElement('optgroup'); og.label = group;
+      for (const m of metrics) { const o = document.createElement('option'); o.value = m.field; o.textContent = m.label; og.appendChild(o); }
+      els.metric.appendChild(og);
+    }
+    let currentMetric = METRIC_BY_FIELD['hsi_score'] ? 'hsi_score' : 'hh_income_median';
+    els.metric.value = currentMetric;
+
+    // ── State picker ─────────────────────────────────────────────
+    const STATE_NAMES = Array.from(new Set(CITIES.map(r => r[COL.state_name]))).sort();
+    for (const s of STATE_NAMES) { const o = document.createElement('option'); o.value = s; o.textContent = s; els.state.appendChild(o); }
+
+    function fmt(field, v) {
+      if (v == null || !Number.isFinite(v)) return '—';
+      const m = METRIC_BY_FIELD[field];
+      if (!m) return String(v);
+      if (m.format === 'money') return '$' + Math.round(v).toLocaleString();
+      if (m.format === 'pct')   return (Math.round(v * 10) / 10) + '%';
+      if (m.format === 'ratio') return Number(v).toFixed(2);
+      if (m.format === 'year')  return String(Math.round(v));
+      return Math.round(v).toLocaleString();
+    }
+
+    function quantile(sorted, q) {
+      if (!sorted.length) return null;
+      const pos = (sorted.length - 1) * q, base = Math.floor(pos), rest = pos - base;
+      return sorted[base + 1] !== undefined ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
+    }
+
+    function colorFor(field) {
+      const col = COL[field];
+      const vals = CITIES.map(r => r[col]).filter(v => v != null && Number.isFinite(v)).sort((a, b) => a - b);
+      const lo = quantile(vals, 0.02), hi = quantile(vals, 0.98);
+      const dir = directionFor(field);
+      const span = (hi - lo) || 1;
+      return (v) => {
+        if (v == null || !Number.isFinite(v)) return NO_DATA;
+        let t = (v - lo) / span; t = Math.max(0, Math.min(1, t));
+        if (dir === 'neutral') return RAMP_NEUTRAL(t);
+        // worseness: 1 = worst (red). good-low → high value is worse.
+        const worse = dir === 'good-low' ? t : (1 - t);
+        return RAMP_DIVERGE(worse);
+      };
+    }
+
+    // ── Draw dots ────────────────────────────────────────────────
+    const drawOrder = [...CITIES].sort((a, b) => (b[COL.population_total] || 0) - (a[COL.population_total] || 0));
+    const dotsSel = d3.select(els.dots);
+
+    function render() {
+      const field = currentMetric;
+      const col = COL[field];
+      const color = colorFor(field);
+      const m = METRIC_BY_FIELD[field];
+
+      const sel = dotsSel.selectAll('circle').data(drawOrder.filter(r => r.__xy), r => r[COL.geoid]);
+      sel.enter().append('circle')
+          .attr('cx', r => r.__xy[0]).attr('cy', r => r.__xy[1])
+          .attr('r', r => rScale(r[COL.population_total] || 0))
+          .attr('stroke', '#2a2a26').attr('stroke-width', 0.25).attr('cursor', 'pointer')
+          .on('mousemove', onHover).on('mouseleave', onLeave).on('click', onClick)
+        .merge(sel)
+          .attr('fill', r => color(r[col]))
+          .attr('fill-opacity', 0.78);
+
+      // Legend
+      const vals = CITIES.map(r => r[col]).filter(v => v != null && Number.isFinite(v)).sort((a, b) => a - b);
+      const lo = quantile(vals, 0.02), hi = quantile(vals, 0.98);
+      const dir = directionFor(field);
+      const stops = [];
+      for (let i = 0; i <= 10; i++) {
+        const t = i / 10;
+        const c = dir === 'neutral' ? RAMP_NEUTRAL(t) : RAMP_DIVERGE(dir === 'good-low' ? t : 1 - t);
+        stops.push(`${c} ${t * 100}%`);
+      }
+      els.legendBar.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+      els.legendLo.textContent = fmt(field, lo);
+      els.legendHi.textContent = fmt(field, hi);
+      els.legend.hidden = false;
+      els.source.textContent = `Metric: ${m ? m.label : field}${m && m.source ? ' — ' + m.source : ''}. City centroids: U.S. Census Gazetteer. State boundaries: us-atlas.`;
+    }
+
+    function onHover(event, r) {
+      const field = currentMetric;
+      const name = r[COL.place_name] + ', ' + r[COL.state_name];
+      const val = fmt(field, r[COL[field]]);
+      const hsi = COL.hsi_score != null ? r[COL.hsi_score] : null;
+      const label = METRIC_BY_FIELD[field]?.label || field;
+      els.tooltip.innerHTML =
+        `<strong>${name}</strong><br>${label}: <strong>${val}</strong>` +
+        (field !== 'hsi_score' && hsi != null ? `<br>Housing Stress Index: ${hsi}` : '') +
+        `<br><span class="tt-pop">Pop ${(r[COL.population_total] || 0).toLocaleString()}</span>`;
+      els.tooltip.hidden = false;
+      const wrap = els.tooltip.parentElement.getBoundingClientRect();
+      els.tooltip.style.left = (event.clientX - wrap.left + 12) + 'px';
+      els.tooltip.style.top  = (event.clientY - wrap.top + 12) + 'px';
+    }
+    function onLeave() { els.tooltip.hidden = true; }
+    function onClick(event, r) {
+      const url = `/place/${r[COL.state_slug]}/${r[COL.slug]}/`;
+      window.location.href = url;
+    }
+
+    // ── State zoom (transform to bbox of that state's dots) ───────
+    function zoomToState(stateName) {
+      if (!stateName) { d3.select(els.zoom).transition().duration(500).attr('transform', 'translate(0,0) scale(1)'); return; }
+      const pts = CITIES.filter(r => r[COL.state_name] === stateName && r.__xy).map(r => r.__xy);
+      if (pts.length < 1) return;
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const pad = 40;
+      const w = (x1 - x0) + pad * 2, h = (y1 - y0) + pad * 2;
+      const k = Math.max(1, Math.min(8, Math.min(VIEW_W / w, VIEW_H / h)));
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      const tx = VIEW_W / 2 - k * cx, ty = VIEW_H / 2 - k * cy;
+      d3.select(els.zoom).transition().duration(500).attr('transform', `translate(${tx},${ty}) scale(${k})`);
+    }
+
+    els.metric.addEventListener('change', () => { currentMetric = els.metric.value; render(); });
+    els.state.addEventListener('change', () => zoomToState(els.state.value));
+
+    render();
+  </script>
+
+  <style>
+    .map-hero { padding: var(--space-8) 0; }
+    .map-hero__lede { max-width: 60ch; margin-bottom: var(--space-5); }
+    .map-controls { display: flex; flex-wrap: wrap; gap: var(--space-5); margin-bottom: var(--space-4); }
+    .ctrl { display: flex; flex-direction: column; gap: var(--space-1); }
+    .ctrl label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+    .ctrl select { padding: .4rem .6rem; border: 1px solid var(--color-sage, #d6dbd4); border-radius: 6px; background: #fff; min-width: 220px; }
+    .map-wrap { position: relative; border: 1px solid var(--color-sage, #d6dbd4); border-radius: 10px; background: #fbf9f4; overflow: hidden; }
+    .map-svg { display: block; width: 100%; height: auto; }
+    .map-tooltip { position: absolute; pointer-events: none; background: rgba(22,24,28,.94); color: #fff; padding: .5rem .65rem; border-radius: 6px; font-size: var(--fs-xs); line-height: 1.35; max-width: 260px; z-index: 5; }
+    .map-tooltip .tt-pop { opacity: .7; }
+    .map-legend { display: flex; flex-direction: column; gap: .25rem; margin-top: var(--space-4); max-width: 420px; }
+    .legend-bar { height: 12px; border-radius: 6px; border: 1px solid rgba(0,0,0,.1); }
+    .legend-scale { display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 600; }
+    .legend-size { font-size: var(--fs-xs); }
+    .source { display: block; margin-top: var(--space-4); font-size: var(--fs-xs); color: var(--color-navy); opacity: .6; }
+  </style>
+</Base>

@@ -95,6 +95,8 @@ const lines = text.split(/\r?\n/).filter(Boolean);
 const header = lines[0].split('\t').map(s => s.trim());
 const geoidIdx = header.findIndex(h => /^GEOID$/i.test(h));
 const sqmiIdx  = header.findIndex(h => /ALAND_SQMI/i.test(h));
+const latIdx   = header.findIndex(h => /INTPTLAT/i.test(h));
+const lngIdx   = header.findIndex(h => /INTPTLONG/i.test(h));
 if (geoidIdx < 0 || sqmiIdx < 0) {
   console.warn('WARNING: Unexpected Gazetteer places column layout:', header);
   await mkdir(OUT_DIR, { recursive: true });
@@ -108,7 +110,11 @@ for (let i = 1; i < lines.length; i++) {
   const geoid = (cols[geoidIdx] || '').trim().padStart(7, '0');
   const sqmi  = parseFloat(cols[sqmiIdx]);
   if (geoid.length === 7 && Number.isFinite(sqmi) && sqmi > 0) {
-    out[geoid] = { land_area_sqmi: sqmi };
+    const rec = { land_area_sqmi: sqmi };
+    const lat = latIdx >= 0 ? parseFloat(cols[latIdx]) : NaN;
+    const lng = lngIdx >= 0 ? parseFloat(cols[lngIdx]) : NaN;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) { rec.lat = lat; rec.lng = lng; }
+    out[geoid] = rec;
   }
 }
 
