@@ -17,6 +17,28 @@ This document does two things: (1) catalogs what has actually shipped, so the ve
 
 ---
 
+## Progress — updated 2026-07-25 (end of build session)
+
+**v4 is closed and delivered.** All work from here is v5.
+
+**Shipped since this doc was drafted (now live):**
+- **EIG rebrand** — design tokens remapped to the *logo* palette (orange `#f7941e`, charcoal `#231f20`, warm greys + taupe `#9c867a`) site-wide. New **sales homepage**: Request-access framing (no search), Log-in link (Cloudflare Access), a state-tile HSI hero computed at build from `hsi.json`, a real county profile preview, and a light "marketing" header variant in `Base.astro` (app pages keep the dark nav header).
+- **/data** sources & freshness page; Data Sheet promoted to a **Data ▾** menu group.
+- **Analysis** section + **HSI methodology** page; grouped dropdown nav (Explore / Rankings / Maps / Data / Analysis).
+- **Housing gap study — PILOT** (`/housing-gap`): CHAS-based cost burden + shortage by price point, pilot states GA / NC / TN. Files: `scripts/fetch-chas.mjs`, `scripts/fetch-market.mjs`, `scripts/build-analysis-geo.mjs`, `src/components/HousingGapBlock.astro`, `public/js/housing-gap.js`, `public/analysis-data/`.
+- **Income-by-age (B19037)** cross-tab added to the Data Sheet generator.
+
+**v5.0 status:** HSI (counties + cities) ✓ · Analysis section + methodology ✓ · /data ✓ · Housing-gap study — **pilot done (3 states); next: national rollout + per-profile panel.**
+
+**Immediate next (finish v5.0):**
+1. Roll the housing-gap study out nationally (beyond GA/NC/TN).
+2. Add a per-profile **housing-gap panel** to county and city profiles — mirror the HSI `IndexBadge` (per §6 decision 3).
+3. Then begin **v5.1 — ACS trends**.
+
+**Loose ends to close:** Request-access `mailto:` → real contact form; confirm the Log-in target in the Cloudflare Access flow.
+
+---
+
 ## 1. What has shipped (as of 2026-07)
 
 **Geographies**
