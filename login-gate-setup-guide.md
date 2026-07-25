@@ -146,6 +146,34 @@ Use the **dark** logo, not the white one: Cloudflare places the logo *inside the
 
 ---
 
+## Making the homepage (and About) public, gating everything else
+
+Goal: anyone can see `housinganalytics.org` and `/about`; clicking any other menu item prompts login. This works by switching Access from "protect the whole domain" to "protect specific paths." Cloudflare allows only **5 paths per application**, and there are 8 gated paths, so it takes **two** Access applications. Both reuse the existing **Approved Viewers** allowlist, so who can get in does not change.
+
+Public (no login): `/` (homepage), `/about`, and all styling/assets.
+Gated (login required): `/counties`, `/cities`, `/compare`, `/rankings`, `/map`, `/county/*`, `/place/*`, `/data/*`.
+
+Do the steps **in this order** so nothing is ever left unprotected.
+
+**Step 1 — Add the `www → housinganalytics.org` redirect first.** Main dashboard → the `housinganalytics.org` zone → **Rules → Redirect Rules → Create rule** (or use the template "Redirect from WWW to Root"). Match: Hostname equals `www.housinganalytics.org`; Then: 301 to `https://housinganalytics.org` preserving path & query. This makes the `www` version send everyone to the plain domain, so we only have to gate one hostname.
+
+**Step 2 — Create the second Access app (detail + data).** Zero Trust → Access → **Applications → Create new application → Self-hosted**.
+- Name: `Housing Analytics — Data & Detail`
+- Add three **public hostname** destinations, all with Domain `housinganalytics.org`, subdomain blank, and Path set to (one each): `county`, `place`, `data`
+- Policies: **Select existing policies → Approved Viewers**
+- Save.
+
+**Step 3 — Reconfigure the existing "Housing Analytics" app.** Applications → **Housing Analytics → Destinations**.
+- Delete the two current rows (the blank-path `housinganalytics.org` and the `www` row) with the trash icons.
+- Add five public-hostname rows, all Domain `housinganalytics.org`, subdomain blank, Path set to (one each): `counties`, `cities`, `compare`, `rankings`, `map`
+- Save.
+
+That's it. Test in a private/incognito window: `housinganalytics.org` and `/about` load with no login; clicking Counties/Cities/Compare/Rankings/Map (or opening any county/city page) shows the sign-in screen.
+
+Notes: the path box takes the path without needing the leading slash; each path also covers everything beneath it (so `county` covers `/county/GA/fulton`, and `data` covers all the JSON). The gated pages fetch their data after you're signed in, so gating `/data` doesn't break them. `about` is intentionally left off both lists so it stays public.
+
+---
+
 ## If you get stuck
 
 The two most common snags are (1) the SSL mode not being set to **Full**, which causes a "too many redirects" error, and (2) flipping the proxy to orange before GitHub has issued its HTTPS certificate. Both are fixable by reversing the step. Send me a screenshot of whatever you're seeing and I'll talk you through it.

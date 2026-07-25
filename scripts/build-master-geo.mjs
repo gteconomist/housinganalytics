@@ -174,10 +174,18 @@ async function run() {
     vintages: VINTAGES,
     tabs: TABS.map((t) => ({
       name: t.name,
-      sections: t.sections.map((s) => ({
-        title: s.title, source: s.source,
-        fields: s.fields.map((id) => ({ id, label: FIELD[id].label, unit: FIELD[id].unit })),
-      })),
+      sections: t.sections.map((s) => {
+        // Matrix (cross-tab) sections carry their own cohort/bucket layout
+        // instead of a flat field list; pass it through verbatim so the
+        // in-browser generator can render the cross-tab from schema.json.
+        if (s.kind === 'matrix') {
+          return { title: s.title, source: s.source, kind: 'matrix', vintage: s.vintage, cohorts: s.cohorts, buckets: s.buckets };
+        }
+        return {
+          title: s.title, source: s.source,
+          fields: s.fields.map((id) => ({ id, label: FIELD[id].label, unit: FIELD[id].unit })),
+        };
+      }),
     })),
   };
   writeFileSync(resolve(OUT_DIR, 'schema.json'), JSON.stringify(schema));

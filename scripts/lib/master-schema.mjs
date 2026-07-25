@@ -20,6 +20,21 @@ export const TABS = [
       fields: ['unemployment_rate'] },
     { title: 'Labor Force Participation Rate', source: 'ACS 5-Year, table B23025 (in labor force / population 16+)',
       fields: ['labor_force_participation'] },
+    // Cross-tab section (kind:'matrix'): age cohort (rows) × income band (cols),
+    // values = share of households within each cohort (rows sum to 100%). Single
+    // vintage. Field ids reconstructed as `incage_<cohort.id>_<bucketIndex>`.
+    { title: 'Income by Age Cohort', kind: 'matrix', vintage: 2024,
+      source: 'ACS 5-Year, U.S. Census Bureau table B19037. Each value is the share of an age cohort’s households in that income band (rows sum to 100%). Shown for 2024 (2020–2024 ACS 5-Year).',
+      cohorts: [
+        { id: 'u25',   label: 'Under 25' },
+        { id: 'a2544', label: '25-44' },
+        { id: 'a4564', label: '45-64' },
+        { id: 'a65p',  label: '65+' },
+      ],
+      buckets: [
+        { label: '<$25,000' }, { label: '$25,000-$49,999' }, { label: '$50,000-$74,999' },
+        { label: '$75,000-$99,999' }, { label: '$100,000+' },
+      ] },
   ]},
   { name: 'Quality of Life', sections: [
     { title: 'Educational Attainment (population 25+, cumulative)', source: 'ACS 5-Year, table B15003. Columns are cumulative ("or higher"), matching the original sheet. "Graduate/Professional" is what the original sheet placed in its "Bachelor\'s+" column.',

@@ -45,6 +45,42 @@ const sum = (g, codes) => {
 };
 const ratio = (num, den) => (num != null && den != null && den !== 0 ? num / den : null);
 
+// ---- B19037 Age of Householder by Household Income -------------------------
+// A cross-tab, not a simple set of columns: the Master Sheet's "Income by Age
+// Cohort" block shows, for each age cohort, the SHARE of that cohort's
+// households falling in each of five income bands (each cohort's five shares
+// sum to 100%). The ACS table has 16 income brackets per cohort; we collapse
+// them into the sheet's five bands. Validated to the third decimal against the
+// hand-made sheet for Chamblee / DeKalb / Atlanta MSA / Georgia (2024).
+//
+// Table layout: _001 total; each cohort has a subtotal line then its 16
+// brackets. Cohort subtotals: Under 25 = _002, 25-44 = _019, 45-64 = _036,
+// 65+ = _053. Bucket offsets below are relative to each cohort's subtotal.
+export const B19037_COHORTS = [
+  { id: 'u25',   label: 'Under 25', base: 2 },
+  { id: 'a2544', label: '25-44',    base: 19 },
+  { id: 'a4564', label: '45-64',    base: 36 },
+  { id: 'a65p',  label: '65+',      base: 53 },
+];
+export const B19037_BUCKETS = [
+  { label: '<$25,000',        offs: [1, 2, 3, 4] },        // <10k,10-14,15-19,20-24k
+  { label: '$25,000-$49,999', offs: [5, 6, 7, 8, 9] },     // 25-29 .. 45-49k
+  { label: '$50,000-$74,999', offs: [10, 11] },            // 50-59, 60-74k
+  { label: '$75,000-$99,999', offs: [12] },                // 75-99k
+  { label: '$100,000+',       offs: [13, 14, 15, 16] },    // 100-124 .. 200k+
+];
+const b19 = (n) => `B19037_${pad(n)}E`;
+// One share field per (cohort, bucket); field id = `incage_<cohort>_<bucketIdx>`.
+// The matrix renderers reconstruct these ids from the cohort id + bucket index.
+const INCOME_AGE_FIELDS = B19037_COHORTS.flatMap((coh) =>
+  B19037_BUCKETS.map((bk, j) => ({
+    id: `incage_${coh.id}_${j}`, tab: 'Labor Force',
+    label: `${coh.label}: ${bk.label}`, unit: 'share', status: 'stable',
+    vars: [b19(coh.base), ...bk.offs.map((o) => b19(coh.base + o))],
+    derive: (g) => ratio(sum(g, bk.offs.map((o) => b19(coh.base + o))), g(b19(coh.base))),
+  })),
+);
+
 // ---------------------------------------------------------------------------
 // FIELD DEFINITIONS
 // tab      -> which Master-Sheet tab the field feeds
@@ -108,6 +144,11 @@ export const FIELDS = [
     vars: ['B23025_003E', 'B23025_005E'], derive: (g) => ratio(g('B23025_005E'), g('B23025_003E')) },
   { id: 'labor_force_participation', tab: 'Labor Force', label: 'Labor Force Participation Rate', unit: 'rate', status: 'stable',
     vars: ['B23025_001E', 'B23025_002E'], derive: (g) => ratio(g('B23025_002E'), g('B23025_001E')) },
+
+  // Income by Age Cohort (B19037) — see B19037_COHORTS/B19037_BUCKETS above.
+  // Rendered as a 2024-only cross-tab (age cohort × income band) by the matrix
+  // section on the Labor Force tab; derived for every vintage regardless.
+  ...INCOME_AGE_FIELDS,
 
   // ---------------- Quality of Life (ACS attainment tables) ----------------
   // B15003 Educational Attainment for pop 25+.
