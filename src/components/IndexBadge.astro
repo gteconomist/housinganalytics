@@ -1,0 +1,77 @@
+---
+/**
+ * IndexBadge — compact Housing Stress Index summary for a county profile.
+ * Score is a 0–100 national percentile (100 = most stressed); rank is the
+ * county's national position (1 = most stressed). Purely presentational.
+ */
+const { score = null, rank = null, countyCount = null, lowConfidence = false } = Astro.props;
+const hasData = score != null && rank != null;
+// Severity band drives the accent color + plain-language label.
+function band(s) {
+  if (s == null)  return { key: 'na',       label: 'No data' };
+  if (s >= 80)    return { key: 'severe',   label: 'Severe stress' };
+  if (s >= 60)    return { key: 'high',     label: 'High stress' };
+  if (s >= 40)    return { key: 'moderate', label: 'Moderate stress' };
+  if (s >= 20)    return { key: 'low',      label: 'Low stress' };
+  return            { key: 'minimal',  label: 'Minimal stress' };
+}
+const b = band(score);
+const pctTop = (hasData && countyCount) ? Math.max(1, Math.round((rank / countyCount) * 100)) : null;
+---
+{hasData && (
+  <div class={`hsi-badge hsi-badge--${b.key}`} data-hsi-badge>
+    <div class="hsi-badge__head">
+      <span class="hsi-badge__eyebrow">Housing Stress Index</span>
+      <span class="hsi-badge__band">{b.label}</span>
+    </div>
+    <div class="hsi-badge__body">
+      <div class="hsi-badge__score">
+        <span class="hsi-badge__num">{score}</span>
+        <span class="hsi-badge__den">/ 100</span>
+      </div>
+      <div class="hsi-badge__meta">
+        <div class="hsi-badge__rank">#{rank.toLocaleString()}{countyCount ? ` of ${countyCount.toLocaleString()}` : ''}</div>
+        <div class="hsi-badge__sub muted">{pctTop ? `More stressed than ${score}% of U.S. counties` : 'National percentile'}</div>
+      </div>
+    </div>
+    <div class="hsi-badge__bar" role="img" aria-label={`Housing Stress Index ${score} of 100`}>
+      <div class="hsi-badge__fill" style={`width:${score}%`}></div>
+    </div>
+    {lowConfidence && (
+      <p class="hsi-badge__flag">Thin ACS sample — interpret with caution.</p>
+    )}
+    <p class="hsi-badge__note muted">Composite of renter &amp; owner cost burden and rent- and price-to-income, national z-scored. Higher = more stress.</p>
+  </div>
+)}
+
+<style>
+  .hsi-badge {
+    border: 1px solid var(--color-sage, #d6dbd4);
+    border-left: 4px solid var(--accent, var(--color-red, #a8432f));
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+    background: var(--color-cream, #fbf6ee);
+    max-width: 460px;
+  }
+  .hsi-badge--severe   { --accent: var(--color-red, #a8432f); }
+  .hsi-badge--high     { --accent: var(--color-gold, #f19623); }
+  .hsi-badge--moderate { --accent: var(--color-gold, #f19623); }
+  .hsi-badge--low      { --accent: var(--color-teal, #3f7d52); }
+  .hsi-badge--minimal  { --accent: var(--color-teal, #3f7d52); }
+  .hsi-badge__head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .hsi-badge__eyebrow { font-size: var(--fs-xs, .72rem); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .hsi-badge__band {
+    font-size: var(--fs-xs, .72rem); font-weight: 600; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 999px; padding: .1rem .55rem;
+  }
+  .hsi-badge__body { display: flex; align-items: baseline; gap: 1rem; margin: .5rem 0 .6rem; }
+  .hsi-badge__score { display: flex; align-items: baseline; gap: .25rem; }
+  .hsi-badge__num { font-size: 2.4rem; line-height: 1; font-weight: 700; color: var(--accent); }
+  .hsi-badge__den { font-size: 1rem; color: var(--color-navy, #16181c); opacity: .6; }
+  .hsi-badge__rank { font-weight: 600; }
+  .hsi-badge__sub { font-size: var(--fs-xs, .72rem); }
+  .hsi-badge__bar { height: 8px; border-radius: 999px; background: var(--color-sage, #d6dbd4); overflow: hidden; }
+  .hsi-badge__fill { height: 100%; background: var(--accent); border-radius: 999px; }
+  .hsi-badge__flag { font-size: var(--fs-xs, .72rem); color: var(--color-red, #a8432f); margin: .5rem 0 0; }
+  .hsi-badge__note { font-size: var(--fs-xs, .72rem); margin: .5rem 0 0; }
+</style>

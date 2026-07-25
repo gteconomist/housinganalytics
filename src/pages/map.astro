@@ -188,6 +188,7 @@ import Base from '../layouts/Base.astro';
     'homeownership_rate', 'bachelors_plus_rate',
     'hud_ami_4p_100', 'hud_ami_4p_80', 'hud_ami_4p_120',
     'population_total',
+    'hsi_rank',
   ]);
   const GOOD_LOW = new Set([
     'vacancy_rate', 'homeowner_vacancy_rate', 'rental_vacancy_rate',
@@ -196,6 +197,7 @@ import Base from '../layouts/Base.astro';
     'poverty_rate',
     'price_to_income_ratio', 'rent_to_income_ratio',
     'aging_stock_share', 'renter_rate',
+    'hsi_score',
   ]);
   function directionFor(field) {
     if (GOOD_HIGH.has(field)) return 'good-high';
