@@ -1,0 +1,114 @@
+---
+import Base from '../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+// Content-hash the engine script so new versions bust Cloudflare/browser cache
+// (files in public/ aren't fingerprinted by Astro).
+const genV = createHash('md5').update(readFileSync('public/js/housing-gap.js')).digest('hex').slice(0, 10);
+---
+<Base title="Housing gap analysis — housinganalytics.org"
+      description="Cost burden by income and tenure, and the existing shortage of housing by price point, for any U.S. city or county.">
+
+  <section class="hero">
+    <div class="container hero__inner">
+      <p class="eyebrow">Analysis</p>
+      <h1>Cost burden &amp; the existing housing gap.</h1>
+      <p class="hero__lede">
+        Pick a city or county. We'll show who is cost-burdened by income and tenure, convert those
+        incomes into affordable rents and home prices, and estimate how many housing units are
+        missing at each price point — the deficit for the residents who already live there.
+      </p>
+    </div>
+  </section>
+
+  <section class="container gen">
+    <div class="step">
+      <p class="step__num">Step 1</p>
+      <h2>Choose a community</h2>
+      <div class="toggle" role="group" aria-label="Target type">
+        <button type="button" class="toggle__btn is-active" data-mode="city">City</button>
+        <button type="button" class="toggle__btn" data-mode="county">County</button>
+      </div>
+      <div class="search" data-target-search>
+        <input type="search" placeholder="Search a city — e.g. Chamblee, Savannah…" autocomplete="off" aria-label="Search for a community" />
+        <ul class="search__results" hidden></ul>
+      </div>
+    </div>
+    <div class="hg-result" data-result></div>
+  </section>
+
+  <script src={`/js/housing-gap.js?v=${genV}`} is:inline></script>
+  <script is:inline>
+    (async function () {
+      const $ = (s, r = document) => r.querySelector(s);
+      const result = $('[data-result]');
+      let index = null, mode = 'city';
+      const bundleCache = {};
+
+      try { index = await fetch('/analysis-data/index.json').then((r) => r.json()); }
+      catch (e) { $('.gen').innerHTML = '<p class="muted">The analysis data isn’t built yet. Run <code>npm run analysis-geo</code> and redeploy.</p>'; return; }
+
+      const lists = { city: index.places || [], county: index.counties || [] };
+      const activeList = () => lists[mode];
+      function score(p, q){ const n=p.name.toLowerCase(), s=(p.state_name||'').toLowerCase();
+        if(n.startsWith(q))return 0; if(n.includes(q))return 1; if(s.startsWith(q))return 2; if(s.includes(q))return 3; return 9; }
+      function match(q){ return activeList().map((p)=>({p,s:score(p,q)})).filter((x)=>x.s<9)
+        .sort((a,b)=>a.s-b.s||a.p.name.localeCompare(b.p.name)).slice(0,10).map((x)=>x.p); }
+
+      const box = $('[data-target-search]'), input = $('input', box), out = $('.search__results', box);
+      input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        if (q.length < 2) { out.hidden = true; out.innerHTML=''; return; }
+        const m = match(q); out.hidden = !m.length;
+        out.innerHTML = m.map((p)=>`<li><a href="#" data-geoid="${p.geoid}" data-st="${p.state_fips}"><span>${p.name}</span><span class="muted">${p.state_name||''}</span></a></li>`).join('');
+        out.querySelectorAll('a').forEach((a)=>a.addEventListener('click', async (e)=>{
+          e.preventDefault(); out.hidden=true; out.innerHTML=''; input.value=p_name(a);
+          await pick(a.dataset.geoid, a.dataset.st);
+        }));
+      });
+      input.addEventListener('blur', ()=>setTimeout(()=>{ out.hidden=true; }, 200));
+      function p_name(a){ return a.querySelector('span').textContent; }
+
+      async function pick(geoid, st){
+        result.innerHTML = '<p class="muted">Loading…</p>';
+        if (!bundleCache[st]) bundleCache[st] = await fetch(`/analysis-data/states/${st}.json`).then((r)=>r.json());
+        const b = bundleCache[st];
+        const rec = (mode==='city'?b.places:b.counties)[geoid];
+        const meta = index[mode==='city'?'places':'counties'].find((p)=>p.geoid===geoid) || {};
+        if (!rec) { result.innerHTML = '<p class="muted">No data for that selection.</p>'; return; }
+        window.HousingGap.render(result, rec.model, { name: rec.name, state_name: meta.state_name, model: rec.model });
+        result.scrollIntoView({ behavior:'smooth', block:'start' });
+      }
+
+      document.querySelectorAll('[data-mode]').forEach((b)=>b.addEventListener('click', ()=>{
+        if (b.dataset.mode===mode) return; mode=b.dataset.mode;
+        document.querySelectorAll('[data-mode]').forEach((x)=>x.classList.toggle('is-active', x===b));
+        input.placeholder = mode==='county'?'Search a county — e.g. DeKalb County…':'Search a city — e.g. Chamblee, Savannah…';
+        input.value=''; out.hidden=true; result.innerHTML='';
+      }));
+    })();
+  </script>
+</Base>
+
+<style>
+  .hero { background: var(--bg-section); padding: var(--space-9) 0 var(--space-7); border-bottom: 1px solid var(--border-soft); }
+  .hero h1 { max-width: 24ch; margin-bottom: var(--space-4); }
+  .hero__lede { max-width: 66ch; font-size: var(--fs-md); color: var(--text-muted); }
+  .gen { padding-top: var(--space-7); padding-bottom: var(--space-9); }
+  .step { margin-bottom: var(--space-6); }
+  .step__num { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-navy); font-weight: var(--fw-medium); margin: 0 0 var(--space-2); }
+  .step h2 { margin: 0 0 var(--space-4); font-size: var(--fs-xl); }
+  .toggle { display: inline-flex; margin: 0 0 var(--space-4); border: 2px solid var(--color-navy); border-radius: var(--radius-md); overflow: hidden; }
+  .toggle__btn { padding: var(--space-2) var(--space-5); font: inherit; font-weight: var(--fw-medium); font-size: var(--fs-sm); background: var(--bg-page); color: var(--color-navy); border: none; cursor: pointer; }
+  .toggle__btn + .toggle__btn { border-left: 2px solid var(--color-navy); }
+  .toggle__btn.is-active { background: var(--color-navy); color: #ffffff; }
+  .search { position: relative; max-width: 520px; }
+  .search input { width: 100%; padding: var(--space-4) var(--space-5); font-size: var(--fs-md); font-family: inherit; border: 2px solid var(--color-navy); border-radius: var(--radius-md); background: var(--bg-page); box-shadow: var(--shadow-soft); }
+  .search input:focus { outline: 3px solid var(--color-gold); outline-offset: 1px; }
+  .search__results { position: absolute; top: 100%; left: 0; right: 0; list-style: none; margin: var(--space-2) 0 0; padding: 0; background: var(--bg-page); border: 1px solid var(--border-soft); border-radius: var(--radius-md); box-shadow: var(--shadow-card); z-index: 10; }
+  .search__results li { border-bottom: 1px solid var(--border-soft); }
+  .search__results a { display: flex; justify-content: space-between; align-items: baseline; padding: var(--space-3) var(--space-4); text-decoration: none; color: var(--text-body); }
+  .search__results a:hover { background: var(--bg-section); }
+</style>
+
+<link rel="stylesheet" href="/css/housing-gap.css"/>

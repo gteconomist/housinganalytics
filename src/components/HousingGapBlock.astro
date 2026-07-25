@@ -1,0 +1,16 @@
+---
+// HousingGapBlock.astro — drop into county/place profile pages:
+//   <HousingGapBlock geoid={geoid} st={stateFips} mode="city" stateName={stateName} />
+// Renders the cost-burden + gap-by-price-point analysis, lazy-loaded on scroll.
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+const { geoid, st, mode = 'city', stateName = '' } = Astro.props;
+const genV = createHash('md5').update(readFileSync('public/js/housing-gap.js')).digest('hex').slice(0, 10);
+const embV = createHash('md5').update(readFileSync('public/js/housing-gap-embed.js')).digest('hex').slice(0, 10);
+---
+<link rel="stylesheet" href="/css/housing-gap.css" />
+<section class="container" style="padding-top:var(--space-7);padding-bottom:var(--space-7)">
+  <div data-hg-embed data-geoid={geoid} data-st={st} data-mode={mode} data-state-name={stateName}></div>
+</section>
+<script src={`/js/housing-gap.js?v=${genV}`} is:inline></script>
+<script src={`/js/housing-gap-embed.js?v=${embV}`} is:inline></script>
