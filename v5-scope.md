@@ -74,15 +74,15 @@ Priority order for v5:
 
 ## 4. New in the v5 direction
 
-- **Analysis as a first-class pillar.** Housing Stress Index (shipped). **Housing shortage by income cohort** (in progress in a parallel workstream) — the affordable-unit gap at each income band, not a single county-wide figure. Room for further indices and studies under `/analysis`.
-- **Cities parity.** City compare, city trends, and a city layer on the unified maps — closing the gap between the counties and cities experiences.
+- **Analysis as a first-class pillar.** Housing Stress Index (shipped). **Housing shortage by income cohort** (in progress in a parallel workstream) — the affordable-unit gap at each income band, not a single county-wide figure. Per §6 it ships in two places: a full study under `/analysis`, and a linked per-profile panel on both county and city profiles, mirroring the HSI badge. Room for further indices and studies under `/analysis`.
+- **Full cities parity.** Cities are a first-class geography, not a lighter tier: a city profile — and every tool and study — should be as rich as its county equivalent (city compare, city trends, the income-cohort panel, city layer on the maps). Every v5 feature ships for counties *and* cities together unless a hard data limit prevents it, noted where it does.
 - **Data section.** A `/data` sources-and-freshness page (every dataset, vintage, source, last-pulled date), which also anchors the Data ▾ menu group.
 
 ---
 
 ## 5. Recommended phasing (v5.x)
 
-- **v5.0 — Analysis pillar.** HSI (done), Analysis section + HSI methodology (done), housing shortage by income cohort. Ship as the analysis release.
+- **v5.0 — Analysis pillar.** HSI (done), Analysis section + HSI methodology (done), housing shortage by income cohort (study under `/analysis` + a linked per-profile panel, counties and cities). Ship as the analysis release.
 - **v5.1 — Trends anchor.** ACS trends across profiles, a trends page, Compare overlay, Rankings movers. Cities included from the start.
 - **v5.2 — Current context.** HUD FMR + building permits; peer counties.
 - **v5.3 — Reach + parity.** MSA/state rollups, saved views, embeds, city compare.
@@ -90,12 +90,15 @@ Priority order for v5:
 
 ---
 
-## 6. Open questions
+## 6. Decisions (2026-07-25) and open questions
 
-1. **Version label.** Call the shipped body "v4, as delivered" and everything here v5 — or fold it all into a single v5 story? (Recommendation: the former; it keeps an honest changelog.)
-2. **Cities parity depth.** How far to push city trends/compare vs. keeping cities lighter than counties.
-3. **Income-cohort study integration.** Does it live purely under `/analysis`, or also feed a per-profile panel (like the HSI badge)?
-4. **When to move to Model C** — i.e., how stable is the geography set (counties, cities, + states/metros?) before collapsing the per-geography pages into toggles.
+**Resolved with Alfie:**
+1. **Version label.** The shipped body is recorded as "v4, as delivered"; new work from here is v5 — an honest changelog rather than a retconned single story.
+2. **Cities parity.** Cities should be as full and rich as counties wherever the data allows; parity is a goal of every v5 feature, not an afterthought (see §4).
+3. **Income-cohort study.** Ships in both forms: a full study under `/analysis`, and a linked per-profile panel on county and city profiles, like the HSI badge.
+
+**Still open:**
+4. **When to move to Model C** (tool-first pages with a geography toggle) — gated on how stable the geography set is (counties, cities, and whether states/metros join). Revisit once cities parity lands.
 
 ---
 
