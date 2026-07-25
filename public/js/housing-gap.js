@@ -180,7 +180,7 @@
   function TEMPLATE(meta){ return `
     <div class="hg-head"><span class="hg-kick">Analysis</span>
       <h2 class="hg-title">${meta.name}</h2>
-      <p class="hg-sub">${meta.state_name||''} · ACS 2018–2022 5-year · existing shortage by price point</p></div>
+      <p class="hg-sub">${meta.state_name||''} · ACS 2020–2024 5-year · existing shortage by price point</p></div>
     <div class="hg-tiles" data-tiles></div>
 
     <h3 class="hg-h3">Cost burden by household income &amp; tenure</h3>
@@ -188,7 +188,7 @@
       <tr><th rowspan="2">Household income</th><th colspan="4" class="hg-grp">Renters</th><th colspan="4" class="hg-grp">Owners</th></tr>
       <tr><th class="n">Total</th><th class="n">Burdened</th><th class="n">Rate</th><th class="n">Severe</th><th class="n">Total</th><th class="n">Burdened</th><th class="n">Rate</th><th class="n">Severe</th></tr>
     </thead><tbody>${matrixRows(meta.model)}</tbody></table>
-    <p class="hg-src">Source: U.S. Census Bureau, ACS 2018–2022 5-year, B25074 &amp; B25095.</p>
+    <p class="hg-src">Source: U.S. Census Bureau, ACS 2020–2024 5-year, B25074 &amp; B25095.</p>
 
     <h3 class="hg-h3">Affordability calculator — income → price point</h3>
     <div class="hg-calc">

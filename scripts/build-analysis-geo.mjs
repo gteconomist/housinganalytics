@@ -1,5 +1,5 @@
 // build-analysis-geo.mjs (PILOT)
-// Pulls ACS 2018-2022 5-yr cost-burden + supply tables for all places+counties
+// Pulls ACS 2020-2024 5-yr cost-burden + supply tables for all places+counties
 // in the pilot states, stores RAW counts per geography (affordability math runs
 // client-side), bundles one file per state into public/analysis-data/.
 // Env: CENSUS_API_KEY, STATES (comma FIPS, default pilot GA,NC,TN).
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve as _resolve } from 'node:path';
 
 const KEY = process.env.CENSUS_API_KEY;
-const YEAR = 2022; // ACS 2018-2022 5-yr — the vintage HUD CHAS is built from
+const YEAR = 2024; // ACS 2020-2024 5-yr — matches the rest of the site (CHAS layered separately)
 const STATES = (process.env.STATES || '13,37,47').split(',').map(s => s.trim().padStart(2,'0'));
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = _resolve(__dirname, '..', 'public/analysis-data');
@@ -118,7 +118,7 @@ async function run(){
   placeIndex.sort((a,b)=>a.name.localeCompare(b.name));
   countyIndex.sort((a,b)=>a.name.localeCompare(b.name));
   writeFileSync(_resolve(OUT,'index.json'), JSON.stringify({
-    vintage:'ACS 2018-2022 5-year', generated_states:STATES,
+    vintage:'ACS 2020-2024 5-year', generated_states:STATES,
     places:placeIndex, counties:countyIndex
   }));
   console.log(`\nWrote ${STATES.length} state bundles, ${placeIndex.length} places + ${countyIndex.length} counties to index.`);
