@@ -1,0 +1,111 @@
+---
+/**
+ * HousingGapCard — compact housing-gap summary for a county or city profile.
+ *
+ * Mirrors IndexBadge: a band-coloured card with one headline figure, a national
+ * rank, and a link out to the full study. The headline is HUD CHAS's
+ * "affordable AND available" rental shortage for households at or below 50% AMI
+ * — the figure behind "City X is short N affordable homes" — because it is the
+ * only one of our measures that removes affordable units already occupied by
+ * higher-income renters.
+ *
+ * Data: src/data/generated/housing-gap-summary.json (built by
+ * scripts/build-analysis-geo.mjs). Purely presentational.
+ */
+const { rec = null, count = null, mode = 'county', geoid = '' } = Astro.props;
+const universeLabel = mode === 'county' ? 'U.S. counties' : 'U.S. cities';
+const hasData = rec && rec.vli != null && rec.score != null;
+
+function band(s) {
+  if (s == null) return { key: 'na', label: 'No data' };
+  if (s >= 80)   return { key: 'severe',   label: 'Severe shortage' };
+  if (s >= 60)   return { key: 'high',     label: 'High shortage' };
+  if (s >= 40)   return { key: 'moderate', label: 'Moderate shortage' };
+  if (s >= 20)   return { key: 'modest',   label: 'Modest shortage' };
+  return           { key: 'minimal',  label: 'Minimal shortage' };
+}
+const b = band(hasData ? rec.score : null);
+const href = `/housing-gap?geo=${geoid}&mode=${mode === 'county' ? 'county' : 'city'}`;
+const fmt = (n) => Number(n).toLocaleString();
+---
+{hasData && (
+  <div class={`hg-card hg-card--${b.key}`}>
+    <div class="hg-card__head">
+      <span class="hg-card__eyebrow">Housing Gap</span>
+      <span class="hg-card__band">{b.label}</span>
+    </div>
+
+    <div class="hg-card__body">
+      <div class="hg-card__score">
+        <span class="hg-card__num">{fmt(rec.vli)}</span>
+        <span class="hg-card__den">homes short</span>
+      </div>
+      <div class="hg-card__meta">
+        <div class="hg-card__rank">#{fmt(rec.rank)}{count ? ` of ${fmt(count)}` : ''}</div>
+        <div class="hg-card__sub muted">More acute than {rec.score}% of {universeLabel}</div>
+      </div>
+    </div>
+
+    <p class="hg-card__lede">
+      Rental homes affordable <em>and available</em> to renters earning ≤&nbsp;50% of area median income,
+      after removing units already occupied by higher-income households.
+    </p>
+
+    <div class="hg-card__bar" role="img" aria-label={`Shortage intensity ${rec.score} of 100`}>
+      <div class="hg-card__fill" style={`width:${rec.score}%`}></div>
+    </div>
+
+    <dl class="hg-card__stats">
+      <div><dt>Renters cost-burdened</dt><dd>{rec.rb != null ? `${rec.rb}%` : '—'}</dd></div>
+      <div><dt>Shortage at ≤ 30% AMI</dt><dd>{rec.eli != null ? fmt(rec.eli) : '—'}</dd></div>
+      <div><dt>Widest gap by price point</dt><dd>{rec.pg != null ? `${fmt(rec.pg)} under $${(rec.pc / 1000).toFixed(0)}k` : '—'}</dd></div>
+    </dl>
+
+    {rec.thin && (
+      <p class="hg-card__flag">Fewer than 500 renter households — treat the rank with caution.</p>
+    )}
+
+    <a class="hg-card__cta" href={href}>See the full housing-gap analysis →</a>
+    <p class="hg-card__note muted">HUD CHAS 2018–2022 (Table 15C); cost burden from ACS 2020–2024 5-year.</p>
+  </div>
+)}
+
+<style>
+  .hg-card {
+    border: 1px solid var(--color-hair);
+    border-left: 4px solid var(--accent-band, var(--color-brick));
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+    background: var(--bg-card);
+    max-width: 460px;
+  }
+  .hg-card--severe   { --accent-band: var(--color-brick); }
+  .hg-card--high     { --accent-band: var(--color-gold); }
+  .hg-card--moderate { --accent-band: var(--color-gold); }
+  .hg-card--modest   { --accent-band: var(--color-green); }
+  .hg-card--minimal  { --accent-band: var(--color-green); }
+
+  .hg-card__head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .hg-card__eyebrow { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--text-primary); }
+  .hg-card__band {
+    font-size: var(--fs-xs); font-weight: 600; color: var(--accent-band);
+    border: 1px solid var(--accent-band); border-radius: 999px; padding: .1rem .55rem;
+  }
+  .hg-card__body { display: flex; align-items: baseline; gap: 1rem; margin: .5rem 0 .4rem; flex-wrap: wrap; }
+  .hg-card__score { display: flex; align-items: baseline; gap: .35rem; }
+  .hg-card__num { font-size: 2.4rem; line-height: 1; font-weight: 700; color: var(--accent-band); font-variant-numeric: tabular-nums; }
+  .hg-card__den { font-size: .95rem; color: var(--text-muted); }
+  .hg-card__rank { font-weight: 600; }
+  .hg-card__sub { font-size: var(--fs-xs); }
+  .hg-card__lede { font-size: var(--fs-xs); color: var(--text-muted); margin: 0 0 .6rem; line-height: 1.45; }
+  .hg-card__bar { height: 8px; border-radius: 999px; background: var(--color-panel-2); overflow: hidden; }
+  .hg-card__fill { height: 100%; background: var(--accent-band); border-radius: 999px; }
+  .hg-card__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .75rem 0 0; }
+  .hg-card__stats div { min-width: 0; }
+  .hg-card__stats dt { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.3; }
+  .hg-card__stats dd { margin: .15rem 0 0; font-weight: 600; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+  .hg-card__flag { font-size: var(--fs-xs); color: var(--color-brick); margin: .6rem 0 0; }
+  .hg-card__cta { display: inline-block; margin: .8rem 0 0; font-size: var(--fs-sm); font-weight: 600; }
+  .hg-card__note { font-size: var(--fs-xs); margin: .5rem 0 0; }
+  @media (max-width: 520px) { .hg-card__stats { grid-template-columns: 1fr 1fr; } }
+</style>

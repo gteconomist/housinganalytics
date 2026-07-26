@@ -4,6 +4,19 @@
 (function () {
   'use strict';
 
+  // ---- palette — resolved from src/styles/tokens.css (EIG); hex fallbacks = token values ----
+  const CS = getComputedStyle(document.documentElement);
+  const tok = (n, f) => ((CS.getPropertyValue(n) || '').trim() || f);
+  const C = {
+    ink:    tok('--color-navy',     '#231f20'),  // charcoal — headings, primary series
+    accent: tok('--color-gold',     '#f7941e'),  // EIG orange — secondary series, rules
+    alert:  tok('--color-brick',    '#a8432f'),  // shortage / severe burden
+    warn:   tok('--color-orange-d', '#c9740f'),  // moderate burden
+    ok:     tok('--color-green',    '#3f7d52'),  // surplus / live data
+    muted:  tok('--text-muted',     '#6d6e71'),
+    faint:  tok('--color-faint',    '#a7a9ac'),
+  };
+
   // ---- ACS bracket / band edge definitions (match build-analysis-geo.mjs) ----
   const REN_INC = [ // B25074 income brackets: [lower, upper, label]
     [0,10000,'<$10k'],[10000,20000,'$10–20k'],[20000,35000,'$20–35k'],
@@ -89,18 +102,18 @@
     REN_INC.forEach((bi,i)=>{
       const rt=model.ren.total[i],rb=model.ren.burd[i],rs=model.ren.sev[i];
       const rr=rt?rb/rt:0;
-      const rc=rr>=0.5?'#e04f39':(rr>=0.3?'#eaa000':'#545b5a');
+      const rc=rr>=0.5?C.alert:(rr>=0.3?C.warn:C.muted);
       // owner cell — owners have 8 brackets; map first 6 directly, collapse last for 100k+ display
       let ownCells;
       if(i<6){ const ot=model.own.total[i],ob=model.own.burd[i],os=model.own.sev[i],orr=ot?ob/ot:0;
-        const oc=orr>=0.5?'#e04f39':(orr>=0.3?'#eaa000':'#545b5a');
+        const oc=orr>=0.5?C.alert:(orr>=0.3?C.warn:C.muted);
         ownCells=`<td class="n">${fmtN(ot)}</td><td class="n">${fmtN(ob)}</td><td class="n" style="color:${oc};font-weight:600">${pct(orr)}</td><td class="n">${fmtN(os)}</td>`;
-      } else { ownCells=`<td class="n" colspan="4" style="color:#999">see $100–150k / $150k+ below</td>`; }
+      } else { ownCells=`<td class="n" colspan="4" style="color:${C.faint}">see $100–150k / $150k+ below</td>`; }
       html+=`<tr><td>${bi[2]}</td><td class="n">${fmtN(rt)}</td><td class="n">${fmtN(rb)}</td><td class="n" style="color:${rc};font-weight:600">${pct(rr)}</td><td class="n">${fmtN(rs)}</td>${ownCells}</tr>`;
     });
     [6,7].forEach(i=>{ const ot=model.own.total[i],ob=model.own.burd[i],os=model.own.sev[i],orr=ot?ob/ot:0;
-      const oc=orr>=0.5?'#e04f39':(orr>=0.3?'#eaa000':'#545b5a');
-      html+=`<tr><td>${OWN_INC[i][2]}</td><td class="n" colspan="4" style="color:#999">—</td><td class="n">${fmtN(ot)}</td><td class="n">${fmtN(ob)}</td><td class="n" style="color:${oc};font-weight:600">${pct(orr)}</td><td class="n">${fmtN(os)}</td></tr>`;
+      const oc=orr>=0.5?C.alert:(orr>=0.3?C.warn:C.muted);
+      html+=`<tr><td>${OWN_INC[i][2]}</td><td class="n" colspan="4" style="color:${C.faint}">—</td><td class="n">${fmtN(ot)}</td><td class="n">${fmtN(ob)}</td><td class="n" style="color:${oc};font-weight:600">${pct(orr)}</td><td class="n">${fmtN(os)}</td></tr>`;
     });
     return html;
   }
@@ -112,18 +125,18 @@
     let bars='';
     rentGap.forEach((x,i)=>{
       const gx=padL+i*grpW+grpW*0.5;
-      [[x.hh,'#003057'],[x.units,'#b3a369']].forEach((d,j)=>{
+      [[x.hh,C.ink],[x.units,C.accent]].forEach((d,j)=>{
         const h=plotH*d[0]/maxv, bx=gx-bw+j*bw, by=padT+plotH-h;
         bars+=`<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${d[1]}"/>`;
-        bars+=`<text x="${(bx+bw/2).toFixed(1)}" y="${(by-4).toFixed(1)}" font-size="10" text-anchor="middle" fill="#333">${fmtN(d[0])}</text>`;
+        bars+=`<text x="${(bx+bw/2).toFixed(1)}" y="${(by-4).toFixed(1)}" font-size="10" text-anchor="middle" fill="${C.muted}">${fmtN(d[0])}</text>`;
       });
-      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+16).toFixed(1)}" font-size="11" text-anchor="middle" fill="#000">≤ ${fmt$(x.cut)}</text>`;
-      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+30).toFixed(1)}" font-size="9" text-anchor="middle" fill="#777">rent ${fmt$(x.aff)}</text>`;
+      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+16).toFixed(1)}" font-size="11" text-anchor="middle" fill="${C.ink}">≤ ${fmt$(x.cut)}</text>`;
+      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+30).toFixed(1)}" font-size="9" text-anchor="middle" fill="${C.faint}">rent ${fmt$(x.aff)}</text>`;
     });
     let yaxis='';
     for(let t=0;t<=4;t++){ const yv=maxv*t/4, yy=padT+plotH-plotH*t/4;
-      yaxis+=`<text x="${padL-8}" y="${(yy+3).toFixed(1)}" font-size="9" text-anchor="end" fill="#777">${fmtN(yv)}</text>`; }
-    const axis=`<line x1="${padL}" y1="${padT+plotH}" x2="${CW-20}" y2="${padT+plotH}" stroke="#000"/><line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+plotH}" stroke="#000"/>`;
+      yaxis+=`<text x="${padL-8}" y="${(yy+3).toFixed(1)}" font-size="9" text-anchor="end" fill="${C.faint}">${fmtN(yv)}</text>`; }
+    const axis=`<line x1="${padL}" y1="${padT+plotH}" x2="${CW-20}" y2="${padT+plotH}" stroke="${C.ink}"/><line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+plotH}" stroke="${C.ink}"/>`;
     return `<svg viewBox="0 0 ${CW} ${CH}" width="100%" style="max-width:${CW}px">${axis}${yaxis}${bars}</svg>`;
   }
 
@@ -131,17 +144,17 @@
     const c=compute(model,A);
     // affordability table
     root.querySelector('[data-afford]').innerHTML = c.afford.map(a=>
-      `<tr><td class="n">${fmt$(a.income)}</td><td class="n">${fmt$(a.budget)}/mo</td><td class="n">${fmt$(a.rent)}/mo</td><td class="n" style="font-weight:600;color:#003057">${fmt$(a.price)}</td></tr>`).join('');
+      `<tr><td class="n">${fmt$(a.income)}</td><td class="n">${fmt$(a.budget)}/mo</td><td class="n">${fmt$(a.rent)}/mo</td><td class="n" style="font-weight:600;color:${C.ink}">${fmt$(a.price)}</td></tr>`).join('');
     // rental gap chart + table
     root.querySelector('[data-gapchart]').innerHTML = gapChart(c.rentGap);
     root.querySelector('[data-gaprows]').innerHTML = c.rentGap.map(x=>{
-      const col=x.gap>0?'#e04f39':'#008c95';
+      const col=x.gap>0?C.alert:C.ok;
       return `<tr><td>≤ ${fmt$(x.cut)}</td><td class="n">${fmt$(x.aff)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n" style="color:${col};font-weight:700">${x.gap>0?'+':''}${fmtN(x.gap)}</td><td style="color:${col}">${x.gap>0?'short':'surplus'}</td></tr>`;
     }).join('');
     // ownership
     root.querySelector('[data-ownrows]').innerHTML = c.ownGap.map(x=>{
       const share=model.tenure.owner?x.units/model.tenure.owner*100:0;
-      return `<tr><td>≤ ${fmt$(x.cut)}</td><td class="n" style="font-weight:600;color:#003057">${fmt$(x.price)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n">${share.toFixed(0)}% of stock</td></tr>`;
+      return `<tr><td>≤ ${fmt$(x.cut)}</td><td class="n" style="font-weight:600;color:${C.ink}">${fmt$(x.price)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n">${share.toFixed(0)}% of stock</td></tr>`;
     }).join('');
     // headline tiles
     root.querySelector('[data-tiles]').innerHTML =
@@ -164,7 +177,7 @@
 
   function marketPanel(mkt){
     if(!mkt) return '';
-    return '<h3 class="hg-h3">Where the market is right now <span class="hg-pill" style="background:#008c95">live</span></h3>'+
+    return '<h3 class="hg-h3">Where the market is right now <span class="hg-pill hg-pill--live">live</span></h3>'+
       '<p class="hg-sub">Current asking rents and sale prices — the timeliness layer. Dated and kept separate from the ACS/CHAS structural counts above.</p>'+
       '<div class="hg-market">'+
         '<div class="hg-mcard"><div class="hg-mv">'+(mkt.rent?fmt$(mkt.rent)+'/mo':'—')+'</div><div class="hg-ml">Typical rent — '+(mkt.cbsaTitle||'metro')+'<br><span class="muted">Zillow ZORI · '+(mkt.rentAsOf||'')+'</span></div></div>'+
@@ -176,10 +189,10 @@
   function chasSection(chas){
     const rows=[['≤ 30% AMI','Extremely low income','eli'],['≤ 50% AMI','Very low income','vli'],['≤ 80% AMI','Low income','li']]
       .map(function(t){ var c=chas[t[2]]; if(!c) return '';
-        return '<tr><td><b>'+t[0]+'</b><br><span style="color:#777;font-size:11px">'+t[1]+'</span></td>'+
+        return '<tr><td><b>'+t[0]+'</b><br><span style="color:'+C.faint+';font-size:11px">'+t[1]+'</span></td>'+
           '<td class="n">'+fmtN(c.hh)+'</td><td class="n">'+fmtN(c.affordable)+'</td>'+
-          '<td class="n" style="font-weight:600;color:#003057">'+fmtN(c.affAndAvail)+'</td>'+
-          '<td class="n" style="color:#e04f39;font-weight:700">'+(c.shortage>0?'-':'')+fmtN(Math.abs(c.shortage))+'</td></tr>';
+          '<td class="n" style="font-weight:600;color:'+C.ink+'">'+fmtN(c.affAndAvail)+'</td>'+
+          '<td class="n" style="color:'+C.alert+';font-weight:700">'+(c.shortage>0?'-':'')+fmtN(Math.abs(c.shortage))+'</td></tr>';
       }).join('');
     return '<h3 class="hg-h3">Affordable <em>and available</em> — the headline shortage <span class="hg-pill">HUD CHAS</span></h3>'+
       '<p class="hg-sub">Renter units affordable to each income tier, minus those already occupied by higher-income households. This is the figure behind “City X is short N affordable units.” Source: HUD CHAS 2018–2022 (Table 15C), by HAMFI income tier.</p>'+
@@ -235,7 +248,7 @@
     ${meta.model && meta.model.market ? marketPanel(meta.model.market) : ''}
 
     <h3 class="hg-h3">Rental gap by price point <span class="hg-pill">the "short N units" number</span></h3>
-    <p class="hg-legend"><span class="hg-sq" style="background:#003057"></span>Renter households (cumulative) &nbsp; <span class="hg-sq" style="background:#b3a369"></span>Affordable rental units (cumulative)</p>
+    <p class="hg-legend"><span class="hg-sq" style="background:${C.ink}"></span>Renter households (cumulative) &nbsp; <span class="hg-sq" style="background:${C.accent}"></span>Affordable rental units (cumulative)</p>
     <div data-gapchart></div>
     <table class="hg-tbl"><thead><tr><th>Income tier</th><th class="n">Aff. rent</th><th class="n">Renter HH</th><th class="n">Aff. units</th><th class="n">Gap</th><th></th></tr></thead><tbody data-gaprows></tbody></table>
     <p class="hg-src" data-medline></p>

@@ -86,6 +86,18 @@ const genV = createHash('md5').update(readFileSync('public/js/housing-gap.js')).
         input.placeholder = mode==='county'?'Search a county — e.g. DeKalb County…':'Search a city — e.g. Chamblee, Savannah…';
         input.value=''; out.hidden=true; result.innerHTML='';
       }));
+
+      // Deep link — /housing-gap?geo=13089&mode=county. The housing-gap card on
+      // county and city profiles links here, so the study opens pre-loaded.
+      const qs = new URLSearchParams(location.search);
+      const qGeo = qs.get('geo');
+      if (qGeo) {
+        const qMode = qs.get('mode') === 'county' ? 'county' : 'city';
+        const btn = document.querySelector(`[data-mode="${qMode}"]`);
+        if (qMode !== mode && btn) btn.click();   // sets `mode` synchronously
+        const hit = (lists[qMode] || []).find((p) => p.geoid === qGeo);
+        if (hit) { input.value = hit.name; await pick(qGeo, hit.state_fips); }
+      }
     })();
   </script>
 </Base>
