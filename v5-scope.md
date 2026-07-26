@@ -28,12 +28,27 @@ This document does two things: (1) catalogs what has actually shipped, so the ve
 - **Housing gap study — PILOT** (`/housing-gap`): CHAS-based cost burden + shortage by price point, pilot states GA / NC / TN. Files: `scripts/fetch-chas.mjs`, `scripts/fetch-market.mjs`, `scripts/build-analysis-geo.mjs`, `src/components/HousingGapBlock.astro`, `public/js/housing-gap.js`, `public/analysis-data/`.
 - **Income-by-age (B19037)** cross-tab added to the Data Sheet generator.
 
-**v5.0 status:** HSI (counties + cities) ✓ · Analysis section + methodology ✓ · /data ✓ · Housing-gap study — **pilot done (3 states); next: national rollout + per-profile panel.**
+**v5.0 status:** HSI (counties + cities) ✓ · Analysis section + methodology ✓ · /data ✓ · Housing-gap study — **national ✓ · per-profile card ✓ (2026-07-26)**. v5.0 is feature-complete.
 
-**Immediate next (finish v5.0):**
-1. Roll the housing-gap study out nationally (beyond GA/NC/TN).
-2. Add a per-profile **housing-gap panel** to county and city profiles — mirror the HSI `IndexBadge` (per §6 decision 3).
-3. Then begin **v5.1 — ACS trends**.
+---
+
+## Progress — updated 2026-07-26
+
+**Housing gap is national and on profiles. v5.0 closed.**
+
+- **National rollout.** `build-analysis-geo.mjs` now covers all 52 states: 3,222 counties and the 4,814 profiled cities (places 5,000+ pop, keyed to `manifest.json`). 52 bundles in `public/analysis-data/states/` (~8.7 MB); index carries 4,814 places + 3,222 counties. Places below the profile threshold are deliberately excluded — their ACS cross-tabs are too thin, and indexing every place would make the search index a ~4 MB fetch on page load.
+- **Per-profile card.** `src/components/HousingGapCard.astro` mirrors `IndexBadge` and sits beside it in the profile hero (new `.profile-badges` row). Headline = HUD CHAS affordable-and-available shortage at ≤ 50% AMI, plus national rank, renter cost-burden rate, ≤ 30% AMI shortage, widest gap by price point, and a link into the study.
+- **Card data is build-time, not fetched.** `src/data/housing-gap-summary.json` (~990 KB) holds one compact record per geography. It lives in `src/data/`, **not** `src/data/generated/` — the latter is gitignored and CI never runs `analysis-geo` (HUD 403s the build sandbox), so a generated-dir path would break the build.
+- **Banding.** Each universe is percentile-ranked on the CHAS ≤ 50% AMI shortage per renter household, denominated by CHAS's own renter total. Mixing a CHAS 2018–2022 numerator with an ACS 2020–2024 denominator produced impossible rates wherever the renter base moved between vintages. Under 500 renter households → `thin` flag on the card.
+- **Deep links.** `/housing-gap?geo=<geoid>&mode=county|city` opens the study pre-loaded.
+- **EIG restyle.** `housing-gap.css` and `housing-gap.js` still carried the GT palette (`#003057` / `#b3a369` / `#e04f39` / `#008c95`); both now resolve from `tokens.css` — the JS reads the custom properties once via `getComputedStyle`, with token values as literal fallbacks.
+- **New:** `npm run analysis-summary` (`SUMMARY_ONLY=1`) recomputes the card summary from bundles already on disk — no API calls — for when the band math changes.
+
+**Immediate next (v5.1 — ACS trends):**
+1. `build-trends` on top of the existing `fetch-acs-vintages.mjs` + `acs-vintage-crosswalk.js` foundation, plus a CPI puller for real-dollar toggling.
+2. Sparklines on profile KPI tiles, a "change at a glance" callout, a `/trends` page, a Compare overlay, and a Rankings "biggest movers" mode — counties and cities together.
+
+**Still open from before:** Request-access `mailto:` → real contact form; confirm the Log-in target in the Cloudflare Access flow.
 
 **Loose ends to close:** Request-access `mailto:` → real contact form; confirm the Log-in target in the Cloudflare Access flow.
 
