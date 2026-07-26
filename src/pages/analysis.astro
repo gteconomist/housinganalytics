@@ -36,8 +36,9 @@ const cityCount = (manifest.places ?? []).length;
         <p class="study__desc">
           Cost burden by income and tenure, converted into affordable rents and home prices, with the
           shortfall of units at each price point — the deficit for residents who already live there,
-          plus an affordability calculator you can adjust. Live now for Georgia, North Carolina, and
-          Tennessee; more states rolling out.
+          plus an affordability calculator you can adjust. Now nationwide — all
+          {fmtInt(manifest.county_count)} counties and {fmtInt(cityCount)} cities, with the HUD CHAS
+          affordable-and-available shortage layered on top.
         </p>
       </li>
     </ul>

@@ -28,6 +28,7 @@
     "index-places": "node scripts/build-index-places.mjs",
     "rankings-places": "node scripts/build-places-rankings.mjs",
     "analysis-geo": "node scripts/build-analysis-geo.mjs",
+    "analysis-summary": "SUMMARY_ONLY=1 node scripts/build-analysis-geo.mjs",
     "chas": "node scripts/fetch-chas.mjs",
     "market": "node scripts/fetch-market.mjs"
   },
