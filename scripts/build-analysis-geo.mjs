@@ -323,6 +323,9 @@ async function run() {
   // ---- Market overlay (Zillow ZORI rent via metro/CBSA + Redfin price by name) ----
   const FIPS_USPS = { '01': 'AL', '02': 'AK', '04': 'AZ', '05': 'AR', '06': 'CA', '08': 'CO', '09': 'CT', '10': 'DE', '11': 'DC', '12': 'FL', '13': 'GA', '15': 'HI', '16': 'ID', '17': 'IL', '18': 'IN', '19': 'IA', '20': 'KS', '21': 'KY', '22': 'LA', '23': 'ME', '24': 'MD', '25': 'MA', '26': 'MI', '27': 'MN', '28': 'MS', '29': 'MO', '30': 'MT', '31': 'NE', '32': 'NV', '33': 'NH', '34': 'NJ', '35': 'NM', '36': 'NY', '37': 'NC', '38': 'ND', '39': 'OH', '40': 'OK', '41': 'OR', '42': 'PA', '44': 'RI', '45': 'SC', '46': 'SD', '47': 'TN', '48': 'TX', '49': 'UT', '50': 'VT', '51': 'VA', '53': 'WA', '54': 'WV', '55': 'WI', '56': 'WY', '72': 'PR' };
   const mNormKey = (region, st) => String(region || '').toLowerCase().replace(/,.*$/, '').replace(/\s+(county|city|town|village|borough|cdp)$/, '').trim() + '|' + String(st || '').toLowerCase();
+  // County key that KEEPS the suffix, so independent cities don't collide with their namesake
+  // county. Byte-identical to rfCountyKey in fetch-market.mjs / refresh-market.mjs.
+  const rfCountyKey = (region, st) => String(region || '').toLowerCase().replace(/,.*$/, '').replace(/\s+/g, ' ').trim() + '|' + String(st || '').toLowerCase();
   let MARKET = {}, PLACESX = {}, COUNTY2CBSA = {}, CBSA_NAME = {}, ZORI_BY_CBSA = {}, ZHVI_FIPS_OK = false;
   try {
     MARKET = JSON.parse(readFileSync(_resolve(GEN, 'market.json'), 'utf8'));
@@ -335,12 +338,18 @@ async function run() {
     const zoriByKey = {}; for (const r of Object.values(MARKET.metros || {})) { const k = metroKey(r.name); if (k && r.zori != null) zoriByKey[k] = r.zori; }
     for (const [code, title] of Object.entries(CBSA_NAME)) { const k = cbsaKey(title); if (k && zoriByKey[k] != null) ZORI_BY_CBSA[code] = zoriByKey[k]; }
     ZHVI_FIPS_OK = Object.keys(MARKET.zhviCountyFips || {}).length > 0;
-    console.log(`MARKET: ${Object.keys(MARKET.redfinCity || {}).length} city + ${Object.keys(MARKET.redfinCounty || {}).length} county prices; ${Object.keys(ZORI_BY_CBSA).length} CBSA rents; ZHVI ${Object.keys(MARKET.zhviCity || {}).length} city + ${Object.keys(MARKET.zhviCounty || {}).length} county values`);
+    console.log(`MARKET: ${Object.keys(MARKET.redfinCity || {}).length} city + ${Object.keys(MARKET.redfinCountyFull || MARKET.redfinCounty || {}).length} county prices; ${Object.keys(ZORI_BY_CBSA).length} CBSA rents; ZHVI ${Object.keys(MARKET.zhviCity || {}).length} city + ${Object.keys(MARKET.zhviCounty || {}).length} county values`);
   } catch (e) { console.log('MARKET: market.json/crosswalk not found — bundles built without overlay (' + e.message + ')'); }
   const buildMarket = (gid, cleanName, level, st) => {
     const abbr = FIPS_USPS[st] || ''; const cbsa = level === 'place' ? (PLACESX[gid] && PLACESX[gid].cbsa) : (COUNTY2CBSA[gid] && COUNTY2CBSA[gid].cbsa);
     const rent = cbsa ? (ZORI_BY_CBSA[cbsa] ?? null) : null;
-    const pk = mNormKey(cleanName, abbr); const pr = level === 'place' ? (MARKET.redfinCity && MARKET.redfinCity[pk]) : (MARKET.redfinCounty && MARKET.redfinCounty[pk]);
+    const pk = mNormKey(cleanName, abbr);
+    // Counties: exact full-name match first (separates "Fairfax city" from "Fairfax County"),
+    // then the suffix-stripped map — which fetch-market has already pruned of ambiguous keys,
+    // so this fallback can widen coverage but can no longer return the wrong county's price.
+    const pr = level === 'place'
+      ? (MARKET.redfinCity && MARKET.redfinCity[pk])
+      : ((MARKET.redfinCountyFull && MARKET.redfinCountyFull[rfCountyKey(cleanName, abbr)]) || (MARKET.redfinCounty && MARKET.redfinCounty[pk]));
     // ZHVI: modeled typical home VALUE — its own field, never a fallback for the Redfin
     // closed-sale price. Counties join on exact GEOID. The name key is NOT safe at county level
     // (mNormKey strips the "county"/"city" suffix, so "St. Louis city" and "St. Louis County"

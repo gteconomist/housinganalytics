@@ -16,11 +16,14 @@ const INDEX = resolve(ROOT, 'public/analysis-data/index.json');
 
 const FIPS_USPS = { '01':'AL','02':'AK','04':'AZ','05':'AR','06':'CA','08':'CO','09':'CT','10':'DE','11':'DC','12':'FL','13':'GA','15':'HI','16':'ID','17':'IL','18':'IN','19':'IA','20':'KS','21':'KY','22':'LA','23':'ME','24':'MD','25':'MA','26':'MI','27':'MN','28':'MS','29':'MO','30':'MT','31':'NE','32':'NV','33':'NH','34':'NJ','35':'NM','36':'NY','37':'NC','38':'ND','39':'OH','40':'OK','41':'OR','42':'PA','44':'RI','45':'SC','46':'SD','47':'TN','48':'TX','49':'UT','50':'VT','51':'VA','53':'WA','54':'WV','55':'WI','56':'WY' };
 const mNormKey = (region, st) => String(region || '').toLowerCase().replace(/,.*$/, '').replace(/\s+(county|city|town|village|borough|cdp)$/, '').trim() + '|' + String(st || '').toLowerCase();
+// County key that KEEPS the suffix, so independent cities don't collide with their namesake
+// county. Byte-identical to rfCountyKey in fetch-market.mjs / build-analysis-geo.mjs.
+const rfCountyKey = (region, st) => String(region || '').toLowerCase().replace(/,.*$/, '').replace(/\s+/g, ' ').trim() + '|' + String(st || '').toLowerCase();
 
 const marketPath = resolve(ROOT, 'src/data/generated/market.json');
 if (!existsSync(marketPath)) { console.error('market.json not found — run `node scripts/fetch-market.mjs` first.'); process.exit(1); }
 const MARKET = JSON.parse(readFileSync(marketPath, 'utf8'));
-const _hasData = Object.keys(MARKET.metros || {}).length > 0 || Object.keys(MARKET.redfinCity || {}).length > 0 || Object.keys(MARKET.redfinCounty || {}).length > 0;
+const _hasData = Object.keys(MARKET.metros || {}).length > 0 || Object.keys(MARKET.redfinCity || {}).length > 0 || Object.keys(MARKET.redfinCounty || {}).length > 0 || Object.keys(MARKET.redfinCountyFull || {}).length > 0;
 if (!_hasData) { console.error('market.json has no ZORI/Redfin data — aborting so the existing overlay is not wiped.'); process.exit(1); }
 const PLACESX = JSON.parse(readFileSync(resolve(ROOT, 'scripts/.master-crosswalk/crosswalk-places.json'), 'utf8'));
 const cbx = JSON.parse(readFileSync(resolve(ROOT, 'scripts/.master-crosswalk/crosswalk-cbsa.json'), 'utf8'));
@@ -37,7 +40,12 @@ function buildMarket(gid, cleanName, level, st) {
   const cbsa = level === 'place' ? (PLACESX[gid] && PLACESX[gid].cbsa) : (COUNTY2CBSA[gid] && COUNTY2CBSA[gid].cbsa);
   const rent = cbsa ? (ZORI_BY_CBSA[cbsa] ?? null) : null;
   const pk = mNormKey(cleanName, abbr);
-  const pr = level === 'place' ? (MARKET.redfinCity && MARKET.redfinCity[pk]) : (MARKET.redfinCounty && MARKET.redfinCounty[pk]);
+  // Counties: exact full-name match first (separates "Fairfax city" from "Fairfax County"),
+  // then the suffix-stripped map — which fetch-market has already pruned of ambiguous keys,
+  // so this fallback can widen coverage but can no longer return the wrong county's price.
+  const pr = level === 'place'
+    ? (MARKET.redfinCity && MARKET.redfinCity[pk])
+    : ((MARKET.redfinCountyFull && MARKET.redfinCountyFull[rfCountyKey(cleanName, abbr)]) || (MARKET.redfinCounty && MARKET.redfinCounty[pk]));
   // ZHVI: modeled typical home VALUE — a separate field from the Redfin closed-sale price,
   // never a fallback for it. Counties join on exact GEOID. The name key is NOT safe at county
   // level (mNormKey strips the "county"/"city" suffix, so "St. Louis city" and "St. Louis
