@@ -34,7 +34,7 @@ const ALL_STATES = [...new Set(MANIFEST.counties.map((c) => c.geoid.slice(0, 2))
 const STATES = (process.env.STATES ? process.env.STATES.split(',').map((s) => s.trim().padStart(2, '0')) : ALL_STATES);
 
 // Tables we pull whole (group()) then slice by known offsets.
-const TABLES = ['B25074', 'B25095', 'B25118', 'B25063', 'B25075', 'B25003', 'B19013', 'B25064', 'B25077'];
+const TABLES = ['B25074', 'B25095', 'B25118', 'B25063', 'B25075', 'B25003', 'B19013', 'B25064', 'B25077', 'B25122'];
 
 const num = (v) => { const n = Number(v); return (v == null || !Number.isFinite(n) || n <= -666666666) ? 0 : n; };
 const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
@@ -92,6 +92,7 @@ async function mapLimit(items, limit, fn) {
 const V = (vars, t, i) => num(vars[`${t}_${String(i).padStart(3, '0')}E`]);
 const REN_STARTS = [2, 11, 20, 29, 38, 47, 56];          // B25074 income brackets
 const OWN_STARTS = [2, 11, 20, 29, 38, 47, 56, 65];      // B25095 income brackets
+const B122_BASES = [2, 19, 36, 53, 70, 87, 104];         // B25122 income brackets (each: +1 with-cash-rent, +2..+15 rent bands, +16 no cash rent)
 function burdenTriplet(vars, table, starts) {
   const total = [], burd = [], sev = [];
   for (const s of starts) {
@@ -107,12 +108,20 @@ function buildModel(vars) {
   const rentBands = []; for (let i = 3; i <= 26; i++) rentBands.push(Math.round(V(vars, 'B25063', i)));  // B25063 003..026
   const valBands = []; for (let i = 2; i <= 27; i++) valBands.push(Math.round(V(vars, 'B25075', i)));    // B25075 002..027
   const ownInc = []; for (let i = 3; i <= 13; i++) ownInc.push(Math.round(V(vars, 'B25118', i)));        // B25118 003..013
+  // B25122 — renter household income x GROSS RENT. Bases 002/019/036/053/070/087/104 are the
+  // 7 income brackets (same edges as B25074); base+2 .. base+15 are the 14 "with cash rent"
+  // bands. This is the only ACS cross-tab of occupant income by rent level, and it is what
+  // makes "affordable AND available" computable outside CHAS. Grid[income][rentBand].
+  const rentByInc = B122_BASES.map((s) => {
+    const row = []; for (let j = 2; j <= 15; j++) row.push(Math.round(V(vars, 'B25122', s + j)));
+    return row;
+  });
   return {
     mhi: Math.round(V(vars, 'B19013', 1)),
     medRent: Math.round(V(vars, 'B25064', 1)),
     medValue: Math.round(V(vars, 'B25077', 1)),
     tenure: { total: Math.round(V(vars, 'B25003', 1)), owner: Math.round(V(vars, 'B25003', 2)), renter: Math.round(V(vars, 'B25003', 3)) },
-    ren, own, rentBands, valBands, ownInc,
+    ren, own, rentBands, valBands, ownInc, rentByInc,
   };
 }
 
@@ -134,6 +143,67 @@ function cumLE(bands, counts, X) {
   return t;
 }
 const sum = (a) => a.reduce((x, y) => x + (y || 0), 0);
+
+// ── workforce band (80–120% HUD AMI, 4-person) — mirrors public/js/housing-gap.js ──
+// The renter-income top bracket is open-ended ($100k+); interpolating inside it is
+// unavoidable once 120% AMI clears $100k, so we model it as $100k–$250k rather than
+// letting cumLE's Infinity silently drop every household above $100k.
+const TOP_INC = 300000;
+const REN_INC_CAP = REN_INC_B.map(([lo, hi]) => [lo, Number.isFinite(hi) ? hi : TOP_INC]);
+// B25122 rent bands (coarser than B25063; the $2,000+ band is open-ended — capped at $4,000).
+const B122_BANDS = [[0, 99], [100, 199], [200, 299], [300, 399], [400, 499], [500, 599], [600, 699],
+  [700, 799], [800, 899], [900, 999], [1000, 1249], [1250, 1499], [1500, 1999]];   // 13 closed bands
+const B122_TOP = 2000;                                                             // 14th band is "$2,000 or more"
+const inBand = (bands, counts, lo, hi) => cumLE(bands, counts, hi) - cumLE(bands, counts, lo);
+
+// B25122's top rent band is open-ended at $2,000+, which swallows the whole workforce range in
+// expensive metros. Use B25063's finer $2,000+ shape ([2000,2499]…[3500,6000]) to work out what
+// share of that open band falls inside [lo,hi], then apply it to each income bracket.
+function topBandShare(rentBands, lo, hi) {
+  if (hi <= B122_TOP) return 0;
+  const tail = RENT_BANDS_B.map((b, i) => (b[0] >= B122_TOP ? [b, rentBands[i] || 0] : null)).filter(Boolean);
+  const tb = tail.map((x) => x[0]), tc = tail.map((x) => x[1]);
+  const denom = tc.reduce((a, b) => a + b, 0);
+  if (!denom) return 1;                       // no tail detail — treat the open band as fully in range
+  return Math.max(0, Math.min(1, inBand(tb, tc, Math.max(lo, B122_TOP), hi) / denom));
+}
+
+// Affordable AND available in the workforce band. B25063 (fine rent bands) supplies the
+// affordable COUNT; B25122 (income x rent) supplies only the availability RATIO — the share
+// of band-rent units NOT already occupied by households above the 120% AMI ceiling. Using
+// B25122 as a ratio rather than a count keeps the headline on the finer rent distribution.
+function workforce(model, A) {
+  const ami = model.ami;
+  if (!ami || !ami.a80 || !ami.a120 || !model.rentByInc) return null;
+  const lo = ami.a80, hi = ami.a120;
+  const rLo = A.front * lo / 12, rHi = A.front * hi / 12;
+  const hh = inBand(REN_INC_CAP, model.ren.total, lo, hi);
+  const affordable = inBand(RENT_BANDS_B, model.rentBands, rLo, rHi);
+  const tShare = topBandShare(model.rentBands, rLo, rHi);
+  const perInc = model.rentByInc.map((row) =>
+    inBand(B122_BANDS, row.slice(0, 13), rLo, Math.min(rHi, B122_TOP)) + (row[13] || 0) * tShare);
+  const tot122 = sum(perInc);
+  // households above the ceiling, by their income bracket's share above `hi`
+  let above = 0;
+  perInc.forEach((n, i) => {
+    const [bl, bh] = REN_INC_CAP[i];
+    const leShare = bh <= hi ? 1 : (bl > hi ? 0 : Math.max(0, Math.min(1, (hi - bl) / (bh - bl + 1))));
+    above += n * (1 - leShare);
+  });
+  const availRatio = tot122 > 0 ? Math.max(0, Math.min(1, 1 - above / tot122)) : 1;   // no B25122 units in the window (tiny geos): no availability discount
+  const available = availRatio == null ? null : affordable * availRatio;
+  return {
+    lo, hi, rLo, rHi,
+    hh: Math.round(hh),
+    affordable: Math.round(affordable),
+    available: available == null ? null : Math.round(available),
+    availRatio,
+    ratioNA: tot122 === 0,
+    topModeled: hi > 100000,
+    shortage: available == null ? null : Math.round(hh - available),
+  };
+}
+
 function summarize(model) {
   const A = DEFAULTS;
   const renT = sum(model.ren.total), renB = sum(model.ren.burd), renS = sum(model.ren.sev);
@@ -145,15 +215,21 @@ function summarize(model) {
     if (!peak || gap > peak.gap) peak = { cut, gap };
   }
   const c = model.chas;
+  const w = workforce(model, A);
   return {
-    rt: renT,                                                   // renter households (ACS 2020–2024)
+    rt: renT,                                                   // renter HOUSEHOLDS (ACS 2020–2024; B25074 universe = renter-occupied units)
     crt: c ? c.renterTotal : null,                               // renter households (CHAS 2018–2022)
-    rb: renT ? +(renB / renT * 100).toFixed(1) : null,           // % renters cost-burdened
-    rs: renS,                                                    // severely burdened renters
+    rb: renT ? +(renB / renT * 100).toFixed(1) : null,           // % renter households cost-burdened
+    rbn: renB,                                                   // count of cost-burdened renter households
+    rs: renS,                                                    // severely burdened renter households
+    rsp: renT ? +(renS / renT * 100).toFixed(1) : null,          // % severely burdened
     pg: peak ? peak.gap : null, pc: peak ? peak.cut : null,      // peak rental gap + its income tier
     eli: c && c.eli ? c.eli.shortage : null,                     // CHAS affordable-and-available shortage
     vli: c && c.vli ? c.vli.shortage : null,
     li: c && c.li ? c.li.shortage : null,
+    // workforce band, 80–120% HUD AMI (4-person), at DEFAULT assumptions
+    wlo: w ? w.lo : null, whi: w ? w.hi : null,
+    whh: w ? w.hh : null, wav: w ? w.available : null, wsh: w ? w.shortage : null,
   };
 }
 
@@ -211,6 +287,39 @@ async function run() {
   if (existsSync(chasPath)) { try { CHAS = JSON.parse(readFileSync(chasPath, 'utf8')).geos || {}; console.log(`CHAS: merged ${Object.keys(CHAS).length} geos`); } catch (e) { console.warn('CHAS load failed:', e.message); } }
   else console.log('CHAS: chas.json not found — bundles built ACS-only');
 
+  // ---- HUD AMI (Section 8 income limits, written by `npm run hud`) ----
+  // County-keyed; places inherit their county's HUD metro FMR area via the master
+  // crosswalk. Drives the 80–120% AMI workforce band on the KPI cards.
+  let HUDAMI = {}, AMIX = {};
+  const amiPath = _resolve(GEN, 'hud-ami.json');
+  if (existsSync(amiPath)) {
+    try {
+      HUDAMI = JSON.parse(readFileSync(amiPath, 'utf8'));
+      AMIX = JSON.parse(readFileSync(_resolve(__dirname, '.master-crosswalk/crosswalk-places.json'), 'utf8'));
+      console.log(`HUD AMI: ${Object.keys(HUDAMI).length} counties`);
+    } catch (e) { console.warn('HUD AMI load failed:', e.message); }
+  } else console.log('HUD AMI: hud-ami.json not found — run `npm run hud` first; workforce band will be omitted');
+  let amiMiss = 0;
+  // The band is ANCHORED ON HUD'S PUBLISHED 4-person 80% (low-income) limit, and the implied
+  // area median is that limit / 0.8. Do NOT anchor on HUD's raw MFI: the published 80% limit
+  // carries HUD's high-housing-cost adjustment (NY, SF, Miami) and its rural/state floors, so
+  // in 237 counties it lands at or above 100% of MFI — and in 50 of those, 0.8*limit > 1.2*MFI,
+  // which inverts the band. Deriving the band from the limit is self-consistent everywhere.
+  const buildAmi = (gid, level) => {
+    const cfips = level === 'place' ? (AMIX[gid] && AMIX[gid].county_fips) : gid;
+    const a = cfips ? HUDAMI[cfips] : null;
+    const l80 = a && (a.ami_80_4p != null ? a.ami_80_4p : (a.mfi_4p != null ? a.mfi_4p * 0.8 : null));
+    if (!l80) { amiMiss++; return null; }
+    return {
+      area: a.fmr_area || null,
+      mfi4: a.mfi_4p != null ? Math.round(a.mfi_4p) : null,   // HUD's raw median family income, for reference
+      l80: Math.round(l80),                                    // HUD published 4-person 80% limit
+      ami: Math.round(l80 / 0.8),                              // implied 100% AMI
+      a80: Math.round(l80),                                    // workforce floor
+      a120: Math.round(l80 * 1.5),                             // workforce ceiling = 120% of implied AMI
+    };
+  };
+
   // ---- Market overlay (Zillow ZORI rent via metro/CBSA + Redfin price by name) ----
   const FIPS_USPS = { '01': 'AL', '02': 'AK', '04': 'AZ', '05': 'AR', '06': 'CA', '08': 'CO', '09': 'CT', '10': 'DE', '11': 'DC', '12': 'FL', '13': 'GA', '15': 'HI', '16': 'ID', '17': 'IL', '18': 'IN', '19': 'IA', '20': 'KS', '21': 'KY', '22': 'LA', '23': 'ME', '24': 'MD', '25': 'MA', '26': 'MI', '27': 'MN', '28': 'MS', '29': 'MO', '30': 'MT', '31': 'NE', '32': 'NV', '33': 'NH', '34': 'NJ', '35': 'NM', '36': 'NY', '37': 'NC', '38': 'ND', '39': 'OH', '40': 'OK', '41': 'OR', '42': 'PA', '44': 'RI', '45': 'SC', '46': 'SD', '47': 'TN', '48': 'TX', '49': 'UT', '50': 'VT', '51': 'VA', '53': 'WA', '54': 'WV', '55': 'WI', '56': 'WY', '72': 'PR' };
   const mNormKey = (region, st) => String(region || '').toLowerCase().replace(/,.*$/, '').replace(/\s+(county|city|town|village|borough|cdp)$/, '').trim() + '|' + String(st || '').toLowerCase();
@@ -261,6 +370,7 @@ async function run() {
         const model = buildModel(vars);
         if (model.tenure.total < 1) continue;
         model.chas = CHAS[gid] || null;
+        model.ami = buildAmi(gid, level);
         model.market = buildMarket(gid, stripState(name), level, st);
         const tgt = level === 'place' ? bundle.places : bundle.counties;
         tgt[gid] = { name: stripState(name), model };
@@ -281,6 +391,7 @@ async function run() {
   }));
 
   writeSummary(summary);
+  if (amiMiss) console.log(`HUD AMI: ${amiMiss} geographies had no county match — workforce band omitted for those.`);
 
   console.log(`\nWrote ${STATES.length} state bundles, ${placeIndex.length} places + ${countyIndex.length} counties to index.`);
   console.log(`Summary: ${summary.counties_count} ranked counties, ${summary.places_count} ranked places.`);

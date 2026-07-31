@@ -38,12 +38,22 @@
     [300000,399999],[400000,499999],[500000,749999],[750000,999999],[1000000,1499999],
     [1500000,1999999],[2000000,3000000]];
 
+  const B122_BANDS = [ // B25122's 13 closed gross-rent bands; its 14th is open-ended "$2,000 or more"
+    [0,99],[100,199],[200,299],[300,399],[400,499],[500,599],[600,699],[700,799],
+    [800,899],[900,999],[1000,1249],[1250,1499],[1500,1999]];
+  const B122_TOP = 2000;
+  // The renter-income top bracket is open-ended ($100k+). Once 120% AMI clears $100k we have
+  // to interpolate inside it, so model it as $100k–$300k rather than dropping it entirely.
+  const TOP_INC = 300000;
+  const REN_INC_CAP = REN_INC.map(b => [b[0], isFinite(b[1]) ? b[1] : TOP_INC]);
+
   const REN_TIERS = [20000,35000,50000,75000];
   const OWN_TIERS = [35000,50000,75000,100000];
 
   const fmt$ = x => '$' + Math.round(x).toLocaleString();
   const fmtN = x => Math.round(x).toLocaleString();
   const pct = x => (x*100).toFixed(1) + '%';
+  const fmt$r = x => '$' + (Math.round(x/100)*100).toLocaleString();   // rounded to $100, for price ranges
 
   // cumulative count in `bands` (array of [lo,hi]) with paired counts, price <= X, interpolated
   function cumLE(bands, counts, X) {
@@ -57,6 +67,56 @@
     return t;
   }
   const sum = a => a.reduce((x,y)=>x+(y||0),0);
+  const inBand = (bands, counts, lo, hi) => cumLE(bands, counts, hi) - cumLE(bands, counts, lo);
+
+  // B25122's top rent band is open-ended at $2,000+, which swallows the whole workforce range in
+  // expensive metros. Use B25063's finer $2,000+ shape ([2000,2499]…[3500,6000]) to work out what
+  // share of that open band falls inside [lo,hi], then apply it to each income bracket.
+  function topBandShare(rentBands, lo, hi){
+    if(hi <= B122_TOP) return 0;
+    const tb=[], tc=[];
+    RENT_BANDS.forEach((b,i)=>{ if(b[0]>=B122_TOP){ tb.push(b); tc.push(rentBands[i]||0); } });
+    const denom=sum(tc);
+    if(!denom) return 1;   // no tail detail — treat the open band as fully in range
+    return Math.max(0, Math.min(1, inBand(tb, tc, Math.max(lo,B122_TOP), hi)/denom));
+  }
+
+  // ---- workforce housing band: 80–120% of HUD area median family income (4-person) ----
+  // Affordable AND available. B25063's fine rent bands give the affordable COUNT; B25122
+  // (renter income x gross rent) gives only the availability RATIO — the share of units
+  // renting in the workforce range that are NOT already occupied by households above the
+  // 120% AMI ceiling. Same idea as CHAS "affordable and available", computed from ACS so it
+  // recomputes live as the assumption sliders move.
+  function workforce(model, A){
+    const ami = model.ami;
+    if(!ami || !ami.a80 || !ami.a120 || !model.rentByInc) return null;
+    const lo=ami.a80, hi=ami.a120;
+    const rLo=affordRent(lo,A), rHi=affordRent(hi,A);
+    const hh = inBand(REN_INC_CAP, model.ren.total, lo, hi);
+    const affordable = inBand(RENT_BANDS, model.rentBands, rLo, rHi);
+    const tShare = topBandShare(model.rentBands, rLo, rHi);
+    const perInc = model.rentByInc.map(row =>
+      inBand(B122_BANDS, row.slice(0,13), rLo, Math.min(rHi,B122_TOP)) + (row[13]||0)*tShare);
+    const tot122 = sum(perInc);
+    let above = 0;
+    perInc.forEach((n,i)=>{
+      const bl=REN_INC_CAP[i][0], bh=REN_INC_CAP[i][1];
+      const leShare = bh<=hi ? 1 : (bl>hi ? 0 : Math.max(0, Math.min(1, (hi-bl)/(bh-bl+1))));
+      above += n*(1-leShare);
+    });
+    const availRatio = tot122>0 ? Math.max(0, Math.min(1, 1-above/tot122)) : 1;   // no B25122 units in the window (tiny geos): no availability discount
+    const available = availRatio==null ? null : affordable*availRatio;
+    return {
+      lo, hi, rLo, rHi, area: ami.area, ami: ami.ami, l80: ami.l80,
+      hh: Math.round(hh),
+      affordable: Math.round(affordable),
+      available: available==null ? null : Math.round(available),
+      occupiedAbove: Math.round(above),
+      availRatio, ratioNA: tot122 === 0, topModeled: hi > 100000,
+      shortage: available==null ? null : Math.round(hh-available),
+      priceLo: affordPrice(lo,A), priceHi: affordPrice(hi,A),
+    };
+  }
 
   // ---- affordability math ----
   function mortConst(rate){ const r=rate/12, n=360; return r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1); }
@@ -91,11 +151,12 @@
       return {cut, price, hh:Math.round(hh), units:Math.round(units)};
     });
     const peak=rentGap.reduce((a,b)=>b.gap>a.gap?b:a, rentGap[0]);
-    return {renT,renB,renS,ownT,ownB,ownS, afford, rentGap, ownGap, peak};
+    const wf=workforce(m,A);
+    return {renT,renB,renS,ownT,ownB,ownS, afford, rentGap, ownGap, peak, wf};
   }
 
   // ---- rendering ----
-  function tile(v,l,alert){ return `<div class="hg-tile${alert?' hg-alert':''}"><div class="hg-tv">${v}</div><div class="hg-tl">${l}</div></div>`; }
+  function tile(v,l,alert,sub,small){ return `<div class="hg-tile${alert?' hg-alert':''}"><div class="hg-tv${small?' hg-tv--sm':''}">${v}</div><div class="hg-tl">${l}</div>${sub?`<div class="hg-ts">${sub}</div>`:''}</div>`; }
 
   function matrixRows(model){
     let html='';
@@ -156,12 +217,27 @@
       const share=model.tenure.owner?x.units/model.tenure.owner*100:0;
       return `<tr><td>≤ ${fmt$(x.cut)}</td><td class="n" style="font-weight:600;color:${C.ink}">${fmt$(x.price)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n">${share.toFixed(0)}% of stock</td></tr>`;
     }).join('');
-    // headline tiles
+    // headline tiles — every count is HOUSEHOLDS (ACS renter-occupied-unit universe), not people
+    const w=c.wf;
     root.querySelector('[data-tiles]').innerHTML =
-      tile(pct(c.renB/c.renT), 'of renters cost-burdened (>30% of income)', true) +
-      tile(fmtN(c.renS), 'renters severely burdened (>50%)', false) +
-      tile('+'+fmtN(c.peak.gap), `rental units short for households ≤ ${fmt$(c.peak.cut)} (peak)`, true) +
-      tile(fmt$(c.afford[3].price), 'affordable home price at ~$62.5k income', false);
+      tile(pct(c.renB/c.renT), 'of renter households cost-burdened (>30% of income)', true,
+           `${fmtN(c.renB)} of ${fmtN(c.renT)} renter households`) +
+      tile(fmtN(c.renS), 'renter households severely burdened (>50%)', false,
+           `${pct(c.renS/c.renT)} of ${fmtN(c.renT)} renter households`) +
+      (w && w.shortage!=null
+        ? tile('+'+fmtN(w.shortage), `workforce rental units short — 80–120% AMI (${fmt$(w.lo)}–${fmt$(w.hi)})`, true,
+               `${fmtN(w.available)} affordable &amp; available for ${fmtN(w.hh)} households`)
+        : tile('+'+fmtN(c.peak.gap), `rental units short for households ≤ ${fmt$(c.peak.cut)} (peak)`, true,
+               'HUD AMI unavailable here — showing the peak ACS price point')) +
+      (w
+        ? tile(`${fmt$r(w.priceLo)}–${fmt$r(w.priceHi)}`, 'affordable home price, 80–120% AMI (4-person)', false,
+               `at ${fmt$(w.lo)}–${fmt$(w.hi)} household income`, true)
+        : tile(fmt$(c.afford[3].price), 'affordable home price at ~$62.5k income', false));
+    // workforce-band methodology line
+    const wn=root.querySelector('[data-wfnote]');
+    if(wn) wn.innerHTML = w
+      ? `Workforce band = 80–120% AMI for a 4-person household, anchored on HUD's published FY26 low-income (80%) limit of <b>${fmt$(w.l80)}</b>${w.area?' for '+w.area:''} — so 100% AMI is ${fmt$(w.ami)} and the band runs <b>${fmt$(w.lo)}–${fmt$(w.hi)}</b>, supporting rent of <b>${fmt$(w.rLo)}–${fmt$(w.rHi)}/mo</b> at ${(A.front*100).toFixed(0)}% of income. Anchoring on the published limit carries HUD's own high-cost and rural-floor adjustments. Of ${fmtN(w.affordable)} units renting in that range, ~${fmtN(w.occupiedAbove)} are occupied by households above 120% AMI, leaving ${fmtN(w.available)} affordable <i>and available</i>.${w.topModeled?" ACS's top renter-income bracket is open-ended ($100k+); the share of it inside this band is modelled." : ''} Source: HUD Section 8 income limits; ACS 2020–2024 B25063 &amp; B25122. All counts are households, not people.`
+      : 'All counts are households (ACS renter- and owner-occupied housing units), not people.';
     // overlay affordability-at-median line
     const affMed=A.front*model.mhi/12;
     var mkt=model.market, mc=root.querySelector('[data-market-ctx]');
@@ -227,6 +303,7 @@
       <h2 class="hg-title">${meta.name}</h2>
       <p class="hg-sub">${meta.state_name||''} · ACS 2020–2024 5-year · existing shortage by price point</p></div>
     <div class="hg-tiles" data-tiles></div>
+    <p class="hg-src" data-wfnote></p>
 
     <h3 class="hg-h3">Cost burden by household income &amp; tenure</h3>
     <table class="hg-tbl"><thead>

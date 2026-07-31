@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 // Content-hash the engine script so new versions bust Cloudflare/browser cache
 // (files in public/ aren't fingerprinted by Astro).
 const genV = createHash('md5').update(readFileSync('public/js/housing-gap.js')).digest('hex').slice(0, 10);
+const cssV = createHash('md5').update(readFileSync('public/css/housing-gap.css')).digest('hex').slice(0, 10);
 ---
 <Base title="Housing gap analysis — housinganalytics.org"
       description="Cost burden by income and tenure, and the existing shortage of housing by price point, for any U.S. city or county.">
@@ -123,4 +124,4 @@ const genV = createHash('md5').update(readFileSync('public/js/housing-gap.js')).
   .search__results a:hover { background: var(--bg-section); }
 </style>
 
-<link rel="stylesheet" href="/css/housing-gap.css"/>
+<link rel="stylesheet" href={`/css/housing-gap.css?v=${cssV}`}/>
