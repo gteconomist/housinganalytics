@@ -47,8 +47,19 @@
   const TOP_INC = 300000;
   const REN_INC_CAP = REN_INC.map(b => [b[0], isFinite(b[1]) ? b[1] : TOP_INC]);
 
-  const REN_TIERS = [20000,35000,50000,75000];
+  // Rental-gap price points run on the AMI LADDER so this chart shares a ruler with the CHAS
+  // block below it (which is already in AMI tiers). Fixed dollar cuts were geography-blind —
+  // $20k means something entirely different in Muscogee than in San Francisco. Geographies with
+  // no HUD AMI match fall back to the old dollar tiers.
+  const AMI_TIERS = [0.30,0.50,0.80,1.20];
+  const REN_TIERS = [20000,35000,50000,75000];   // fallback only
   const OWN_TIERS = [35000,50000,75000,100000];
+  function renTiers(model){
+    const a = model.ami;
+    if(a && a.ami) return AMI_TIERS.map(p=>({cut:Math.round(a.ami*p), pctAmi:p}));
+    return REN_TIERS.map(c=>({cut:c, pctAmi:null}));
+  }
+  const tierLabel = t => t.pctAmi!=null ? `≤ ${Math.round(t.pctAmi*100)}% AMI` : `≤ ${fmt$(t.cut)}`;
 
   const fmt$ = x => '$' + Math.round(x).toLocaleString();
   const fmtN = x => Math.round(x).toLocaleString();
@@ -87,10 +98,14 @@
   // renting in the workforce range that are NOT already occupied by households above the
   // 120% AMI ceiling. Same idea as CHAS "affordable and available", computed from ACS so it
   // recomputes live as the assumption sliders move.
-  function workforce(model, A){
-    const ami = model.ami;
-    if(!ami || !ami.a80 || !ami.a120 || !model.rentByInc) return null;
-    const lo=ami.a80, hi=ami.a120;
+  //
+  // TWO ANCHORS, DELIBERATELY. workforceBand() is the pure math; the two wrappers below feed it
+  // different income edges. HUD AMI is a REGULATORY threshold (regional, family-based, 4-person,
+  // capped and floored) and local MHI is a DESCRIPTIVE one (this jurisdiction, all households).
+  // They disagree on the SIGN of the gap in 26% of geographies and by >2x in 41%, so the page
+  // must never show one without the other. See the memo in project memory.
+  function workforceBand(model, A, lo, hi){
+    if(!model.rentByInc || !(hi > lo)) return null;
     const rLo=affordRent(lo,A), rHi=affordRent(hi,A);
     const hh = inBand(REN_INC_CAP, model.ren.total, lo, hi);
     const affordable = inBand(RENT_BANDS, model.rentBands, rLo, rHi);
@@ -107,7 +122,7 @@
     const availRatio = tot122>0 ? Math.max(0, Math.min(1, 1-above/tot122)) : 1;   // no B25122 units in the window (tiny geos): no availability discount
     const available = availRatio==null ? null : affordable*availRatio;
     return {
-      lo, hi, rLo, rHi, area: ami.area, ami: ami.ami, l80: ami.l80,
+      lo: Math.round(lo), hi: Math.round(hi), rLo, rHi,
       hh: Math.round(hh),
       affordable: Math.round(affordable),
       available: available==null ? null : Math.round(available),
@@ -116,6 +131,28 @@
       shortage: available==null ? null : Math.round(hh-available),
       priceLo: affordPrice(lo,A), priceHi: affordPrice(hi,A),
     };
+  }
+
+  // Anchor A — HUD AMI. What housing PROGRAMS target: LIHTC, HOME, CDBG, inclusionary zoning
+  // and density bonuses all key off this, so it is the number that reconciles with other
+  // consultants' work. Band = HUD's published 4-person 80% limit up to 120% of the implied AMI.
+  function workforce(model, A){
+    const ami = model.ami;
+    if(!ami || !ami.a80 || !ami.a120) return null;
+    const w = workforceBand(model, A, ami.a80, ami.a120);
+    if(!w) return null;
+    w.basis='ami'; w.label='HUD AMI'; w.area=ami.area; w.ami=ami.ami; w.l80=ami.l80;
+    return w;
+  }
+
+  // Anchor B — local median household income. What RESIDENTS experience: can the people who
+  // actually live here afford what is here. Same 80–120% width, anchored on this jurisdiction.
+  function workforceLocal(model, A){
+    if(!model.mhi || model.mhi <= 0) return null;
+    const w = workforceBand(model, A, model.mhi*0.8, model.mhi*1.2);
+    if(!w) return null;
+    w.basis='mhi'; w.label='Local median household income'; w.mhi=model.mhi;
+    return w;
   }
 
   // ---- affordability math ----
@@ -136,12 +173,15 @@
     // affordability conversion table (representative incomes)
     const incs=[15000,30000,50000,62500,87500,125000];
     const afford=incs.map(i=>({income:i, budget:A.front*i/12, rent:affordRent(i,A), price:affordPrice(i,A)}));
-    // rental gap by tier
-    const rentGap=REN_TIERS.map(cut=>{
-      const hh=cumLE(REN_INC.map(b=>[b[0],b[1]]), m.ren.total, cut);
+    // rental gap by tier (AMI ladder where available)
+    const rentGap=renTiers(m).map(t=>{
+      const cut=t.cut;
+      // REN_INC_CAP, not REN_INC: on the AMI ladder these cuts routinely clear $100k, and the
+      // open-ended top bracket would contribute zero, flatlining the 80% and 120% tiers.
+      const hh=cumLE(REN_INC_CAP, m.ren.total, cut);
       const aff=affordRent(cut,A);
       const units=cumLE(RENT_BANDS, m.rentBands, aff);
-      return {cut, aff, hh:Math.round(hh), units:Math.round(units), gap:Math.round(hh-units)};
+      return {cut, pctAmi:t.pctAmi, aff, hh:Math.round(hh), units:Math.round(units), gap:Math.round(hh-units)};
     });
     // ownership supply by tier
     const ownGap=OWN_TIERS.map(cut=>{
@@ -151,12 +191,65 @@
       return {cut, price, hh:Math.round(hh), units:Math.round(units)};
     });
     const peak=rentGap.reduce((a,b)=>b.gap>a.gap?b:a, rentGap[0]);
-    const wf=workforce(m,A);
-    return {renT,renB,renS,ownT,ownB,ownS, afford, rentGap, ownGap, peak, wf};
+    const wf=workforce(m,A), wfLocal=workforceLocal(m,A);
+    // divergence between the two anchors — drives the caution flag
+    const ratio = (wf && m.mhi>0) ? wf.ami/m.mhi : null;
+    const bandShare = (wf && renT>0) ? wf.hh/renT : null;
+    // Flag on what actually misleads: the two anchors reaching OPPOSITE conclusions, or an AMI so
+    // far from local incomes that the band describes a population that barely exists here.
+    // Fires on ~29% of geographies; a looser rule fired on 40% and stopped meaning anything.
+    const signSplit = !!(wf && wfLocal && wf.shortage!=null && wfLocal.shortage!=null && (wf.shortage>0)!==(wfLocal.shortage>0));
+    const diverges = !!(signSplit || (ratio!=null && (ratio>2.0 || ratio<0.80)));
+    return {renT,renB,renS,ownT,ownB,ownS, afford, rentGap, ownGap, peak, wf, wfLocal, ratio, bandShare, signSplit, diverges};
   }
 
   // ---- rendering ----
   function tile(v,l,alert,sub,small){ return `<div class="hg-tile${alert?' hg-alert':''}"><div class="hg-tv${small?' hg-tv--sm':''}">${v}</div><div class="hg-tl">${l}</div>${sub?`<div class="hg-ts">${sub}</div>`:''}</div>`; }
+
+  // ---- the two-anchor panel: same calculation, two income definitions, side by side ----
+  function anchorCard(w, kind, A){
+    if(!w || w.shortage==null) return '';
+    const short=w.shortage>0;
+    const basisLine = kind==='ami'
+      ? `HUD AMI ${fmt$(w.ami)} — 4-person family median${w.area?', '+w.area:''}`
+      : `Median household income ${fmt$(w.mhi)} — this jurisdiction, all households`;
+    return '<div class="hg-anchor hg-anchor--'+kind+'">'+
+      '<div class="hg-akick">'+(kind==='ami'?'Program threshold':'Local affordability')+'</div>'+
+      '<div class="hg-atitle">'+w.label+'</div>'+
+      '<div class="hg-abasis">'+basisLine+'</div>'+
+      '<div class="hg-av" style="color:'+(short?C.alert:C.ok)+'">'+(short?'+':'')+fmtN(w.shortage)+'</div>'+
+      '<div class="hg-al">rental units '+(short?'short':'surplus')+' at 80–120% of this anchor</div>'+
+      '<dl class="hg-adl">'+
+        '<div><dt>Income band</dt><dd>'+fmt$(w.lo)+'–'+fmt$(w.hi)+'</dd></div>'+
+        '<div><dt>Supports rent of</dt><dd>'+fmt$(w.rLo)+'–'+fmt$(w.rHi)+'/mo</dd></div>'+
+        '<div><dt>Renter households in band</dt><dd>'+fmtN(w.hh)+'</dd></div>'+
+        '<div><dt>Affordable &amp; available</dt><dd>'+fmtN(w.available)+'</dd></div>'+
+        '<div><dt>Affordable home price</dt><dd>'+fmt$r(w.priceLo)+'–'+fmt$r(w.priceHi)+'</dd></div>'+
+      '</dl></div>';
+  }
+
+  function anchorPanel(c, A){
+    if(!c.wf && !c.wfLocal) return '';
+    const w=c.wf, l=c.wfLocal;
+    let recon='';
+    if(w && c.ratio!=null){
+      const x=c.ratio, hi=x>=1;
+      recon = 'HUD sets this area\'s AMI at <b>'+fmt$(w.ami)+'</b>'+(w.area?' ('+w.area+' — a 4-person <i>family</i> median for the whole area)':'')+
+        '. This jurisdiction\'s own median household income is <b>'+fmt$(l?l.mhi:0)+'</b>, '+
+        (Math.abs(x-1)<0.03 ? 'essentially the same' : (hi? x.toFixed(2)+'× lower' : (1/x).toFixed(2)+'× higher'))+
+        '. The AMI band above covers <b>'+(c.bandShare!=null?pct(c.bandShare):'—')+'</b> of the renter households who actually live here.';
+    }
+    const flag = c.diverges
+      ? '<p class="hg-flag"><b>'+(c.signSplit
+          ? 'These two anchors reach opposite conclusions here — one shows a shortage, the other a surplus.'
+          : 'HUD\'s AMI is far from local incomes here.')+'</b> The AMI figure is a regional program threshold, not a description of local incomes; quoting it on its own will mislead a local reader. Use the AMI number when the audience is a funder, a developer pro forma or an ordinance. Use the local-income number when the question is whether the people who live here can afford to stay. Say which one you are citing.</p>'
+      : '';
+    return '<h3 class="hg-h3">Two income anchors — and why they disagree <span class="hg-pill">read both</span></h3>'+
+      '<p class="hg-sub">The same shortage calculation, run against the two income definitions this field uses. Nationally they disagree on the <i>direction</i> of the gap in 26% of communities and by more than 2× in 41%. Neither is wrong; they answer different questions.</p>'+
+      '<div class="hg-anchors">'+anchorCard(w,'ami',A)+anchorCard(l,'mhi',A)+'</div>'+
+      (recon?'<p class="hg-recon">'+recon+'</p>':'')+ flag +
+      '<p class="hg-note"><b>On area median income.</b> HUD\'s AMI is a regulatory threshold, not a local statistic: it is a <i>family</i> median for an entire metro or HUD-defined area, adjusted to a 4-person household, and subject to statutory high-housing-cost adjustments and rural floors. It is higher than the local median household income in 92% of U.S. communities, and more than 1.5× higher in 38%. Figures anchored on AMI describe <i>program eligibility</i>; figures anchored on local median household income describe <i>local affordability</i>. Both are shown above, and they will not agree.</p>';
+  }
 
   function matrixRows(model){
     let html='';
@@ -180,7 +273,7 @@
   }
 
   function gapChart(rentGap){
-    const CW=680,CH=300,padL=55,padB=60,padT=20,plotW=CW-padL-20,plotH=CH-padB-padT;
+    const CW=680,CH=316,padL=55,padB=76,padT=20,plotW=CW-padL-20,plotH=CH-padB-padT;
     const maxv=Math.max(...rentGap.map(x=>Math.max(x.hh,x.units)))||1;
     const grpW=plotW/rentGap.length, bw=grpW*0.30;
     let bars='';
@@ -191,8 +284,9 @@
         bars+=`<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${d[1]}"/>`;
         bars+=`<text x="${(bx+bw/2).toFixed(1)}" y="${(by-4).toFixed(1)}" font-size="10" text-anchor="middle" fill="${C.muted}">${fmtN(d[0])}</text>`;
       });
-      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+16).toFixed(1)}" font-size="11" text-anchor="middle" fill="${C.ink}">≤ ${fmt$(x.cut)}</text>`;
-      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+30).toFixed(1)}" font-size="9" text-anchor="middle" fill="${C.faint}">rent ${fmt$(x.aff)}</text>`;
+      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+16).toFixed(1)}" font-size="11" font-weight="600" text-anchor="middle" fill="${C.ink}">${tierLabel(x)}</text>`;
+      if(x.pctAmi!=null) bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+30).toFixed(1)}" font-size="9.5" text-anchor="middle" fill="${C.muted}">${fmt$(x.cut)}</text>`;
+      bars+=`<text x="${gx.toFixed(1)}" y="${(padT+plotH+(x.pctAmi!=null?44:30)).toFixed(1)}" font-size="9" text-anchor="middle" fill="${C.faint}">rent ${fmt$(x.aff)}</text>`;
     });
     let yaxis='';
     for(let t=0;t<=4;t++){ const yv=maxv*t/4, yy=padT+plotH-plotH*t/4;
@@ -210,7 +304,7 @@
     root.querySelector('[data-gapchart]').innerHTML = gapChart(c.rentGap);
     root.querySelector('[data-gaprows]').innerHTML = c.rentGap.map(x=>{
       const col=x.gap>0?C.alert:C.ok;
-      return `<tr><td>≤ ${fmt$(x.cut)}</td><td class="n">${fmt$(x.aff)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n" style="color:${col};font-weight:700">${x.gap>0?'+':''}${fmtN(x.gap)}</td><td style="color:${col}">${x.gap>0?'short':'surplus'}</td></tr>`;
+      return `<tr><td><b>${tierLabel(x)}</b>${x.pctAmi!=null?` <span style="color:${C.faint}">${fmt$(x.cut)}</span>`:''}</td><td class="n">${fmt$(x.aff)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n" style="color:${col};font-weight:700">${x.gap>0?'+':''}${fmtN(x.gap)}</td><td style="color:${col}">${x.gap>0?'short':'surplus'}</td></tr>`;
     }).join('');
     // ownership
     root.querySelector('[data-ownrows]').innerHTML = c.ownGap.map(x=>{
@@ -225,8 +319,10 @@
       tile(fmtN(c.renS), 'renter households severely burdened (>50%)', false,
            `${pct(c.renS/c.renT)} of ${fmtN(c.renT)} renter households`) +
       (w && w.shortage!=null
-        ? tile('+'+fmtN(w.shortage), `workforce rental units short — 80–120% AMI (${fmt$(w.lo)}–${fmt$(w.hi)})`, true,
-               `${fmtN(w.available)} affordable &amp; available for ${fmtN(w.hh)} households`)
+        ? tile((w.shortage>0?'+':'')+fmtN(w.shortage), `workforce rental units ${w.shortage>0?'short':'surplus'} — 80–120% <b>HUD AMI</b> (${fmt$(w.lo)}–${fmt$(w.hi)})`, w.shortage>0,
+               `${fmtN(w.available)} affordable &amp; available for ${fmtN(w.hh)} households` +
+               (c.wfLocal && c.wfLocal.shortage!=null
+                 ? `<br><span class="hg-alt">On local median income: <b>${c.wfLocal.shortage>0?'+':''}${fmtN(c.wfLocal.shortage)}</b></span>` : ''))
         : tile('+'+fmtN(c.peak.gap), `rental units short for households ≤ ${fmt$(c.peak.cut)} (peak)`, true,
                'HUD AMI unavailable here — showing the peak ACS price point')) +
       (w
@@ -238,6 +334,18 @@
     if(wn) wn.innerHTML = w
       ? `Workforce band = 80–120% AMI for a 4-person household, anchored on HUD's published FY26 low-income (80%) limit of <b>${fmt$(w.l80)}</b>${w.area?' for '+w.area:''} — so 100% AMI is ${fmt$(w.ami)} and the band runs <b>${fmt$(w.lo)}–${fmt$(w.hi)}</b>, supporting rent of <b>${fmt$(w.rLo)}–${fmt$(w.rHi)}/mo</b> at ${(A.front*100).toFixed(0)}% of income. Anchoring on the published limit carries HUD's own high-cost and rural-floor adjustments. Of ${fmtN(w.affordable)} units renting in that range, ~${fmtN(w.occupiedAbove)} are occupied by households above 120% AMI, leaving ${fmtN(w.available)} affordable <i>and available</i>.${w.topModeled?" ACS's top renter-income bracket is open-ended ($100k+); the share of it inside this band is modelled." : ''} Source: HUD Section 8 income limits; ACS 2020–2024 B25063 &amp; B25122. All counts are households, not people.`
       : 'All counts are households (ACS renter- and owner-occupied housing units), not people.';
+    const gn=root.querySelector('[data-gapnote]');
+    if(gn){
+      const amiLadder=c.rentGap[0].pctAmi!=null, over=c.rentGap.filter(x=>x.cut>100000).length;
+      gn.innerHTML = (amiLadder
+        ? '<b>Price points run on the AMI ladder</b> — 30 / 50 / 80 / 120% of this area\'s HUD area median income, so this chart shares a ruler with the CHAS shortage table below. Dollar equivalents are shown under each tier.'
+        : '<b>Price points run on fixed dollar tiers</b> — no HUD income limit matched this geography, so the AMI ladder is unavailable here.')
+        + (over ? ' ACS\'s top renter-income bracket is open-ended ($100k+); ' + over + ' of these tiers sit inside it, so the household counts there are modelled rather than observed.' : '');
+      gn.style.display = '';
+    }
+    // the two-anchor comparison panel (re-rendered so it tracks the sliders)
+    const ap=root.querySelector('[data-anchors]');
+    if(ap) ap.innerHTML = anchorPanel(c, A);
     // overlay affordability-at-median line
     const affMed=A.front*model.mhi/12;
     var mkt=model.market, mc=root.querySelector('[data-market-ctx]');
@@ -272,8 +380,8 @@
           '<td class="n" style="font-weight:600;color:'+C.ink+'">'+fmtN(c.affAndAvail)+'</td>'+
           '<td class="n" style="color:'+C.alert+';font-weight:700">'+(c.shortage>0?'-':'')+fmtN(Math.abs(c.shortage))+'</td></tr>';
       }).join('');
-    return '<h3 class="hg-h3">Affordable <em>and available</em> — the headline shortage <span class="hg-pill">HUD CHAS</span></h3>'+
-      '<p class="hg-sub">Renter units affordable to each income tier, minus those already occupied by higher-income households. This is the figure behind “City X is short N affordable units.” Source: HUD CHAS 2018–2022 (Table 15C), by HAMFI income tier.</p>'+
+    return '<h3 class="hg-h3">Affordable <em>and available</em> — the headline shortage <span class="hg-pill">HUD CHAS · HAMFI 2018–2022</span></h3>'+
+      '<p class="hg-sub">Renter units affordable to each income tier, minus those already occupied by higher-income households. This is the figure behind “City X is short N affordable units.” Source: HUD CHAS 2018–2022 (Table 15C), by HAMFI income tier. <b>Note the vintage:</b> these AMI tiers use HUD’s HAMFI for 2018–2022, while the workforce band above uses HUD’s FY2026 income limits — they are not the same AMI.</p>'+
       '<table class="hg-tbl"><thead><tr><th>Renter income (AMI)</th><th class="n">Households</th><th class="n">Affordable units</th><th class="n">Affordable &amp; available</th><th class="n">Shortage</th></tr></thead><tbody>'+rows+'</tbody></table>'+
       '<p class="hg-note"><b>Why this is the credible number:</b> “available” removes affordable units occupied by higher-income renters. Look at the ≤ 80% row — there can be more <i>affordable</i> units than households, yet still a shortage once the unavailable ones are removed, which a simple affordability count misses. CHAS is 2018–2022 (HUD’s latest); the cost-burden and price-point figures above are ACS 2020–2024. (Vacant-for-rent affordable units are a small pending addition.)</p>';
   }
@@ -307,6 +415,8 @@
     <div class="hg-tiles" data-tiles></div>
     <p class="hg-src" data-wfnote></p>
 
+    <div data-anchors></div>
+
     <h3 class="hg-h3">Cost burden by household income &amp; tenure</h3>
     <table class="hg-tbl"><thead>
       <tr><th rowspan="2">Household income</th><th colspan="4" class="hg-grp">Renters</th><th colspan="4" class="hg-grp">Owners</th></tr>
@@ -326,11 +436,12 @@
 
     ${meta.model && meta.model.market ? marketPanel(meta.model.market) : ''}
 
-    <h3 class="hg-h3">Rental gap by price point <span class="hg-pill">the "short N units" number</span></h3>
+    <h3 class="hg-h3">Rental gap by price point <span class="hg-pill">AMI ladder</span></h3>
     <p class="hg-legend"><span class="hg-sq" style="background:${C.ink}"></span>Renter households (cumulative) &nbsp; <span class="hg-sq" style="background:${C.accent}"></span>Affordable rental units (cumulative)</p>
     <div data-gapchart></div>
     <table class="hg-tbl"><thead><tr><th>Income tier</th><th class="n">Aff. rent</th><th class="n">Renter HH</th><th class="n">Aff. units</th><th class="n">Gap</th><th></th></tr></thead><tbody data-gaprows></tbody></table>
     <p class="hg-src" data-medline></p>
+    <p class="hg-note" data-gapnote></p>
     <p class="hg-note"><b>Affordable vs. affordable-and-available:</b> this counts affordable units; the headline-grade figure removes units occupied by higher-income households (shown next, from HUD CHAS). Small places carry ±10–20% ACS margins of error.</p>
 
     ${meta.model && meta.model.chas ? chasSection(meta.model.chas) : ''}

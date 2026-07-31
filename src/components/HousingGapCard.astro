@@ -27,6 +27,9 @@ function band(s) {
 const b = band(hasData ? rec.score : null);
 const href = `/housing-gap?geo=${geoid}&mode=${mode === 'county' ? 'county' : 'city'}`;
 const fmt = (n) => Number(n).toLocaleString();
+// Signed, so a surplus never reads as a shortage. The AMI and local-income anchors disagree on
+// SIGN in ~26% of geographies, so both are always shown — see the AMI-vs-MHI methodology memo.
+const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
 ---
 {hasData && (
   <div class={`hg-card hg-card--${b.key}`}>
@@ -58,15 +61,23 @@ const fmt = (n) => Number(n).toLocaleString();
     <dl class="hg-card__stats">
       <div><dt>Renter households cost-burdened</dt><dd>{rec.rb != null ? `${rec.rb}%` : '—'}<span class="hg-card__dd2">{rec.rbn != null ? fmt(rec.rbn) : ''}</span></dd></div>
       <div><dt>Shortage at ≤ 30% AMI</dt><dd>{rec.eli != null ? fmt(rec.eli) : '—'}</dd></div>
-      <div><dt>Workforce gap, 80–120% AMI</dt><dd>{rec.wsh != null ? fmt(rec.wsh) : (rec.pg != null ? `${fmt(rec.pg)} under $${(rec.pc / 1000).toFixed(0)}k` : '—')}<span class="hg-card__dd2">{rec.wlo != null ? `$${Math.round(rec.wlo / 1000)}k–$${Math.round(rec.whi / 1000)}k` : ''}</span></dd></div>
+      <div><dt>Workforce gap, 80–120%<br/>on HUD AMI / on local income</dt><dd>{sgn(rec.wsh) ?? (rec.pg != null ? `${fmt(rec.pg)} under $${(rec.pc / 1000).toFixed(0)}k` : '—')}<span class="hg-card__dd2">{sgn(rec.msh) != null ? `local: ${sgn(rec.msh)}` : ''}</span></dd></div>
     </dl>
+
+    {rec.dvg === 1 && (
+      <p class="hg-card__flag">
+        HUD's AMI for this area and this jurisdiction's own median household income
+        {rec.amiRatio != null ? ` differ by ${rec.amiRatio >= 1 ? `${rec.amiRatio}×` : `${(1 / rec.amiRatio).toFixed(2)}× the other way`}` : ' diverge sharply'} —
+        the two workforce figures above are not interchangeable. Say which one you are citing.
+      </p>
+    )}
 
     {rec.thin && (
       <p class="hg-card__flag">Fewer than 500 renter households — treat the rank with caution.</p>
     )}
 
     <a class="hg-card__cta" href={href}>See the full housing-gap analysis →</a>
-    <p class="hg-card__note muted">HUD CHAS 2018–2022 (Table 15C); cost burden and the workforce band from ACS 2020–2024 5-year and HUD FY26 income limits. All counts are households.</p>
+    <p class="hg-card__note muted">Headline shortage: HUD CHAS 2018–2022 (Table 15C), HAMFI 2018–2022 tiers. Cost burden and the workforce band: ACS 2020–2024 5-year with HUD FY2026 income limits — a different AMI vintage. All counts are households.</p>
   </div>
 )}
 

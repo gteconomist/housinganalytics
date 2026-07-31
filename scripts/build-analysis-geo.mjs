@@ -131,7 +131,8 @@ const REN_INC_B = [[0, 10000], [10000, 20000], [20000, 35000], [35000, 50000], [
 const RENT_BANDS_B = [[0, 99], [100, 149], [150, 199], [200, 249], [250, 299], [300, 349], [350, 399], [400, 449], [450, 499],
   [500, 549], [550, 599], [600, 649], [650, 699], [700, 749], [750, 799], [800, 899], [900, 999],
   [1000, 1249], [1250, 1499], [1500, 1999], [2000, 2499], [2500, 2999], [3000, 3499], [3500, 6000]];
-const REN_TIERS = [20000, 35000, 50000, 75000];
+const REN_TIERS = [20000, 35000, 50000, 75000];   // fallback only
+const AMI_TIERS = [0.30, 0.50, 0.80, 1.20];
 function cumLE(bands, counts, X) {
   let t = 0;
   for (let i = 0; i < bands.length; i++) {
@@ -172,10 +173,11 @@ function topBandShare(rentBands, lo, hi) {
 // affordable COUNT; B25122 (income x rent) supplies only the availability RATIO — the share
 // of band-rent units NOT already occupied by households above the 120% AMI ceiling. Using
 // B25122 as a ratio rather than a count keeps the headline on the finer rent distribution.
-function workforce(model, A) {
-  const ami = model.ami;
-  if (!ami || !ami.a80 || !ami.a120 || !model.rentByInc) return null;
-  const lo = ami.a80, hi = ami.a120;
+// TWO ANCHORS, DELIBERATELY — see public/js/housing-gap.js. HUD AMI is a regulatory threshold
+// (regional, family-based, 4-person, capped/floored); local MHI is descriptive (this jurisdiction,
+// all households). They disagree on the SIGN of the gap in 26% of geographies and by >2x in 41%.
+function workforceBand(model, A, lo, hi) {
+  if (!model.rentByInc || !(hi > lo)) return null;
   const rLo = A.front * lo / 12, rHi = A.front * hi / 12;
   const hh = inBand(REN_INC_CAP, model.ren.total, lo, hi);
   const affordable = inBand(RENT_BANDS_B, model.rentBands, rLo, rHi);
@@ -193,7 +195,7 @@ function workforce(model, A) {
   const availRatio = tot122 > 0 ? Math.max(0, Math.min(1, 1 - above / tot122)) : 1;   // no B25122 units in the window (tiny geos): no availability discount
   const available = availRatio == null ? null : affordable * availRatio;
   return {
-    lo, hi, rLo, rHi,
+    lo: Math.round(lo), hi: Math.round(hi), rLo, rHi,
     hh: Math.round(hh),
     affordable: Math.round(affordable),
     available: available == null ? null : Math.round(available),
@@ -204,18 +206,38 @@ function workforce(model, A) {
   };
 }
 
+// Anchor A — HUD AMI: what housing PROGRAMS target (LIHTC, HOME, CDBG, inclusionary zoning).
+function workforce(model, A) {
+  const ami = model.ami;
+  if (!ami || !ami.a80 || !ami.a120) return null;
+  return workforceBand(model, A, ami.a80, ami.a120);
+}
+// Anchor B — local median household income: what RESIDENTS actually experience.
+function workforceLocal(model, A) {
+  if (!model.mhi || model.mhi <= 0) return null;
+  return workforceBand(model, A, model.mhi * 0.8, model.mhi * 1.2);
+}
+
 function summarize(model) {
   const A = DEFAULTS;
   const renT = sum(model.ren.total), renB = sum(model.ren.burd), renS = sum(model.ren.sev);
+  // Price points run on the AMI ladder where HUD AMI is known (mirrors renTiers() in the client);
+  // fixed dollar tiers only where it isn't.
+  const tiers = (model.ami && model.ami.ami)
+    ? AMI_TIERS.map((p) => ({ cut: Math.round(model.ami.ami * p), pctAmi: p }))
+    : REN_TIERS.map((c) => ({ cut: c, pctAmi: null }));
   let peak = null;
-  for (const cut of REN_TIERS) {
-    const hh = cumLE(REN_INC_B, model.ren.total, cut);
-    const units = cumLE(RENT_BANDS_B, model.rentBands, A.front * cut / 12);
+  for (const t of tiers) {
+    const hh = cumLE(REN_INC_CAP, model.ren.total, t.cut);   // capped top bracket — AMI tiers routinely clear $100k
+    const units = cumLE(RENT_BANDS_B, model.rentBands, A.front * t.cut / 12);
     const gap = Math.round(hh - units);
-    if (!peak || gap > peak.gap) peak = { cut, gap };
+    if (!peak || gap > peak.gap) peak = { cut: t.cut, pctAmi: t.pctAmi, gap };
   }
   const c = model.chas;
   const w = workforce(model, A);
+  const wl = workforceLocal(model, A);
+  const ratio = (model.ami && model.ami.ami && model.mhi > 0) ? model.ami.ami / model.mhi : null;
+  const bandShare = (w && renT > 0) ? w.hh / renT : null;
   return {
     rt: renT,                                                   // renter HOUSEHOLDS (ACS 2020–2024; B25074 universe = renter-occupied units)
     crt: c ? c.renterTotal : null,                               // renter households (CHAS 2018–2022)
@@ -224,12 +246,21 @@ function summarize(model) {
     rs: renS,                                                    // severely burdened renter households
     rsp: renT ? +(renS / renT * 100).toFixed(1) : null,          // % severely burdened
     pg: peak ? peak.gap : null, pc: peak ? peak.cut : null,      // peak rental gap + its income tier
+    pcp: peak ? peak.pctAmi : null,                              // that tier as a share of AMI (null = dollar fallback)
     eli: c && c.eli ? c.eli.shortage : null,                     // CHAS affordable-and-available shortage
     vli: c && c.vli ? c.vli.shortage : null,
     li: c && c.li ? c.li.shortage : null,
     // workforce band, 80–120% HUD AMI (4-person), at DEFAULT assumptions
     wlo: w ? w.lo : null, whi: w ? w.hi : null,
     whh: w ? w.hh : null, wav: w ? w.available : null, wsh: w ? w.shortage : null,
+    // same calculation anchored on LOCAL median household income — never publish one without the other
+    mlo: wl ? wl.lo : null, mhii: wl ? wl.hi : null,
+    mhh: wl ? wl.hh : null, mav: wl ? wl.available : null, msh: wl ? wl.shortage : null,
+    amiRatio: ratio == null ? null : +ratio.toFixed(2),          // HUD AMI / local MHI
+    bandShare: bandShare == null ? null : +(bandShare * 100).toFixed(1),  // % of local renters inside the AMI band
+    // divergence flag — opposite conclusions, or an AMI far from local incomes (~29% of geographies)
+    dvg: ((w && wl && w.shortage != null && wl.shortage != null && (w.shortage > 0) !== (wl.shortage > 0))
+      || (ratio != null && (ratio > 2.0 || ratio < 0.80))) ? 1 : 0,
   };
 }
 
