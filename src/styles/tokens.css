@@ -232,6 +232,68 @@ figure.card:hover > .chart-png-btn,
   .chart-png-btn { opacity: 1; }
 }
 
+/* Split download control: "PNG" downloads in EIG colours; the caret opens a
+   palette menu whose second entry renders the chart in Georgia Tech colours.
+   Both buttons reuse .chart-png-btn for look; .chart-dl positions them. */
+.chart-dl {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: stretch;
+  z-index: 3;
+}
+.chart-dl .chart-png-btn {
+  position: static;
+  opacity: 0;
+}
+.chart-dl__main { border-radius: 3px 0 0 3px; }
+.chart-dl__caret {
+  border-radius: 0 3px 3px 0;
+  border-left: none;
+  padding: 4px 6px;
+}
+figure.card:hover > .chart-dl .chart-png-btn,
+.chart-dl:focus-within .chart-png-btn,
+.chart-dl__caret[aria-expanded="true"] { opacity: 1; }
+
+.chart-dl__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 15rem;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.chart-dl__menu[hidden] { display: none; }
+.chart-dl__menu button {
+  font: 500 12px/1.2 'Geist', system-ui, sans-serif;
+  text-align: left;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  color: var(--color-navy);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chart-dl__menu button:hover { background: var(--color-cream); }
+.chart-dl__menu button + button { border-top: 1px solid var(--border-soft); }
+
+/* Excel download on any card that holds a table. */
+.table-xlsx-btn { opacity: 0; }
+.card:hover > .table-xlsx-btn,
+.table-xlsx-btn:focus-visible { opacity: 1; }
+.table-xlsx-btn--offset { right: 92px; }
+@media (hover: none) {
+  .chart-dl .chart-png-btn,
+  .table-xlsx-btn { opacity: 1; }
+}
+
 .export-toolbar {
   display: flex;
   flex-wrap: wrap;

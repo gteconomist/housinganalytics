@@ -493,6 +493,10 @@ const WEIGHTED_MEDIAN_FIELDS = [
   // field, weight-field
   ['hh_income_median',  'tenure_total_occupied'],
   ['hh_income_mean',    'tenure_total_occupied'],
+  // Without these two the "State" bars in Median Household Income by Tenure
+  // were empty — the field never made it onto the aggregate.
+  ['income_median_owner',  'tenure_owner_occupied'],
+  ['income_median_renter', 'tenure_renter_occupied'],
   ['value_median',      'tenure_owner_occupied'],
   ['rent_median',       'tenure_renter_occupied'],
   ['rent_median_0br',   'br_0'],
@@ -555,6 +559,84 @@ for (const [state, group] of byState) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// ACS extras (src/data/acs-extra.json) — ethnicity, labor force, and
+// units-by-structure. These variables are NOT in the two hand-maintained
+// "Full Housing Data Table" workbooks; scripts/fetch-acs-extra.mjs pulls
+// them from the Census API and commits one compact file covering every
+// county, place, state and the nation.
+//
+// The file is COMMITTED (not in src/data/generated/) because CI does not
+// run the fetch script — see the committed-vs-generated rule in the repo
+// conventions. Missing file is non-fatal: every consuming field simply
+// stays null and the pages collapse those charts gracefully.
+// ─────────────────────────────────────────────────────────────────
+async function loadAcsExtra() {
+  const f = join(__dirname, '..', 'src', 'data', 'acs-extra.json');
+  try {
+    return JSON.parse(await readFile(f, 'utf8'));
+  } catch {
+    console.warn('! acs-extra.json not found — ethnicity, labor force and ' +
+                 'vacancy-by-structure will be null. Run: node scripts/fetch-acs-extra.mjs');
+    return null;
+  }
+}
+
+const ETH_FIELDS = ['eth_total', 'eth_hispanic', 'eth_nh_white', 'eth_nh_black',
+                    'eth_nh_asian', 'eth_nh_two_plus', 'eth_nh_other'];
+const LABOR_FIELDS = ['pop_16_plus', 'lfpr_16_plus', 'lfpr_20_64',
+                      'emp_pop_ratio', 'unemployment_rate'];
+const STRUCT_KEYS = ['1_detached', '1_attached', '2', '3_4', '5_9',
+                     '10_19', '20_49', '50_plus', 'mobile', 'other'];
+// Multi-family = 2 units through 50+. Single-family attached, mobile homes
+// and "boat/RV/van" are deliberately outside the MF aggregate.
+const MF_KEYS = new Set(['2', '3_4', '5_9', '10_19', '20_49', '50_plus']);
+
+/**
+ * Expand one compact acs-extra record into readable fields.
+ * Vacancy by structure is DERIVED: all units (B25024) − occupied units
+ * (B25032). ACS publishes no vacant-by-structure table, so that difference
+ * is the only route — and it therefore counts seasonal, migrant and "other
+ * vacant" units as well as the for-rent / for-sale stock. Pages that show
+ * it must call it a non-occupancy rate, not a market vacancy rate.
+ */
+function expandAcsExtra(rec) {
+  const out = {};
+  for (const f of ETH_FIELDS)   out[f] = null;
+  for (const f of LABOR_FIELDS) out[f] = null;
+  out.hispanic_share = null;
+  out.units_by_structure = null;
+  out.vac_sfd_total = out.vac_sfd_units = out.vac_sfd_rate = null;
+  out.vac_mf_total  = out.vac_mf_units  = out.vac_mf_rate  = null;
+  if (!rec) return out;
+
+  ETH_FIELDS.forEach((f, i)   => { out[f] = rec.e?.[i] ?? null; });
+  LABOR_FIELDS.forEach((f, i) => { out[f] = rec.l?.[i] ?? null; });
+  out.hispanic_share = (out.eth_total && out.eth_hispanic != null)
+    ? (out.eth_hispanic / out.eth_total) * 100 : null;
+
+  const byStruct = {};
+  let sfdT = 0, sfdV = 0, mfT = 0, mfV = 0, any = false;
+  STRUCT_KEYS.forEach((key, i) => {
+    const pair = rec.s?.[i];
+    if (!Array.isArray(pair)) { byStruct[key] = null; return; }
+    const [total, occupied] = pair;
+    const vacant = Math.max(0, total - occupied);
+    byStruct[key] = { total, occupied, vacant, rate: total > 0 ? (vacant / total) * 100 : null };
+    any = true;
+    if (key === '1_detached') { sfdT += total; sfdV += vacant; }
+    if (MF_KEYS.has(key))     { mfT  += total; mfV  += vacant; }
+  });
+  if (any) {
+    out.units_by_structure = byStruct;
+    out.vac_sfd_total = sfdT; out.vac_sfd_units = sfdV;
+    out.vac_sfd_rate  = sfdT > 0 ? (sfdV / sfdT) * 100 : null;
+    out.vac_mf_total  = mfT;  out.vac_mf_units  = mfV;
+    out.vac_mf_rate   = mfT  > 0 ? (mfV  / mfT)  * 100 : null;
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Slugs and routing
 // ─────────────────────────────────────────────────────────────────
 function slug(s) {
@@ -580,6 +662,7 @@ const qcew            = await loadQcew();
 const oews            = await loadOews();
 const placesRaw       = await loadPlaces();
 const gazetteerPlaces = await loadGazetteerPlaces();
+const acsExtra        = await loadAcsExtra();
 console.log(`HUD AMI loaded for ${Object.keys(hudAmi).length} counties.`);
 console.log(`Gazetteer loaded for ${Object.keys(gazetteer).length} counties.`);
 console.log(`QCEW loaded for ${Object.keys(qcew.counties ?? {}).length} counties ` +
@@ -589,6 +672,28 @@ console.log(`OEWS loaded for ${Object.keys(oews.counties ?? {}).length} counties
 console.log(`Places loaded: ${Object.keys(placesRaw.places ?? {}).length} ` +
             `(${placesRaw.vintage ?? 'no vintage'}).`);
 console.log(`Gazetteer places loaded for ${Object.keys(gazetteerPlaces).length} places.`);
+
+// Merge the ACS extras onto every geography. State and national values come
+// from the API's own state / us records rather than from re-aggregating
+// counties — a labor force participation RATE cannot be summed, and the
+// published aggregate is the correct denominator anyway.
+{
+  let hitC = 0, hitS = 0;
+  for (const c of counties) {
+    Object.assign(c, expandAcsExtra(acsExtra?.counties?.[c.geoid] ?? null));
+    if (c.lfpr_16_plus != null) hitC++;
+  }
+  for (const agg of Object.values(stateAggs)) {
+    Object.assign(agg, expandAcsExtra(
+      agg.state_fips ? (acsExtra?.states?.[String(agg.state_fips).padStart(2, '0')] ?? null) : null));
+    if (agg.lfpr_16_plus != null) hitS++;
+  }
+  Object.assign(nationalAgg, expandAcsExtra(acsExtra?.national ?? null));
+  console.log(`ACS extras merged: ${hitC}/${counties.length} counties, ` +
+              `${hitS}/${Object.keys(stateAggs).length} states, ` +
+              `national ${nationalAgg.lfpr_16_plus != null ? 'yes' : 'no'} ` +
+              `(vintage ${acsExtra?.vintage ?? 'n/a'}).`);
+}
 
 if (existsSync(OUT_DIR)) await rm(OUT_DIR, { recursive: true, force: true });
 await mkdir(OUT_DIR, { recursive: true });
@@ -738,6 +843,7 @@ for (const p of places) {
   // Centroid (lat/lng) for the city map — from the Gazetteer place file.
   p.lat = gaz?.lat ?? null;
   p.lng = gaz?.lng ?? null;
+  Object.assign(p, expandAcsExtra(acsExtra?.places?.[p.geoid] ?? null));
   // Sections 4 & 5 explicitly null — the place template should not render them.
   p.industries = null;
   p.occupations = null;
@@ -765,6 +871,21 @@ function lightContext(a) {
     aging_stock_share: a.aging_stock_share,
     single_family_share: a.single_family_share,
     bachelors_plus_rate: a.bachelors_plus_rate,
+    // Race counts — the Community Data Summary table compares against these.
+    // They were missing, so the state column read "0.0% White · 0.0% Black".
+    race_white: a.race_white,
+    race_black: a.race_black,
+    // Median income by tenure — the "State" series in that chart was empty.
+    income_median_owner: a.income_median_owner,
+    income_median_renter: a.income_median_renter,
+    // ACS extras.
+    hispanic_share: a.hispanic_share,
+    lfpr_16_plus: a.lfpr_16_plus,
+    lfpr_20_64: a.lfpr_20_64,
+    emp_pop_ratio: a.emp_pop_ratio,
+    unemployment_rate: a.unemployment_rate,
+    vac_sfd_rate: a.vac_sfd_rate,
+    vac_mf_rate: a.vac_mf_rate,
   };
 }
 

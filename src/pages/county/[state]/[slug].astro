@@ -1,5 +1,10 @@
 ---
 import Base from '../../../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+// Content-hash /js/export.js so a new version busts the Cloudflare and browser
+// cache — Astro does not fingerprint anything under public/.
+const exportV = createHash('md5').update(readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 import manifest from '../../../data/generated/manifest.json';
 import { fmtMoney, fmtInt, fmtPct, fmtRatio, affordableHomePrice } from '../../../lib/format.js';
 import IndexBadge from '../../../components/IndexBadge.astro';
@@ -49,9 +54,39 @@ const chartData = {
       pct(county.race_two_plus, tot_pop),
       pct((county.race_other ?? 0) + (county.race_aian ?? 0) + (county.race_nhpi ?? 0), tot_pop),
     ],
+    // Raw counts, so the bar labels can carry both the % and the number.
+    counts: [
+      county.race_white,
+      county.race_black,
+      county.race_asian,
+      county.race_two_plus,
+      (county.race_other ?? 0) + (county.race_aian ?? 0) + (county.race_nhpi ?? 0),
+    ],
     // For state context, build the same shares from the state agg fields:
     state: [],
   },
+
+  // 1b. Ethnicity (Hispanic or Latino origin) — ACS DP05.
+  // Census asks race and Hispanic origin as two SEPARATE questions, so this
+  // is a second composition chart, not extra bars on the race chart. A
+  // Hispanic respondent also appears in one of the race categories above.
+  ethnicity: (() => {
+    const t = county.eth_total ?? tot_pop;
+    if (!t || county.eth_hispanic == null) return null;
+    const rows = [
+      ['Hispanic or Latino', county.eth_hispanic],
+      ['White, NH',          county.eth_nh_white],
+      ['Black, NH',          county.eth_nh_black],
+      ['Asian, NH',          county.eth_nh_asian],
+      ['Two or more, NH',    county.eth_nh_two_plus],
+      ['Other, NH',          county.eth_nh_other],
+    ].filter(([, v]) => v != null);
+    return {
+      labels: rows.map(r => r[0]),
+      values: rows.map(r => pct(r[1], t)),
+      counts: rows.map(r => r[1]),
+    };
+  })(),
 
   // 2. Tenure
   tenure: {
@@ -60,6 +95,7 @@ const chartData = {
       pct(county.tenure_owner_occupied,  tot_occupied),
       pct(county.tenure_renter_occupied, tot_occupied),
     ],
+    counts: [county.tenure_owner_occupied, county.tenure_renter_occupied],
     state: [
       state.homeownership_rate ?? 0,
       state.renter_rate ?? 0,
@@ -80,6 +116,12 @@ const chartData = {
       pct(county.structure_50_plus,    tot_units),
       pct(county.structure_mobile,     tot_units),
       pct(county.structure_other,      tot_units),
+    ],
+    counts: [
+      county.structure_1_detached, county.structure_1_attached, county.structure_2,
+      county.structure_3_4,        county.structure_5_9,        county.structure_10_19,
+      county.structure_20_49,      county.structure_50_plus,    county.structure_mobile,
+      county.structure_other,
     ],
   },
 
@@ -270,6 +312,65 @@ chartData.vacancyFrictionalStructural = {
   values: [county.vacant_frictional ?? 0, county.vacant_structural ?? 0],
 };
 
+// ── Labor force (ACS S2301) ───────────────────────────────────────
+// Four rates on one axis, local vs state. Participation for 20–64 is the
+// one to read alongside WAHI: it excludes the retirement-age cohort that
+// drags the headline 16+ rate down in older communities.
+chartData.laborForce = (county.lfpr_16_plus == null) ? null : {
+  labels: ['Participation (16+)', 'Participation (20–64)', 'Employment / population', 'Unemployment'],
+  local: [
+    county.lfpr_16_plus, county.lfpr_20_64,
+    county.emp_pop_ratio, county.unemployment_rate,
+  ],
+  state: [
+    state.lfpr_16_plus ?? null, state.lfpr_20_64 ?? null,
+    state.emp_pop_ratio ?? null, state.unemployment_rate ?? null,
+  ],
+};
+
+// ── Occupied vs vacant, all housing units (2-slice pie) ───────────
+chartData.occupancy = (() => {
+  const occ = county.tenure_total_occupied ?? 0;
+  const vac = county.vacant_total ?? 0;
+  if (!(occ + vac)) return null;
+  return { labels: ['Occupied', 'Vacant'], values: [occ, vac] };
+})();
+
+// ── Non-occupancy rate by structure type ──────────────────────────
+// Derived as B25024 (all units by structure) − B25032 (occupied units by
+// structure). ACS publishes no direct "vacant by structure" table, so the
+// difference is the only route — and it therefore counts seasonal, migrant
+// and "other vacant" units too. The figure footnote says so.
+chartData.vacancyByStructure = (() => {
+  const vs = county.units_by_structure;
+  if (!vs) return null;
+  const groups = [
+    ['Single-family detached', ['1_detached']],
+    ['Single-family attached', ['1_attached']],
+    ['2–4 units',              ['2', '3_4']],
+    ['5–19 units',             ['5_9', '10_19']],
+    ['20+ units',              ['20_49', '50_plus']],
+    ['Mobile home',            ['mobile']],
+  ];
+  const labels = [], values = [], vacants = [], totals = [];
+  for (const [label, keys] of groups) {
+    let tot = 0, vac = 0, any = false;
+    for (const k of keys) {
+      const r = vs[k];
+      if (!r) continue;
+      any = true; tot += r.total; vac += r.vacant;
+    }
+    // Suppress categories with a trivial denominator — the ACS margin of
+    // error on a 40-unit base makes the rate meaningless.
+    if (!any || tot < 50) continue;
+    labels.push(label);
+    values.push((vac / tot) * 100);
+    vacants.push(vac);
+    totals.push(tot);
+  }
+  return labels.length ? { labels, values, vacants, totals } : null;
+})();
+
 // Workforce housing range
 const mhi = county.hh_income_median;
 const workforceLow  = mhi ? mhi * 0.80 : null;
@@ -278,6 +379,38 @@ const workforceHigh = mhi ? mhi * 1.20 : null;
 // HUD AMI (may be null if the HUD fetch step didn't run / failed). The page
 // guards every reference so the section just collapses gracefully.
 const hud = county.hud_ami;
+
+// ── Shared attainability math ─────────────────────────────────────
+// One implementation, used by the earners-table body AND its income-anchor
+// rows, so every number on that table ties out against every other.
+// 30% housing budget · 30-yr mortgage at 7% · 5% down · $2,500/yr taxes and
+// insurance · 0.5% PMI. Same assumptions as the Section 3 widget.
+function attainableFrom(income) {
+  if (income == null || !(income > 0)) return { monthlyCost: null, homePrice: null };
+  const monthlyCost   = (income * 0.30) / 12;
+  const monthlyTaxIns = 2500 / 12;
+  const monthlyRate   = 0.07 / 12;
+  const n = 360;
+  const piFactor = (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+  const principal = (monthlyCost - monthlyTaxIns) / (piFactor + 0.005 / 12);
+  return { monthlyCost, homePrice: principal > 0 ? principal / 0.95 : 0 };
+}
+
+// Income anchors shown beneath the earners table. Publishing MHI and AMI
+// together is a standing rule — they disagree on the sign of the housing gap
+// in about a quarter of places — and WAHI is the third anchor that reconciles
+// them. See the /housing-gap methodology.
+const incomeAnchors = [
+  ['Median household income (MHI)',
+   gap?.mhii ?? county.hh_income_median,
+   'All households — ACS B19013. Includes retiree- and student-headed households.'],
+  ['Working-age household income (WAHI)',
+   gap?.wahi ?? null,
+   'Households headed by someone aged 25–64 — ACS B19037, interpolated.'],
+  ['HUD Area Median Income (4-person, 100%)',
+   hud?.ami_100_4p ?? null,
+   'HUD FY2026 income limit, published for the county / metro area.'],
+].filter(([, v]) => v != null);
 
 // ── Section 4: Industry & Workforce Wages (BLS QCEW) ──────────────
 // county.industries is null when QCEW didn't load (graceful degrade).
@@ -324,6 +457,8 @@ chartData.industryTopSectors = {
   labels: topSectors.map(r => r.title),
   emp:    topSectors.map(r => r.emp ?? 0),
   wage:   topSectors.map(r => r.avg_annual_pay ?? 0),
+  // Denominator for the share labels: all sectors, not just the top ten.
+  total:  totalIndustryEmp,
 };
 
 // ── Section 5: Wages by Occupation (BLS OEWS) ─────────────────────
@@ -467,9 +602,22 @@ const occRows = (occupations?.rows ?? [])
                 {fmtPct(pct(county.race_black, county.population_total))} Black</td>
             <td>{fmtPct(pct(state.race_white,  state.population_total))} White ·
                 {fmtPct(pct(state.race_black,  state.population_total))} Black</td></tr>
+          {county.hispanic_share != null && (
+            <tr><th>Ethnicity (Hispanic or Latino, any race)</th>
+              <td>{fmtPct(county.hispanic_share)} Hispanic ·
+                  {fmtPct(100 - county.hispanic_share)} not Hispanic</td>
+              <td>{state.hispanic_share != null
+                    ? <>{fmtPct(state.hispanic_share)} Hispanic · {fmtPct(100 - state.hispanic_share)} not Hispanic</>
+                    : '—'}</td></tr>
+          )}
+          {county.lfpr_16_plus != null && (
+            <tr><th>Labor force participation rate (age 16+)</th>
+              <td>{fmtPct(county.lfpr_16_plus)}</td>
+              <td>{state.lfpr_16_plus != null ? fmtPct(state.lfpr_16_plus) : '—'}</td></tr>
+          )}
         </tbody>
       </table>
-      <small class="source">Source: ACS 5-year 2024 (Tables DP05, S1101, DP04, S1901){county.population_density != null ? ' and Census Gazetteer (land area)' : ''}; HUD FY2026 Income Limits.</small>
+      <small class="source">Source: ACS 5-year 2024 (Tables DP05, S1101, S2301, DP04, S1901){county.population_density != null ? ' and Census Gazetteer (land area)' : ''}; HUD FY2026 Income Limits. Race and Hispanic origin are separate ACS questions — people of Hispanic origin may be of any race, so the two rows do not add.</small>
     </div>
 
     <div class="grid grid-2">
@@ -483,6 +631,23 @@ const occRows = (occupations?.rows ?? [])
       </figure>
 
       <figure class="card">
+        <h3>Ethnicity — Hispanic or Latino origin</h3>
+        {chartData.ethnicity ? (
+          <canvas data-chart="ethnicity"></canvas>
+        ) : (
+          <p class="muted">Hispanic-origin data not available for this geography.</p>
+        )}
+        <figcaption class="muted">
+          {county.hispanic_share != null
+            ? <>{fmtPct(county.hispanic_share)} of residents are Hispanic or Latino (of any race).</>
+            : <>Hispanic or Latino origin, of any race.</>}
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table DP05. “NH” = not Hispanic or Latino. Hispanic origin is asked separately from race, so unlike the race chart these categories are mutually exclusive and do sum to 100%.</small>
+      </figure>
+    </div>
+
+    <div class="grid grid-2">
+      <figure class="card">
         <h3>Educational attainment (population 25+)</h3>
         <canvas data-chart="education"></canvas>
         <figcaption class="muted">
@@ -490,6 +655,22 @@ const occRows = (occupations?.rows ?? [])
           (state: {fmtPct(state.bachelors_plus_rate)}).
         </figcaption>
         <small class="source">Source: ACS 5-year 2024, Table S1501.</small>
+      </figure>
+
+      <figure class="card">
+        <h3>Labor force participation</h3>
+        {chartData.laborForce ? (
+          <canvas data-chart="laborForce"></canvas>
+        ) : (
+          <p class="muted">Labor force data not available for this geography.</p>
+        )}
+        <figcaption class="muted">
+          {county.lfpr_16_plus != null
+            ? <>{fmtPct(county.lfpr_16_plus)} of residents 16 and over are in the labor force
+                ({fmtPct(county.lfpr_20_64)} of those aged 20–64); unemployment {fmtPct(county.unemployment_rate)}.</>
+            : <>Participation, employment and unemployment rates.</>}
+        </figcaption>
+        <small class="source">Source: ACS 5-year 2024, Table S2301. ACS rates are 5-year averages and will not match the BLS monthly series.</small>
       </figure>
     </div>
 
@@ -546,7 +727,12 @@ const occRows = (occupations?.rows ?? [])
     </div>
 
     <figure class="card">
-      <h3>Income by Number of Earners</h3>
+      <h3>Median Family Income by Number of Earners — and What It Buys</h3>
+      <p class="muted earners-table__lede">
+        The income column is <strong>median family income by number of earners</strong> (ACS Table S1903).
+        It is not AMI, MHI or WAHI — those three anchors are shown underneath, run through
+        the same attainability math so the rows are directly comparable.
+      </p>
       <table class="earners-table">
         <thead>
           <tr>
@@ -586,12 +772,31 @@ const occRows = (occupations?.rows ?? [])
             );
           })}
         </tbody>
+        {incomeAnchors.length > 0 && (
+          <tbody class="earners-table__anchors">
+            <tr class="earners-table__rule">
+              <th colspan="5">Income anchors, for comparison</th>
+            </tr>
+            {incomeAnchors.map(([label, value, note]) => {
+              const a = attainableFrom(value);
+              return (
+                <tr>
+                  <th>{label}<span class="earners-table__note">{note}</span></th>
+                  <td>—</td>
+                  <td>{fmtMoney(value)}</td>
+                  <td>{a.monthlyCost != null ? fmtMoney(a.monthlyCost) : '—'}</td>
+                  <td>{a.homePrice != null ? fmtMoney(a.homePrice) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        )}
       </table>
       <figcaption class="muted">
         Attainable monthly housing cost = 30% of gross income ÷ 12.
         Attainable home price assumes 30% housing budget, 30-yr mortgage at 7%, 5% down.
       </figcaption>
-      <small class="source">Source: ACS 5-year 2024, Table S1903; affordability formula derived.</small>
+      <small class="source">Source: ACS 5-year 2024, Tables S1903 (median family income by earners), B19013 (MHI) and B19037 (WAHI); HUD FY2026 Income Limits; affordability formula derived. WAHI is the median income of households <em>headed by</em> someone aged 25–64 — a working-age household, not a household of working-age adults.</small>
     </figure>
 
     <div class="grid grid-3">
@@ -734,15 +939,13 @@ const occRows = (occupations?.rows ?? [])
 
         <div class="grid grid-2">
           <figure class="card">
-            <h3>Vacant units by type</h3>
-            <canvas data-chart="vacancyComposition"></canvas>
+            <h3>Occupied vs vacant</h3>
+            <canvas data-chart="occupancy"></canvas>
             <figcaption class="muted">
-              For sale {fmtPct(county.vacant_for_sale_share)} ·
-              For rent {fmtPct(county.vacant_for_rent_share)} ·
-              Seasonal {fmtPct(county.vacant_seasonal_share)} ·
-              Other {fmtPct(county.vacant_other_share)}.
+              {fmtPct(county.vacancy_rate)} of all {fmtInt(county.units_total)} housing units are vacant
+              ({fmtInt(county.vacant_total)} units); {fmtInt(county.tenure_total_occupied)} are occupied.
             </figcaption>
-            <small class="source">Source: ACS 5-year 2024, Table B25004.</small>
+            <small class="source">Source: ACS 5-year 2024, Table DP04.</small>
           </figure>
 
           <figure class="card">
@@ -756,6 +959,50 @@ const occRows = (occupations?.rows ?? [])
             <small class="source">Source: ACS 5-year 2024, Table B25004.</small>
           </figure>
         </div>
+
+        <figure class="card chart-wide">
+          <h3>Vacant units by type</h3>
+          <canvas data-chart="vacancyComposition"></canvas>
+          <figcaption class="muted">
+            For sale {fmtPct(county.vacant_for_sale_share)} ·
+            For rent {fmtPct(county.vacant_for_rent_share)} ·
+            Seasonal {fmtPct(county.vacant_seasonal_share)} ·
+            Other {fmtPct(county.vacant_other_share)}.
+          </figcaption>
+          <p class="muted chart-note">
+            <strong>What “Other vacant” means.</strong> It is Census's residual category for
+            B25004 — every vacant unit that is not for rent, for sale, already rented or sold
+            but not yet occupied, held for seasonal or recreational use, or housing migrant
+            workers. In practice it covers units held off the market while an estate is settled,
+            homes under repair or renovation, units held for a caretaker or for personal reasons,
+            units in foreclosure, and abandoned or condemned stock. A large “Other” share is the
+            standard first indicator of disinvestment rather than of market slack.
+          </p>
+          <small class="source">Source: ACS 5-year 2024, Table B25004.</small>
+        </figure>
+
+        {chartData.vacancyByStructure && (
+          <figure class="card chart-wide">
+            <h3>Non-occupancy rate by structure type</h3>
+            <canvas data-chart="vacancyByStructure"></canvas>
+            <figcaption class="muted">
+              {county.vac_sfd_rate != null && county.vac_mf_rate != null
+                ? <>{fmtPct(county.vac_sfd_rate)} of single-family detached homes are unoccupied,
+                    against {fmtPct(county.vac_mf_rate)} of multi-family units (2+ units in structure)
+                    — a {fmtPct(Math.abs(county.vac_mf_rate - county.vac_sfd_rate))} spread.</>
+                : <>Share of units in each structure type that no household occupies.</>}
+            </figcaption>
+            <p class="muted chart-note">
+              <strong>Read this as non-occupancy, not market vacancy.</strong> ACS publishes no
+              table of vacant units by structure type, so this is derived as all units
+              (B25024) minus occupied units (B25032) for each category. The difference therefore
+              includes seasonal, migrant and “other vacant” units, not just the for-rent and
+              for-sale stock that drives the headline vacancy rates above. Categories with fewer
+              than 50 units are suppressed.
+            </p>
+            <small class="source">Source: ACS 5-year 2024, Tables B25024 and B25032 (derived).</small>
+          </figure>
+        )}
 
         <div class="grid grid-2">
           <div class={`stat-card ${county.seasonal_stock_share != null && county.seasonal_stock_share >= 10 ? 'stat-card--flag' : ''}`}>
@@ -1159,7 +1406,7 @@ const occRows = (occupations?.rows ?? [])
 <script type="application/json" id="county-data" set:html={JSON.stringify({ county, chartData })}></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <!-- Export module: PNG buttons per chart + Excel/PDF buttons for [data-export-toolbar]. -->
-<script src="/js/export.js" defer is:inline></script>
+<script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
 <script>
   const { county, chartData } = JSON.parse(document.getElementById('county-data').textContent);
 
@@ -1192,6 +1439,9 @@ const occRows = (occupations?.rows ?? [])
   // ── Custom plugin: data labels on top of bars ─────────────────
   // Self-contained replacement for chartjs-plugin-datalabels so we don't
   // depend on an external CDN that might fail to load.
+  // A formatter may return a string OR an array of strings; an array is
+  // drawn as stacked lines above the bar, first element on top. That is how
+  // a bar carries both its number and its share of the total.
   const dataLabels = {
     id: 'datalabels',
     afterDatasetsDraw(chart, _args, opts) {
@@ -1200,23 +1450,71 @@ const occRows = (occupations?.rows ?? [])
       chart.data.datasets.forEach((dataset, di) => {
         const meta = chart.getDatasetMeta(di);
         if (meta.hidden || !meta.data || meta.type !== 'bar') return;
+        const total = dataset.data.reduce((a, b) => a + (Number(b) || 0), 0);
         meta.data.forEach((bar, idx) => {
           const value = dataset.data[idx];
           if (value == null || !isFinite(value)) return;
-          const formatted = opts.formatter ? opts.formatter(value) : String(value);
-          if (!formatted) return;
+          const out = opts.formatter
+            ? opts.formatter(value, { index: idx, datasetIndex: di, total, dataset })
+            : String(value);
+          const lines = (Array.isArray(out) ? out : [out]).filter(Boolean);
+          if (!lines.length) return;
           ctx.save();
-          ctx.fillStyle = opts.color || C.navy;
-          ctx.font = (opts.font || '500 11px Geist, system-ui, sans-serif');
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(formatted, bar.x, bar.y - 4);
+          const LINE_H = 11;
+          lines.forEach((line, li) => {
+            const secondary = li > 0;
+            ctx.fillStyle = secondary ? (opts.mutedColor || '#6d6e71') : (opts.color || C.navy);
+            ctx.font = secondary
+              ? '400 9.5px Geist, system-ui, sans-serif'
+              : (opts.font || '500 11px Geist, system-ui, sans-serif');
+            ctx.fillText(line, bar.x, bar.y - 4 - (lines.length - 1 - li) * LINE_H);
+          });
           ctx.restore();
         });
       });
     },
   };
   Chart.register(dataLabels);
+
+  // Percent labels drawn on doughnut / pie slices. Text colour flips to
+  // black on light slices so the cream and sage wedges stay readable.
+  function contrastOn(color) {
+    const m = String(color || '').trim().match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return '#fff';
+    const n = parseInt(m[1], 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    // Rec. 709 relative luminance.
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 150 ? '#000' : '#fff';
+  }
+  const donutLabels = {
+    id: 'donutlabels',
+    afterDatasetsDraw(chart, _args, opts) {
+      if (!opts || opts.display !== true) return;
+      const ctx = chart.ctx;
+      chart.data.datasets.forEach((dataset, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden || !meta.data) return;
+        if (meta.type !== 'doughnut' && meta.type !== 'pie') return;
+        const total = dataset.data.reduce((a, b) => a + (Number(b) || 0), 0) || 1;
+        const bg = dataset.backgroundColor;
+        meta.data.forEach((arc, idx) => {
+          const share = ((Number(dataset.data[idx]) || 0) / total) * 100;
+          if (share < (opts.minShare ?? 6)) return;
+          const pos = arc.tooltipPosition();
+          ctx.save();
+          ctx.fillStyle = contrastOn(Array.isArray(bg) ? bg[idx] : bg);
+          ctx.font = '600 12px Geist, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(share >= 10 ? share.toFixed(0) + '%' : share.toFixed(1) + '%', pos.x, pos.y);
+          ctx.restore();
+        });
+      });
+    },
+  };
+  Chart.register(donutLabels);
 
   const mk = (sel, cfg) => {
     const el = document.querySelector(`canvas[data-chart="${sel}"]`);
@@ -1230,7 +1528,9 @@ const occRows = (occupations?.rows ?? [])
   const fmtMoney = v => (v == null || !isFinite(v)) ? '' : '$' + Math.round(v).toLocaleString();
 
   // Top padding so data labels above the tallest bar aren't clipped.
+  // Two-line labels (number + share) need the taller reserve.
   const CHART_TOP_PADDING = 22;
+  const CHART_TOP_PADDING_2 = 34;
 
   // Common axis shape: no grid lines, axis line kept, black tick labels.
   const X_AXIS = (rotation) => ({
@@ -1247,29 +1547,44 @@ const occRows = (occupations?.rows ?? [])
   });
 
   // Option presets. `rotation` must be 0 or 45 per house style.
-  function pctOpts({ legend = false, rotation = 0, max } = {}) {
+  // `counts` turns the label into "12.4%" over "(3,481 units)".
+  function pctOpts({ legend = false, rotation = 0, max, counts = null } = {}) {
     return {
-      layout: { padding: { top: CHART_TOP_PADDING } },
+      layout: { padding: { top: counts ? CHART_TOP_PADDING_2 : CHART_TOP_PADDING } },
       scales: {
         y: Y_AXIS({ max, ticks: { color: '#000', callback: v => v + '%' } }),
         x: X_AXIS(rotation),
       },
       plugins: {
         legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
-        datalabels: { formatter: fmtPct },
+        datalabels: {
+          formatter: counts
+            ? (v, c) => [fmtPct(v), counts[c.index] != null ? fmtInt(counts[c.index]) : '']
+            : fmtPct,
+        },
       },
     };
   }
-  function countOpts({ legend = false, rotation = 0 } = {}) {
+  // `share: true` adds the percent of the series total under each count.
+  // Pass `total` when the bars are a subset (e.g. top-10 sectors) so the
+  // share is of the real universe rather than of what is plotted.
+  function countOpts({ legend = false, rotation = 0, share = false, total = null } = {}) {
     return {
-      layout: { padding: { top: CHART_TOP_PADDING } },
+      layout: { padding: { top: share ? CHART_TOP_PADDING_2 : CHART_TOP_PADDING } },
       scales: {
         y: Y_AXIS(),
         x: X_AXIS(rotation),
       },
       plugins: {
         legend: legend ? { position: 'bottom', labels: { color: '#000' } } : { display: false },
-        datalabels: { formatter: fmtInt },
+        datalabels: {
+          formatter: share
+            ? (v, c) => {
+                const t = total || c.total;
+                return [fmtInt(v), t ? fmtPct((v / t) * 100) : ''];
+              }
+            : fmtInt,
+        },
       },
     };
   }
@@ -1294,8 +1609,38 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.race.labels,
       datasets: [{ data: chartData.race.county, backgroundColor: C.navy }],
     },
-    options: pctOpts({ rotation: 45, max: 100 }),
+    options: pctOpts({ rotation: 45, max: 100, counts: chartData.race.counts }),
   });
+
+  if (chartData.ethnicity) {
+    mk('ethnicity', {
+      type: 'bar',
+      data: {
+        labels: chartData.ethnicity.labels,
+        datasets: [{
+          // Hispanic origin is the subject of the chart, so it gets the
+          // accent colour and every "not Hispanic" bar stays neutral.
+          data: chartData.ethnicity.values,
+          backgroundColor: chartData.ethnicity.labels.map((_, i) => i === 0 ? C.gold : C.navy),
+        }],
+      },
+      options: pctOpts({ rotation: 45, counts: chartData.ethnicity.counts }),
+    });
+  }
+
+  if (chartData.laborForce) {
+    mk('laborForce', {
+      type: 'bar',
+      data: {
+        labels: chartData.laborForce.labels,
+        datasets: [
+          { label: 'Local',  data: chartData.laborForce.local, backgroundColor: C.navy },
+          { label: 'State',  data: chartData.laborForce.state, backgroundColor: C.gold },
+        ],
+      },
+      options: pctOpts({ legend: true, rotation: 45 }),
+    });
+  }
 
   mk('education', {
     type: 'bar',
@@ -1303,7 +1648,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.education.labels,
       datasets: [{ data: chartData.education.values, backgroundColor: C.gold }],
     },
-    options: countOpts({ rotation: 45 }),
+    options: countOpts({ rotation: 45, share: true }),
   });
 
   mk('tenure', {
@@ -1315,13 +1660,47 @@ const occRows = (occupations?.rows ?? [])
     options: {
       plugins: {
         legend: { position: 'bottom' },
-        datalabels: { display: false }, // bar-only plugin; skip on donut
+        datalabels: { display: false },   // bar-only plugin; skip on donut
+        donutlabels: { display: true },
         tooltip: {
-          callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed.toFixed(1)}%` },
+          callbacks: {
+            label: ctx => {
+              const n = chartData.tenure.counts?.[ctx.dataIndex];
+              return `${ctx.label}: ${ctx.parsed.toFixed(1)}%` +
+                     (n != null ? ` (${n.toLocaleString()} households)` : '');
+            },
+          },
         },
       },
     },
   });
+
+  // Occupied vs vacant — the two-slice headline for the vacancy block.
+  if (chartData.occupancy) {
+    mk('occupancy', {
+      type: 'pie',
+      data: {
+        labels: chartData.occupancy.labels,
+        datasets: [{ data: chartData.occupancy.values, backgroundColor: [C.navy, C.gold] }],
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom' },
+          datalabels: { display: false },
+          donutlabels: { display: true, minShare: 2 },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                return `${ctx.label}: ${ctx.parsed.toLocaleString()} units ` +
+                       `(${((ctx.parsed / total) * 100).toFixed(1)}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
 
   mk('structure', {
     type: 'bar',
@@ -1329,7 +1708,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.structure.labels,
       datasets: [{ data: chartData.structure.values, backgroundColor: C.navy }],
     },
-    options: pctOpts({ rotation: 45 }),
+    options: pctOpts({ rotation: 45, counts: chartData.structure.counts }),
   });
 
   mk('yearBuilt', {
@@ -1338,7 +1717,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.yearBuilt.labels,
       datasets: [{ data: chartData.yearBuilt.values, backgroundColor: C.navy }],
     },
-    options: countOpts({ rotation: 45 }),
+    options: countOpts({ rotation: 45, share: true }),
   });
 
   // Housing size mismatch: bedrooms vs household size on a unified percent axis.
@@ -1366,7 +1745,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.homeValue.labels,
       datasets: [{ data: chartData.homeValue.values, backgroundColor: C.navy }],
     },
-    options: countOpts({ rotation: 45 }),
+    options: countOpts({ rotation: 45, share: true }),
   });
 
   mk('rentByBR', {
@@ -1384,7 +1763,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.tenureAge.labels,
       datasets: [{ data: chartData.tenureAge.renters, backgroundColor: C.gold }],
     },
-    options: countOpts({ rotation: 0 }),
+    options: countOpts({ rotation: 0, share: true }),
   });
   mk('ownerAge', {
     type: 'bar',
@@ -1392,7 +1771,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.tenureAge.labels,
       datasets: [{ data: chartData.tenureAge.owners, backgroundColor: C.navy }],
     },
-    options: countOpts({ rotation: 0 }),
+    options: countOpts({ rotation: 0, share: true }),
   });
 
   // Renter cost burden: deliberate 3-stop visual signal —
@@ -1410,7 +1789,7 @@ const occRows = (occupations?.rows ?? [])
         ),
       }],
     },
-    options: countOpts({ rotation: 0 }),
+    options: countOpts({ rotation: 0, share: true }),
   });
   mk('ownerBurden', {
     type: 'bar',
@@ -1418,7 +1797,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.ownerBurden.labels,
       datasets: [{ data: chartData.ownerBurden.values, backgroundColor: C.navy }],
     },
-    options: countOpts({ rotation: 0 }),
+    options: countOpts({ rotation: 0, share: true }),
   });
 
   mk('incomeByTenure', {
@@ -1430,6 +1809,7 @@ const occRows = (occupations?.rows ?? [])
         { label: 'Renters', data: chartData.incomeByTenure.renters, backgroundColor: C.gold },
       ],
     },
+    // Counts only: 22 bars is too many to carry a second label line legibly.
     options: countOpts({ legend: true, rotation: 45 }),
   });
 
@@ -1474,7 +1854,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.householdSize.labels,
       datasets: [{ data: chartData.householdSize.values, backgroundColor: C.gold }],
     },
-    options: countOpts({ rotation: 0 }),
+    options: countOpts({ rotation: 0, share: true }),
   });
 
   // Number of bedrooms
@@ -1484,7 +1864,7 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.bedroomsDistribution.labels,
       datasets: [{ data: chartData.bedroomsDistribution.values, backgroundColor: C.navy }],
     },
-    options: countOpts({ rotation: 0 }),
+    options: countOpts({ rotation: 0, share: true }),
   });
 
   // Monthly housing costs distribution
@@ -1494,29 +1874,43 @@ const occRows = (occupations?.rows ?? [])
       labels: chartData.monthlyHousingCost.labels,
       datasets: [{ data: chartData.monthlyHousingCost.values, backgroundColor: C.navy }],
     },
-    options: countOpts({ rotation: 45 }),
+    options: countOpts({ rotation: 45, share: true }),
   });
 
   // ── Section 2: vacancy analytics ──────────────────────────────
   // Composition: doughnut over the 7 Census B25004 buckets (zero-population
   // buckets are filtered out in chartData so the donut stays readable).
   if (chartData.vacancyComposition && chartData.vacancyComposition.labels.length) {
-    const vacancyColors = [
-      C.navy, C.blue, C.gold, C.amber, C.sage, C.teal, C.char,
-    ];
+    const vacancyColors = chartData.vacancyComposition.labels.map(l => ({
+      'For rent':                 C.navy,
+      'Rented, not occupied':     C.blue,
+      'For sale':                 C.gold,
+      'Sold, not occupied':       C.amber,
+      'Seasonal / recreational':  C.purple,   // taupe
+      'Migrant workers':          C.lteal,
+      'Other':                    C.red,      // brick — the disinvestment read
+    })[l] ?? C.char);
     mk('vacancyComposition', {
       type: 'doughnut',
       data: {
         labels: chartData.vacancyComposition.labels,
         datasets: [{
           data: chartData.vacancyComposition.values,
-          backgroundColor: vacancyColors.slice(0, chartData.vacancyComposition.labels.length),
+          backgroundColor: vacancyColors,
         }],
       },
       options: {
+        // Legend on the right so the ring itself can be large — this donut
+        // carries seven categories and was unreadable at half width.
+        maintainAspectRatio: false,
+        layout: { padding: { top: 8, bottom: 8 } },
         plugins: {
-          legend: { position: 'bottom' },
+          legend: {
+            position: 'right',
+            labels: { color: '#000', boxWidth: 12, boxHeight: 12, padding: 12 },
+          },
           datalabels: { display: false },
+          donutlabels: { display: true },
           tooltip: {
             callbacks: {
               label: ctx => {
@@ -1524,6 +1918,48 @@ const occRows = (occupations?.rows ?? [])
                 const pct = ((ctx.parsed / total) * 100).toFixed(1);
                 return `${ctx.label}: ${ctx.parsed.toLocaleString()} units (${pct}%)`;
               },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // Non-occupancy rate by structure type. Single-family detached gets the
+  // neutral colour and every multi-family category the accent, so the
+  // single-family vs multi-family comparison reads off the chart directly.
+  if (chartData.vacancyByStructure) {
+    const vbs = chartData.vacancyByStructure;
+    mk('vacancyByStructure', {
+      type: 'bar',
+      data: {
+        labels: vbs.labels,
+        datasets: [{
+          data: vbs.values,
+          backgroundColor: vbs.labels.map(l =>
+            l === 'Single-family detached' ? C.navy
+              : (l === 'Single-family attached' || l === 'Mobile home') ? C.char
+              : C.gold),
+        }],
+      },
+      options: {
+        layout: { padding: { top: CHART_TOP_PADDING_2 } },
+        scales: {
+          y: Y_AXIS({ ticks: { color: '#000', callback: v => v + '%' } }),
+          x: X_AXIS(45),
+        },
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            formatter: (v, c) => [
+              fmtPct(v),
+              vbs.vacants[c.index] != null ? fmtInt(vbs.vacants[c.index]) + ' units' : '',
+            ],
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.label}: ${ctx.parsed.y.toFixed(1)}% unoccupied ` +
+                            `(${fmtInt(vbs.vacants[ctx.dataIndex])} of ${fmtInt(vbs.totals[ctx.dataIndex])} units)`,
             },
           },
         },
@@ -1543,7 +1979,7 @@ const occRows = (occupations?.rows ?? [])
           backgroundColor: [C.navy, C.gold],
         }],
       },
-      options: countOpts({ rotation: 0 }),
+      options: countOpts({ rotation: 0, share: true }),
     });
   }
 
@@ -1555,7 +1991,7 @@ const occRows = (occupations?.rows ?? [])
         labels: chartData.industryTopSectors.labels,
         datasets: [{ data: chartData.industryTopSectors.emp, backgroundColor: C.navy }],
       },
-      options: countOpts({ rotation: 45 }),
+      options: countOpts({ rotation: 45, share: true, total: chartData.industryTopSectors.total || null }),
     });
   }
 
@@ -1945,9 +2381,52 @@ const occRows = (occupations?.rows ?? [])
   /* Donut charts need a square canvas to render as a circle, not a
      football. Add any new doughnut chart ID to this selector list.   */
   canvas[data-chart="tenure"],
-  canvas[data-chart="vacancyComposition"] {
+  canvas[data-chart="occupancy"] {
     max-width: 280px;
     margin: 0 auto;
     display: block;
+  }
+  /* Vacancy composition is full-width with a right-hand legend, so it gets
+     a taller canvas and keeps its natural width — the ring grows to fill
+     the space the legend isn't using. */
+  canvas[data-chart="vacancyComposition"] {
+    height: 340px !important;
+    max-width: 100%;
+  }
+  canvas[data-chart="vacancyByStructure"] { height: 320px !important; }
+  .chart-wide { margin-top: var(--space-5); }
+  /* Long footnotes under a chart: smaller, indented, visually secondary to
+     the figcaption that states the headline. */
+  .chart-note {
+    font-size: var(--fs-xs);
+    line-height: 1.5;
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-soft);
+  }
+  .chart-note strong { color: var(--text-primary); }
+
+  /* Earners table — lede paragraph and the income-anchor rows. */
+  .earners-table__lede {
+    font-size: var(--fs-sm);
+    margin-top: calc(-1 * var(--space-2));
+    margin-bottom: var(--space-3);
+  }
+  .earners-table__anchors { border-top: 2px solid var(--border-muted); }
+  .earners-table__anchors th { font-weight: var(--fw-medium); }
+  .earners-table__rule th {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    padding-top: var(--space-3);
+  }
+  .earners-table__note {
+    display: block;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-regular, 400);
+    color: var(--text-muted);
+    white-space: normal;
+    max-width: 26rem;
   }
 </style>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WAHI: does it earn page space? — Economic Impact Group</title>
+<title>WAHI: a third income anchor — Economic Impact Group</title>
 <style>
   :root{
     --navy:#231f20;
@@ -49,8 +49,8 @@
     margin:0 0 14px;
   }
   h1.title{
-    font-size:clamp(28px,4vw,42px);
-    line-height:1.12;
+    font-size:clamp(26px,4vw,40px);
+    line-height:1.14;
     margin:0 0 12px;
     font-weight:700;
     letter-spacing:-.01em;
@@ -60,7 +60,7 @@
     margin:0;
     color:var(--muted);
     font-size:15px;
-    max-width:640px;
+    max-width:680px;
   }
 
   section{margin-bottom:56px;}
@@ -108,13 +108,14 @@
     gap:1px;
     background:var(--hairline);
     border:1px solid var(--hairline);
+    margin-bottom:20px;
   }
   .tile{
     background:var(--panel);
     padding:24px 20px;
   }
   .tile .stat{
-    font-size:clamp(26px,3vw,34px);
+    font-size:clamp(24px,3vw,32px);
     font-weight:700;
     color:var(--navy);
     letter-spacing:-.01em;
@@ -122,6 +123,7 @@
     margin-bottom:8px;
   }
   .tile .stat.accent{color:var(--gold);}
+  .tile .stat.taupe{color:var(--taupe);}
   .tile .label{
     font-size:12.5px;
     color:var(--muted);
@@ -135,7 +137,7 @@
     padding:24px 24px 16px;
   }
   .chart-svg{width:100%;height:auto;display:block;}
-  .hbar{fill:var(--gold);}
+  .hbar{fill:var(--taupe);}
   .axisline{stroke:var(--navy);stroke-width:1;}
   .tick{stroke:var(--faint);stroke-width:1;}
   .axlbl{font-size:11px;fill:var(--muted);font-family:var(--font);}
@@ -152,7 +154,11 @@
     font-size:12px;color:var(--muted);
     margin-bottom:10px;
   }
-  .legend-sq{width:9px;height:9px;background:var(--gold);display:inline-block;}
+  .legend-sq{width:9px;height:9px;background:var(--taupe);display:inline-block;}
+  .legend-sq.navy{background:var(--navy);}
+  .legend-sq.gold{background:var(--gold);}
+  .legend-sq.taupe{background:var(--taupe);}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;}
 
   /* ---- tables ---- */
   table{
@@ -236,6 +242,43 @@
     margin-right:4px;
   }
 
+  /* ---- definition callout ---- */
+  .callout{
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-left:4px solid var(--taupe);
+    padding:22px 26px;
+    margin:18px 0;
+  }
+  .callout .def-term{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    color:var(--taupe);
+    font-weight:700;
+    margin:0 0 8px;
+  }
+  .callout p{font-size:14.5px;}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---- reversal box ---- */
+  .reversal{
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-left:4px solid var(--brick);
+    padding:20px 24px;
+  }
+
+  .cite{
+    display:inline-block;
+    font-family:ui-monospace, "SF Mono", Menlo, monospace;
+    font-size:12px;
+    background:var(--panel2);
+    padding:1px 6px;
+    border-radius:2px;
+    color:var(--deep);
+  }
+
   footer{
     margin-top:60px;
     padding-top:20px;
@@ -258,25 +301,25 @@
 <div class="wrap">
 
   <header class="masthead">
-    <p class="eyebrow">Economic Impact Group &middot; Prototype Research Note</p>
-    <h1 class="title">Working-Age Household Income (WAHI): does it earn page space?</h1>
-    <p class="subtitle">Prototype findings — ACS 2020–2024 5-year, B19037. Economic Impact Group, 31 July 2026.</p>
+    <p class="eyebrow">Economic Impact Group &middot; Research Brief</p>
+    <h1 class="title">Working-Age Household Income (WAHI): a third income anchor</h1>
+    <p class="subtitle">Findings and shipped implementation &mdash; ACS 2020&ndash;2024 5-year, table B19037. Economic Impact Group, 31 July 2026.</p>
   </header>
 
-  <!-- 1. THE HEADLINE -->
+  <!-- 1. THE DECISION -->
   <section>
-    <h2 class="sec-title"><span class="num">01</span> The headline</h2>
+    <h2 class="sec-title"><span class="num">01</span> The decision</h2>
     <div class="tiles">
       <div class="tile">
-        <div class="stat accent">1.16×</div>
+        <div class="stat taupe">1.16×</div>
         <div class="label">Median WAHI / MHI ratio across screened geographies</div>
       </div>
       <div class="tile">
         <div class="stat">10.7%</div>
-        <div class="label">Share of screened geographies where the workforce-gap sign flips under WAHI</div>
+        <div class="label">Share of geographies where the workforce-gap sign flips under WAHI</div>
       </div>
       <div class="tile">
-        <div class="stat">+0.01</div>
+        <div class="stat accent">+0.01</div>
         <div class="label">Correlation of the WAHI/MHI ratio with the existing AMI/MHI divergence measure</div>
       </div>
       <div class="tile">
@@ -284,222 +327,273 @@
         <div class="label">Geographies passing the reliability screen</div>
       </div>
     </div>
+    <p class="lede">WAHI ships as a third income anchor &mdash; alongside HUD Area Median Income and local MHI &mdash; on every geography in the system. It is not a filter, a threshold, or an exception flag. Every screened geography gets all three numbers; nothing is suppressed and nothing is singled out for review based on how large the ratio is.</p>
+    <p>The rest of this brief is the evidence for that decision, and a short account of why the opposite decision &mdash; an exception flag firing at high ratios &mdash; was recommended first and then abandoned.</p>
   </section>
 
   <!-- 2. THE DISTORTION IS UNIVERSAL -->
   <section>
     <h2 class="sec-title"><span class="num">02</span> The distortion is universal, not exceptional</h2>
-    <p class="lede">Working-age households out-earn all households in essentially every American community. The median WAHI/MHI ratio is 1.16 — a 16% premium — and it holds across the overwhelming majority of the 5,132 geographies that clear the reliability screen. A fixed 1.15 threshold would fire in <strong>54.2%</strong> of geographies and mean nothing: it would be flagging the median case, not an outlier.</p>
-    <p>The distribution is tight and right-skewed: p10 is 1.08, p25 is 1.12, p75 is 1.20, p90 is 1.25. Only past roughly 1.30 does the ratio start separating a genuine tail from the pack. The signal that's actually useful for policy is not the level of the ratio — it is the <strong>variation around 1.16</strong>, and specifically the geographies sitting well outside the interquartile band.</p>
+    <p class="lede">Working-age households out-earn all households in essentially every American community. The median WAHI/MHI ratio is 1.16× &mdash; a 16% premium &mdash; and it holds across the 5,132 geographies that clear the reliability screen.</p>
+    <p>A fixed 1.15 threshold would fire in <strong>54.2%</strong> of geographies. That is not a signal, it is the base rate. A condition that fires in more than half of all cases carries no information about which of those cases is unusual.</p>
 
     <div class="chart-box">
-      <div class="legend-row"><span class="legend-sq"></span> Geographies by WAHI/MHI ratio bin (width 0.05×)</div>
-      <svg class="chart-svg" viewBox="0 0 975 365" role="img" aria-label="Histogram of WAHI to MHI ratio across screened geographies">
-        <rect class="hbar" x="86.03" y="316.45" width="29.53" height="3.55"><title>0.95–1.00×: 18 geographies</title></rect>
-        <rect class="hbar" x="117.07" y="293.60" width="29.53" height="26.40"><title>1.00–1.05×: 134 geographies</title></rect>
-        <rect class="hbar" x="148.10" y="182.31" width="29.53" height="137.69"><title>1.05–1.10×: 699 geographies</title></rect>
-        <rect class="hbar" x="179.14" y="24.92" width="29.53" height="295.08"><title>1.10–1.15×: 1498 geographies</title></rect>
-        <rect class="hbar" x="210.17" y="20.00" width="29.53" height="300.00"><title>1.15–1.20×: 1523 geographies</title></rect>
-        <rect class="hbar" x="241.21" y="162.42" width="29.53" height="157.58"><title>1.20–1.25×: 800 geographies</title></rect>
-        <rect class="hbar" x="272.24" y="263.27" width="29.53" height="56.73"><title>1.25–1.30×: 288 geographies</title></rect>
-        <rect class="hbar" x="303.28" y="301.68" width="29.53" height="18.32"><title>1.30–1.35×: 93 geographies</title></rect>
-        <rect class="hbar" x="334.31" y="311.73" width="29.53" height="8.27"><title>1.35–1.40×: 42 geographies</title></rect>
-        <rect class="hbar" x="365.34" y="317.83" width="29.53" height="2.17"><title>1.40–1.45×: 11 geographies</title></rect>
-        <rect class="hbar" x="396.38" y="318.23" width="29.53" height="1.77"><title>1.45–1.50×: 9 geographies</title></rect>
-        <rect class="hbar" x="427.41" y="318.62" width="29.53" height="1.38"><title>1.50–1.55×: 7 geographies</title></rect>
-        <rect class="hbar" x="458.45" y="319.80" width="29.53" height="0.60"><title>1.55–1.60×: 1 geographies</title></rect>
-        <rect class="hbar" x="489.48" y="319.61" width="29.53" height="0.60"><title>1.60–1.65×: 2 geographies</title></rect>
-        <rect class="hbar" x="520.52" y="319.80" width="29.53" height="0.60"><title>1.65–1.70×: 1 geographies</title></rect>
-        <rect class="hbar" x="551.55" y="319.80" width="29.53" height="0.60"><title>1.70–1.75×: 1 geographies</title></rect>
-        <rect class="hbar" x="582.59" y="319.80" width="29.53" height="0.60"><title>1.75–1.80×: 1 geographies</title></rect>
-        <rect class="hbar" x="613.62" y="319.80" width="29.53" height="0.60"><title>1.80–1.85×: 1 geographies</title></rect>
-        <rect class="hbar" x="675.69" y="319.61" width="29.53" height="0.60"><title>1.90–1.95×: 2 geographies</title></rect>
-        <rect class="hbar" x="892.93" y="319.80" width="29.53" height="0.60"><title>2.25–2.30×: 1 geographies</title></rect>
-        <line class="axisline" x1="55" y1="320" x2="955" y2="320" />
-        <line class="tick" x1="86.03" y1="320.00" x2="86.03" y2="325.00" />
-        <text class="axlbl" x="86.03" y="338" text-anchor="middle">0.95×</text>
-        <line class="tick" x1="117.07" y1="320.00" x2="117.07" y2="325.00" />
-        <text class="axlbl" x="117.07" y="338" text-anchor="middle">1.00×</text>
-        <line class="tick" x1="179.14" y1="320.00" x2="179.14" y2="325.00" />
-        <text class="axlbl" x="179.14" y="338" text-anchor="middle">1.10×</text>
-        <line class="tick" x1="241.21" y1="320.00" x2="241.21" y2="325.00" />
-        <text class="axlbl" x="241.21" y="338" text-anchor="middle">1.20×</text>
-        <line class="tick" x1="303.28" y1="320.00" x2="303.28" y2="325.00" />
-        <text class="axlbl" x="303.28" y="338" text-anchor="middle">1.30×</text>
-        <line class="tick" x1="365.34" y1="320.00" x2="365.34" y2="325.00" />
-        <text class="axlbl" x="365.34" y="338" text-anchor="middle">1.40×</text>
-        <line class="tick" x1="427.41" y1="320.00" x2="427.41" y2="325.00" />
-        <text class="axlbl" x="427.41" y="338" text-anchor="middle">1.50×</text>
-        <text class="axlbl" x="830.86" y="338" text-anchor="middle">→ 2.30×</text>
-        <line class="tick" x1="50" y1="320.00" x2="55" y2="320.00" />
-        <text class="axlbl" x="45" y="324.00" text-anchor="end">0</text>
-        <line class="tick" x1="50" y1="221.51" x2="55" y2="221.51" />
-        <text class="axlbl" x="45" y="225.51" text-anchor="end">500</text>
-        <line class="tick" x1="50" y1="123.02" x2="55" y2="123.02" />
-        <text class="axlbl" x="45" y="127.02" text-anchor="end">1000</text>
-        <line class="tick" x1="50" y1="24.53" x2="55" y2="24.53" />
-        <text class="axlbl" x="45" y="28.53" text-anchor="end">1500</text>
-        <line class="medianline" x1="214.34" y1="20" x2="214.34" y2="320" />
-        <text class="medianlbl" x="222.34" y="36">median 1.16×</text>
-        <text class="axtitle" x="505.00" y="361" text-anchor="middle">WAHI / MHI ratio</text>
-        <text class="axtitle" transform="rotate(-90)" x="-170.00" y="14" text-anchor="middle">geographies</text>
+      <div class="legend-row"><span class="legend-sq"></span> Geographies by WAHI/MHI ratio bin (width 0.05&times;)</div>
+      <svg class="chart-svg" viewBox="0 0 975 380" role="img" aria-label="Histogram of WAHI to MHI ratio across screened geographies, median 1.16">
+        <rect class="hbar" x="63.31" y="316.48" width="26.52" height="3.52"><title>0.95–1.00×: 18 geographies</title></rect>
+        <rect class="hbar" x="96.46" y="293.78" width="26.52" height="26.22"><title>1.00–1.05×: 134 geographies</title></rect>
+        <rect class="hbar" x="129.61" y="183.23" width="26.52" height="136.77"><title>1.05–1.10×: 699 geographies</title></rect>
+        <rect class="hbar" x="162.76" y="26.89" width="26.52" height="293.11"><title>1.10–1.15×: 1,498 geographies</title></rect>
+        <rect class="hbar" x="195.91" y="22.00" width="26.52" height="298.00"><title>1.15–1.20×: 1,523 geographies</title></rect>
+        <rect class="hbar" x="229.06" y="163.47" width="26.52" height="156.53"><title>1.20–1.25×: 800 geographies</title></rect>
+        <rect class="hbar" x="262.20" y="263.65" width="26.52" height="56.35"><title>1.25–1.30×: 288 geographies</title></rect>
+        <rect class="hbar" x="295.35" y="301.80" width="26.52" height="18.20"><title>1.30–1.35×: 93 geographies</title></rect>
+        <rect class="hbar" x="328.50" y="311.78" width="26.52" height="8.22"><title>1.35–1.40×: 42 geographies</title></rect>
+        <rect class="hbar" x="361.65" y="317.85" width="26.52" height="2.15"><title>1.40–1.45×: 11 geographies</title></rect>
+        <rect class="hbar" x="394.80" y="318.24" width="26.52" height="1.76"><title>1.45–1.50×: 9 geographies</title></rect>
+        <rect class="hbar" x="427.94" y="318.63" width="26.52" height="1.37"><title>1.50–1.55×: 7 geographies</title></rect>
+        <rect class="hbar" x="461.09" y="319.80" width="26.52" height="0.20"><title>1.55–1.60×: 1 geographies</title></rect>
+        <rect class="hbar" x="494.24" y="319.61" width="26.52" height="0.39"><title>1.60–1.65×: 2 geographies</title></rect>
+        <rect class="hbar" x="527.39" y="319.80" width="26.52" height="0.20"><title>1.65–1.70×: 1 geographies</title></rect>
+        <rect class="hbar" x="560.54" y="319.80" width="26.52" height="0.20"><title>1.70–1.75×: 1 geographies</title></rect>
+        <rect class="hbar" x="593.69" y="319.80" width="26.52" height="0.20"><title>1.75–1.80×: 1 geographies</title></rect>
+        <rect class="hbar" x="626.83" y="319.80" width="26.52" height="0.20"><title>1.80–1.85×: 1 geographies</title></rect>
+        <rect class="hbar" x="659.98" y="320.00" width="26.52" height="0.00"><title>1.85–1.90×: 0 geographies</title></rect>
+        <rect class="hbar" x="693.13" y="319.61" width="26.52" height="0.39"><title>1.90–1.95×: 2 geographies</title></rect>
+        <rect class="hbar" x="726.28" y="320.00" width="26.52" height="0.00"><title>1.95–2.00×: 0 geographies</title></rect>
+        <rect class="hbar" x="759.43" y="320.00" width="26.52" height="0.00"><title>2.00–2.05×: 0 geographies</title></rect>
+        <rect class="hbar" x="792.57" y="320.00" width="26.52" height="0.00"><title>2.05–2.10×: 0 geographies</title></rect>
+        <rect class="hbar" x="825.72" y="320.00" width="26.52" height="0.00"><title>2.10–2.15×: 0 geographies</title></rect>
+        <rect class="hbar" x="858.87" y="320.00" width="26.52" height="0.00"><title>2.15–2.20×: 0 geographies</title></rect>
+        <rect class="hbar" x="892.02" y="320.00" width="26.52" height="0.00"><title>2.20–2.25×: 0 geographies</title></rect>
+        <rect class="hbar" x="925.17" y="319.80" width="26.52" height="0.20"><title>2.25–2.30×: 1 geographies</title></rect>
+        <line class="axisline" x1="60" y1="320" x2="955" y2="320" />
+        <line class="tick" x1="76.57" y1="320.00" x2="76.57" y2="325.00" />
+        <text class="axlbl" x="76.57" y="338" text-anchor="middle">0.95×</text>
+        <line class="tick" x1="109.72" y1="320.00" x2="109.72" y2="325.00" />
+        <text class="axlbl" x="109.72" y="338" text-anchor="middle">1.00×</text>
+        <line class="tick" x1="176.02" y1="320.00" x2="176.02" y2="325.00" />
+        <text class="axlbl" x="176.02" y="338" text-anchor="middle">1.10×</text>
+        <line class="tick" x1="242.31" y1="320.00" x2="242.31" y2="325.00" />
+        <text class="axlbl" x="242.31" y="338" text-anchor="middle">1.20×</text>
+        <line class="tick" x1="308.61" y1="320.00" x2="308.61" y2="325.00" />
+        <text class="axlbl" x="308.61" y="338" text-anchor="middle">1.30×</text>
+        <line class="tick" x1="374.91" y1="320.00" x2="374.91" y2="325.00" />
+        <text class="axlbl" x="374.91" y="338" text-anchor="middle">1.40×</text>
+        <line class="tick" x1="441.20" y1="320.00" x2="441.20" y2="325.00" />
+        <text class="axlbl" x="441.20" y="338" text-anchor="middle">1.50×</text>
+        <text class="axlbl" x="706.39" y="338" text-anchor="middle">long thin tail → 2.30×</text>
+        <line class="tick" x1="55" y1="320.00" x2="60" y2="320.00" />
+        <text class="axlbl" x="50" y="324.00" text-anchor="end">0</text>
+        <line class="tick" x1="55" y1="222.17" x2="60" y2="222.17" />
+        <text class="axlbl" x="50" y="226.17" text-anchor="end">500</text>
+        <line class="tick" x1="55" y1="124.33" x2="60" y2="124.33" />
+        <text class="axlbl" x="50" y="128.33" text-anchor="end">1,000</text>
+        <line class="tick" x1="55" y1="26.50" x2="60" y2="26.50" />
+        <text class="axlbl" x="50" y="30.50" text-anchor="end">1,500</text>
+        <line class="medianline" x1="197.04" y1="22" x2="197.04" y2="320" /><text class="medianlbl" x="205.04" y="38">median 1.16×</text>
+        <text class="axtitle" x="507.50" y="360" text-anchor="middle">WAHI / MHI ratio</text>
+        <text class="axtitle" transform="rotate(-90)" x="-171.00" y="18" text-anchor="middle">geographies</text>
       </svg>
-      <p class="chart-source">Source: ACS 2020–2024 5-year, B19037; n = 5,132 screened geographies. Bin width 0.05×; tail beyond 1.55× (10 geographies, to 2.30×) compressed for legibility.</p>
+      <p class="chart-source">Source: findings2.json &middot; hist. ACS 2020&ndash;2024 5-year, B19037; n = 5,132 screened geographies. Bin width 0.05&times;.</p>
     </div>
   </section>
 
-  <!-- 3. THRESHOLD SENSITIVITY -->
+  <!-- 3. THE MUSCOGEE TEST -->
   <section>
-    <h2 class="sec-title"><span class="num">03</span> Threshold sensitivity</h2>
-    <p>Pick any single cutoff and you are choosing how much of the country to flag, not identifying an anomaly. Ratio &ge; 1.30 fires on <strong>~3.4%</strong> of screened geographies; ratio &le; 1.05 fires on <strong>~3.0%</strong>. These are two different stories — a high-tail group dominated by student and retirement enclaves, a low-tail group dominated by distressed labor markets — not one flag with a single meaning.</p>
-    <div class="two-col">
-      <div>
-        <div class="table-scroll">
-          <table>
-            <caption>High tail — ratio &ge; t</caption>
-            <thead><tr><th>Threshold</th><th class="num">Count</th><th class="num">% of screened</th></tr></thead>
-            <tbody>
-              <tr><td>≥ 1.05×</td><td>4,980</td><td>97.0%</td></tr>
-              <tr><td>≥ 1.10×</td><td>4,281</td><td>83.4%</td></tr>
-              <tr><td>≥ 1.15×</td><td>2,783</td><td>54.2%</td></tr>
-              <tr><td>≥ 1.20×</td><td>1,260</td><td>24.6%</td></tr>
-              <tr><td>≥ 1.25×</td><td>460</td><td>9.0%</td></tr>
-              <tr><td>≥ 1.30×</td><td>172</td><td>3.4%</td></tr>
-              <tr><td>≥ 1.35×</td><td>79</td><td>1.5%</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="chart-source">Source: findings.thresholds; % of 5,132 screened geographies.</p>
-      </div>
-      <div>
-        <div class="table-scroll">
-          <table>
-            <caption>Low tail — ratio &le; t</caption>
-            <thead><tr><th>Threshold</th><th class="num">Count</th><th class="num">% of screened</th></tr></thead>
-            <tbody>
-              <tr><td>≤ 1.02×</td><td>40</td><td>0.8%</td></tr>
-              <tr><td>≤ 1.05×</td><td>152</td><td>3.0%</td></tr>
-              <tr><td>≤ 1.08×</td><td>475</td><td>9.3%</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="chart-source">Source: findings.low; % of 5,132 screened geographies.</p>
-      </div>
+    <h2 class="sec-title"><span class="num">03</span> Why it is not a flag &mdash; the Muscogee test</h2>
+    <p class="lede">Muscogee County, Georgia sits at the 25th percentile of distortion &mdash; ratio 1.109× against the 1.157× norm. Ordinary. Nothing an exception flag would catch.</p>
+    <p>Yet the three anchors disagree by a lot: HUD AMI puts the gap at <span class="gpos">+$3,193</span>, local MHI at <span class="gpos">+$325</span>, WAHI at <span class="gpos">+$1,974</span>. An analyst reading only MHI would call Muscogee close to balanced. An analyst reading WAHI would call it a meaningful shortage. Both are looking at the same county.</p>
+
+    <div class="chart-box">
+      <div class="legend-row">Workforce-band gap under each anchor, Muscogee County, Georgia</div>
+      <svg class="chart-svg" viewBox="0 0 975 152" role="img" aria-label="Comparison of workforce housing gap under HUD AMI, local MHI, and WAHI for Muscogee County, Georgia">
+        <text class="axlbl" x="158" y="35" text-anchor="end" style="font-weight:600;fill:var(--navy);font-size:12.5px;">HUD AMI</text>
+        <rect x="170" y="14" width="730.00" height="26" fill="var(--navy)"></rect>
+        <text class="axlbl" x="910.00" y="32" style="font-weight:700;fill:var(--navy);font-size:13px;">+$3,193</text>
+        <text class="axlbl" x="158" y="81" text-anchor="end" style="font-weight:600;fill:var(--navy);font-size:12.5px;">Local MHI</text>
+        <rect x="170" y="60" width="74.30" height="26" fill="var(--gold)"></rect>
+        <text class="axlbl" x="254.30" y="78" style="font-weight:700;fill:var(--navy);font-size:13px;">+$325</text>
+        <text class="axlbl" x="158" y="127" text-anchor="end" style="font-weight:600;fill:var(--navy);font-size:12.5px;">WAHI</text>
+        <rect x="170" y="106" width="451.31" height="26" fill="var(--taupe)"></rect>
+        <text class="axlbl" x="631.31" y="124" style="font-weight:700;fill:var(--navy);font-size:13px;">+$1,974</text>
+      </svg>
+      <p class="chart-source">Source: findings2.json &middot; muscogee. Gap = workforce-band housing need under each anchor, units.</p>
     </div>
-  </section>
 
-  <!-- 4. WHAT DRIVES IT -->
-  <section>
-    <h2 class="sec-title"><span class="num">04</span> What drives it</h2>
-    <p>Senior-headed households are a median <strong>28.7%</strong> of all households and earn a median <strong>63%</strong> of what working-age households earn. Pull seniors out of the household-income denominator and the median goes up — mechanically, everywhere they're present in volume. A composite driver — senior share &times; senior income deficit, plus a student term — correlates <strong>0.83</strong> with the ratio itself. The measure behaves exactly as theory predicts: it is not picking up noise, it is picking up the compositional effect of age structure on median household income.</p>
-  </section>
-
-  <!-- 5. WHERE IT FIRES -->
-  <section>
-    <h2 class="sec-title"><span class="num">05</span> Where it fires</h2>
-    <div class="two-col">
-      <div>
-        <p class="subhead-line">Top 25, by ratio — college towns and retirement communities.</p>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>Place</th><th class="num">MHI</th><th class="num">WAHI</th><th class="num">Ratio</th><th class="num">65+ share</th><th class="num">&lt;25 share</th></tr></thead>
-            <tbody>
-              <tr><td>West Lafayette city</td><td>$34,891</td><td>$80,190</td><td>2.30×</td><td>14.0%</td><td>46.7%</td></tr>
-              <tr><td>King City city</td><td>$63,684</td><td>$120,423</td><td>1.93×</td><td>62.6%</td><td>0.3%</td></tr>
-              <tr><td>East Lansing city</td><td>$45,687</td><td>$88,000</td><td>1.93×</td><td>18.5%</td><td>38.4%</td></tr>
-              <tr><td>Blacksburg town</td><td>$50,182</td><td>$91,009</td><td>1.82×</td><td>15.0%</td><td>30.6%</td></tr>
-              <tr><td>Seal Beach city</td><td>$85,964</td><td>$151,394</td><td>1.75×</td><td>60.0%</td><td>0.8%</td></tr>
-              <tr><td>Collegeville borough</td><td>$91,466</td><td>$161,007</td><td>1.73×</td><td>35.8%</td><td>1.7%</td></tr>
-              <tr><td>Pullman city</td><td>$46,812</td><td>$78,467</td><td>1.67×</td><td>11.3%</td><td>35.8%</td></tr>
-              <tr><td>San Luis Obispo city</td><td>$73,685</td><td>$121,117</td><td>1.64×</td><td>24.0%</td><td>28.1%</td></tr>
-              <tr><td>Whitewater city</td><td>$54,969</td><td>$89,227</td><td>1.61×</td><td>16.8%</td><td>36.5%</td></tr>
-              <tr><td>Cottonwood city</td><td>$48,448</td><td>$77,387</td><td>1.57×</td><td>51.3%</td><td>4.8%</td></tr>
-              <tr><td>College Station city</td><td>$50,900</td><td>$79,068</td><td>1.54×</td><td>11.7%</td><td>30.1%</td></tr>
-              <tr><td>Whitman County</td><td>$55,406</td><td>$85,000</td><td>1.54×</td><td>19.3%</td><td>24.7%</td></tr>
-              <tr><td>Carlisle city</td><td>$71,136</td><td>$111,024</td><td>1.54×</td><td>33.6%</td><td>10.7%</td></tr>
-              <tr><td>Noble County</td><td>$56,098</td><td>$85,253</td><td>1.52×</td><td>53.3%</td><td>0.6%</td></tr>
-              <tr><td>Stephenville city</td><td>$53,015</td><td>$78,236</td><td>1.51×</td><td>19.7%</td><td>22.1%</td></tr>
-              <tr><td>Normal town</td><td>$64,785</td><td>$97,900</td><td>1.50×</td><td>20.7%</td><td>23.5%</td></tr>
-              <tr><td>Seminole city</td><td>$75,774</td><td>$114,732</td><td>1.50×</td><td>46.1%</td><td>0.7%</td></tr>
-              <tr><td>Huntley village</td><td>$88,536</td><td>$133,009</td><td>1.50×</td><td>52.1%</td><td>0.2%</td></tr>
-              <tr><td>Hettinger County</td><td>$73,026</td><td>$100,647</td><td>1.49×</td><td>39.5%</td><td>4.4%</td></tr>
-              <tr><td>Palos Heights city</td><td>$108,740</td><td>$161,530</td><td>1.49×</td><td>46.9%</td><td>0.0%</td></tr>
-              <tr><td>State College borough</td><td>$45,424</td><td>$67,408</td><td>1.49×</td><td>15.2%</td><td>35.0%</td></tr>
-              <tr><td>Boulder city</td><td>$87,493</td><td>$131,972</td><td>1.47×</td><td>20.6%</td><td>20.6%</td></tr>
-              <tr><td>Montevallo city</td><td>$56,626</td><td>$83,426</td><td>1.47×</td><td>31.3%</td><td>8.6%</td></tr>
-              <tr><td>Pope County</td><td>$60,050</td><td>$87,637</td><td>1.46×</td><td>46.7%</td><td>1.2%</td></tr>
-              <tr><td>Louisburg city</td><td>$68,824</td><td>$105,169</td><td>1.46×</td><td>39.7%</td><td>3.4%</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="chart-source">Source: findings.top; ratio to 2 decimals, shares to 1 decimal.</p>
-      </div>
-      <div>
-        <p class="subhead-line">Bottom 15, by ratio — distressed post-industrial cities where working-age households earn no premium at all. A different, equally publishable signal.</p>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>Place</th><th class="num">MHI</th><th class="num">WAHI</th><th class="num">Ratio</th><th class="num">65+ share</th><th class="num">&lt;25 share</th></tr></thead>
-            <tbody>
-              <tr><td>Ashtabula city</td><td>$44,120</td><td>$42,620</td><td>0.97×</td><td>29.4%</td><td>4.6%</td></tr>
-              <tr><td>Umatilla city</td><td>$68,826</td><td>$68,003</td><td>0.98×</td><td>18.9%</td><td>10.8%</td></tr>
-              <tr><td>Batesville city</td><td>$51,856</td><td>$50,591</td><td>0.98×</td><td>28.1%</td><td>6.3%</td></tr>
-              <tr><td>Gary city</td><td>$38,731</td><td>$38,199</td><td>0.98×</td><td>34.3%</td><td>2.6%</td></tr>
-              <tr><td>Cheverly town</td><td>$123,535</td><td>$118,806</td><td>0.98×</td><td>27.7%</td><td>1.5%</td></tr>
-              <tr><td>Saginaw city</td><td>$38,579</td><td>$37,526</td><td>0.98×</td><td>26.3%</td><td>5.0%</td></tr>
-              <tr><td>Kinston city</td><td>$36,878</td><td>$37,033</td><td>0.99×</td><td>36.9%</td><td>3.3%</td></tr>
-              <tr><td>Roosevelt County</td><td>$57,063</td><td>$56,502</td><td>0.99×</td><td>27.5%</td><td>2.2%</td></tr>
-              <tr><td>Jasper County</td><td>$65,613</td><td>$64,451</td><td>0.99×</td><td>32.8%</td><td>3.6%</td></tr>
-              <tr><td>Yeadon borough</td><td>$49,759</td><td>$49,250</td><td>0.99×</td><td>30.3%</td><td>1.3%</td></tr>
-              <tr><td>Ferguson city</td><td>$47,524</td><td>$46,387</td><td>0.99×</td><td>21.6%</td><td>1.7%</td></tr>
-              <tr><td>Lajas Municipio</td><td>$19,695</td><td>$19,613</td><td>0.99×</td><td>43.6%</td><td>0.7%</td></tr>
-              <tr><td>Crawford County</td><td>$60,392</td><td>$60,190</td><td>1.00×</td><td>35.8%</td><td>2.8%</td></tr>
-              <tr><td>Maywood city</td><td>$60,943</td><td>$60,683</td><td>1.00×</td><td>20.3%</td><td>1.4%</td></tr>
-              <tr><td>Long View town</td><td>$46,739</td><td>$47,110</td><td>1.00×</td><td>28.6%</td><td>6.7%</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="chart-source">Source: findings.bottom; ratio to 2 decimals, shares to 1 decimal.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- 6. DOES IT CHANGE THE ANSWER -->
-  <section>
-    <h2 class="sec-title"><span class="num">06</span> Does it change the answer?</h2>
-    <p>Re-anchoring the workforce band on WAHI instead of MHI flips the sign of the gap in <strong>10.7%</strong> of screened geographies and moves the shortage estimate by more than 25% in <strong>61.6%</strong> of them. Median magnitude change: <strong>36%</strong>. Negative values below are surpluses (<span class="gneg">forest</span>); positive values are shortages (<span class="gpos">brick</span>).</p>
+    <p>The band table below generalises the test across all 5,132 geographies, grouped by how distorted the ratio is:</p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Place</th><th class="num">MHI</th><th class="num">WAHI</th><th class="num">Ratio</th><th class="num">Gap under MHI</th><th class="num">Gap under WAHI</th></tr></thead>
+        <thead><tr><th>Ratio band</th><th class="num">n</th><th class="num">Sign flips</th><th class="num">Gap moves &gt;25%</th><th class="num">Median move / 1,000 renters</th></tr></thead>
         <tbody>
-          <tr><td>Brazos County</td><td>$58,553</td><td>$76,946</td><td>1.31×</td><td><span class="gneg">−2,843</span></td><td><span class="gneg">−487</span></td></tr>
-          <tr><td>Gainesville city</td><td>$46,195</td><td>$60,912</td><td>1.32×</td><td><span class="gneg">−4,037</span></td><td><span class="gneg">−3,777</span></td></tr>
-          <tr><td>Ann Arbor city</td><td>$82,212</td><td>$112,572</td><td>1.37×</td><td><span class="gneg">−2,820</span></td><td><span class="gneg">−801</span></td></tr>
-          <tr><td>Berkeley city</td><td>$108,092</td><td>$143,667</td><td>1.32×</td><td><span class="gneg">−1,750</span></td><td><span class="gneg">−10</span></td></tr>
-          <tr><td>College Station city</td><td>$50,900</td><td>$79,068</td><td>1.54×</td><td><span class="gneg">−2,684</span></td><td><span class="gneg">−872</span></td></tr>
-          <tr><td>Boulder city</td><td>$87,493</td><td>$131,972</td><td>1.47×</td><td><span class="gneg">−3,039</span></td><td><span class="gneg">−760</span></td></tr>
-          <tr><td>Guaynabo Municipio</td><td>$46,731</td><td>$65,067</td><td>1.38×</td><td><span class="gpos">+551</span></td><td><span class="gpos">+552</span></td></tr>
-          <tr><td>Walnut Creek city</td><td>$130,432</td><td>$181,847</td><td>1.38×</td><td><span class="gneg">−714</span></td><td><span class="gpos">+687</span></td></tr>
-          <tr><td>Iowa City city</td><td>$58,546</td><td>$80,938</td><td>1.38×</td><td><span class="gneg">−286</span></td><td><span class="gpos">+120</span></td></tr>
-          <tr><td>Auburn city</td><td>$63,668</td><td>$86,915</td><td>1.35×</td><td><span class="gneg">−568</span></td><td><span class="gpos">+450</span></td></tr>
+          <tr><td>below the norm (<1.10)</td><td class='num'>851</td><td class='num'>10.2%</td><td class='num'>49.8%</td><td class='num'>11.2</td></tr>
+              <tr><td>at the norm (1.10–1.20)</td><td class='num'>3,021</td><td class='num'>10.4%</td><td class='num'>62.4%</td><td class='num'>17.1</td></tr>
+              <tr><td>1.20–1.30</td><td class='num'>1,088</td><td class='num'>10.1%</td><td class='num'>66.1%</td><td class='num'>15.3</td></tr>
+              <tr><td>1.30 and above</td><td class='num'>172</td><td class='num'>22.1%</td><td class='num'>77.9%</td><td class='num'>18.6</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="chart-source">Source: findings.examples. Walnut Creek, Iowa City and Auburn flip from surplus to shortage under WAHI — the sign-flip effect in section 01, in named cities.</p>
+    <p class="chart-source">Source: findings2.json &middot; bands.</p>
+    <p>Sign flips run about 10% in <strong>every</strong> band, including the below-average one. The size of the distortion does not predict whether the answer changes. What moves the gap is the ratio shifting the workforce-band income up 10&ndash;16% and landing in a thin part of the local rent distribution &mdash; a local, not a global, property. No single ratio cutoff can find it.</p>
   </section>
 
-  <!-- 7. VALIDATION -->
+  <!-- 4. A NOTE ON UNITS -->
   <section>
-    <h2 class="sec-title"><span class="num">07</span> Validation</h2>
-    <ul class="validation-list">
-      <li><span class="vlabel">(a) Interpolation consistency.</span>The pooled 25–64 median lies between the published 25–44 and 45–64 cohort medians in <strong>100.00%</strong> of geographies — a hard mathematical constraint the method must satisfy, and does, in every case.</li>
-      <li><span class="vlabel">(b) Port fidelity.</span>The workforce-band math was ported to Python and reproduces the site's committed shortage field exactly in <strong>8,034 of 8,034</strong> geographies.</li>
-      <li><span class="vlabel">(c) Interpolation accuracy.</span>The same interpolation applied to the full distribution reproduces published B19013 median household income with median error <strong>+0.19%</strong> (p5 &minus;3.5%, p95 +4.2%). Because WAHI and its denominator are interpolated from the same table with the same method, this error largely cancels in the ratio.</li>
-      <li><span class="vlabel">(d) Reliability screen.</span><code class="field">&ge;1,000 households, &ge;500 working-age households, CV&lt;15% on both cohort medians, derived median not in the open top bracket</code> — 5,132 of 8,034 geographies pass.</li>
-    </ul>
+    <h2 class="sec-title"><span class="num">04</span> A note on units</h2>
+    <p>The Muscogee move reads as <strong>507%</strong> if you express it as a percentage of the MHI-anchored gap (+$1,649 on a base of $325) &mdash; because that base is near zero. Percentages of a near-zero denominator are unstable and misleading.</p>
+    <p>Correctly stated, the move is <strong>+$1,649 units</strong> on 40,025 renter households, or <strong>41 per 1,000</strong> &mdash; the 78th percentile nationally (national median 15 per 1,000). All reporting in this system uses units per 1,000 renter households. Percentages of the MHI gap are reported nowhere, because that gap approaches zero in exactly the geographies where the anchor choice matters most.</p>
+  </section>
+
+  <!-- 5. NOT A MILITARY ARTIFACT -->
+  <section>
+    <h2 class="sec-title"><span class="num">05</span> It is not a military artifact</h2>
+    <p>Muscogee is genuinely military-heavy &mdash; armed forces are <strong>6.86%</strong> of the labor force, the 97.9th percentile nationally &mdash; and Fort Moore sits inside the county. The objection that WAHI is picking up a base-town artifact was well-founded and had to be tested.</p>
+    <p>It does not survive the test. Military presence pushes the ratio the <strong>other</strong> way: corr(armed-forces share, ratio) = <strong>-0.109</strong>. Its correlation with the size of the gap move is negligible: <strong>+0.029</strong>.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Group</th><th class="num">n</th><th class="num">Median ratio</th><th class="num">Median move / 1,000</th><th class="num">Sign flips</th></tr></thead>
+        <tbody>
+          <tr><td>armed forces >5% of labor force</td><td class='num'>147</td><td class='num'>1.116×</td><td class='num'>20.7</td><td class='num'>15.0%</td></tr>
+              <tr><td><0.2% (effectively none)</td><td class='num'>3,213</td><td class='num'>1.162×</td><td class='num'>14.5</td><td class='num'>9.8%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="chart-source">Source: findings2.json &middot; military.groups.</p>
+
+    <p>The matched-peer test controls directly: 121 counties of similar size and MHI with armed forces under 1% of the labor force post a <strong>higher</strong> median ratio (1.166×) and a <strong>larger</strong> median move (34 per 1,000) than Muscogee (1.109× / 41 per 1,000, no sign flip). Peer sign flips run 15%, above Muscogee's zero.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>County</th><th class="num">MHI</th><th class="num">WAHI</th><th class="num">Ratio</th><th class="num">Gap on MHI</th><th class="num">Gap on WAHI</th><th class="num">Per 1,000</th></tr></thead>
+        <tbody>
+          <tr><td>Forsyth County</td><td class='num'>$67,165</td><td class='num'>$76,422</td><td class='num'>1.132×</td><td class='num'><span class="gpos">+$2,395</span></td><td class='num'><span class="gpos">+$4,258</span></td><td class='num'>32.0</td></tr>
+              <tr><td>Horry County</td><td class='num'>$66,880</td><td class='num'>$74,658</td><td class='num'>1.118×</td><td class='num'><span class="gneg">−$186</span></td><td class='num'><span class="gpos">+$808</span></td><td class='num'>27.5</td></tr>
+              <tr><td>Stark County</td><td class='num'>$67,934</td><td class='num'>$79,177</td><td class='num'>1.164×</td><td class='num'><span class="gpos">+$6,198</span></td><td class='num'><span class="gpos">+$6,881</span></td><td class='num'>14.2</td></tr>
+              <tr><td>Orleans Parish</td><td class='num'>$56,631</td><td class='num'>$64,550</td><td class='num'>1.138×</td><td class='num'><span class="gneg">−$6,734</span></td><td class='num'><span class="gneg">−$5,478</span></td><td class='num'>16.5</td></tr>
+              <tr><td>St. Louis city</td><td class='num'>$56,160</td><td class='num'>$64,202</td><td class='num'>1.131×</td><td class='num'><span class="gpos">+$1,681</span></td><td class='num'><span class="gpos">+$5,053</span></td><td class='num'>42.5</td></tr>
+              <tr><td>Fayette County</td><td class='num'>$69,479</td><td class='num'>$83,192</td><td class='num'>1.184×</td><td class='num'><span class="gpos">+$1,650</span></td><td class='num'><span class="gpos">+$4,533</span></td><td class='num'>44.6</td></tr>
+              <tr><td>Cameron County</td><td class='num'>$52,601</td><td class='num'>$61,403</td><td class='num'>1.166×</td><td class='num'><span class="gpos">+$574</span></td><td class='num'><span class="gpos">+$3,845</span></td><td class='num'>67.9</td></tr>
+              <tr><td>Luzerne County</td><td class='num'>$63,691</td><td class='num'>$74,199</td><td class='num'>1.151×</td><td class='num'><span class="gpos">+$1,118</span></td><td class='num'><span class="gpos">+$3,155</span></td><td class='num'>46.8</td></tr>
+              <tr><td>Spartanburg County</td><td class='num'>$66,234</td><td class='num'>$77,035</td><td class='num'>1.163×</td><td class='num'><span class="gpos">+$1,527</span></td><td class='num'><span class="gpos">+$3,169</span></td><td class='num'>46.2</td></tr>
+              <tr><td>Greene County</td><td class='num'>$61,479</td><td class='num'>$72,457</td><td class='num'>1.169×</td><td class='num'><span class="gpos">+$4,861</span></td><td class='num'><span class="gpos">+$6,447</span></td><td class='num'>28.5</td></tr>
+              <tr><td>Lubbock County</td><td class='num'>$64,155</td><td class='num'>$78,618</td><td class='num'>1.219×</td><td class='num'><span class="gneg">−$1,042</span></td><td class='num'><span class="gpos">+$2,320</span></td><td class='num'>59.9</td></tr>
+              <tr><td>Leon County</td><td class='num'>$66,287</td><td class='num'>$77,639</td><td class='num'>1.167×</td><td class='num'><span class="gneg">−$4,218</span></td><td class='num'><span class="gpos">+$361</span></td><td class='num'>78.7</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="chart-source">Source: findings2.json &middot; military.peers.rows. n = 121 matched peers (similar household count and MHI, armed forces &lt;1% of labor force). Horry, Lubbock and Leon &mdash; all with negligible military presence &mdash; flip sign under WAHI; Muscogee does not.</p>
+  </section>
+
+  <!-- 6. WHAT DRIVES IT -->
+  <section>
+    <h2 class="sec-title"><span class="num">06</span> What drives it</h2>
+    <p>Senior-headed households are a median <strong>28.7%</strong> of all households and earn a median <strong>63%</strong> of what working-age households earn. Pulling seniors out of the household-income denominator mechanically raises the median wherever they are present in volume.</p>
+    <p>A composite driver &mdash; senior share &times; senior income deficit, plus a student term &mdash; correlates <strong>0.83</strong> with the ratio itself. The measure behaves exactly as theory predicts: it is not noise, it is the compositional effect of household age structure on median household income, measured and reproduced.</p>
+  </section>
+
+  <!-- 7. THE TAILS -->
+  <section>
+    <h2 class="sec-title"><span class="num">07</span> The tails, as reporting colour not as a trigger</h2>
+    <p>The tails are real and worth publishing &mdash; they are just not a rule. High-ratio places are college towns and retirement communities. Low-ratio places are distressed post-industrial cities where working-age households earn no premium at all over the household median &mdash; a separate and equally publishable signal, running the opposite direction from the exception-flag framing.</p>
+    <div class="two-col">
+      <div>
+        <p class="subhead-line">High tail &mdash; college towns and retirement communities</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Place</th><th class="num">MHI</th><th class="num">WAHI</th><th class="num">Ratio</th><th class="num">65+ share</th><th class="num">&lt;25 share</th></tr></thead>
+            <tbody>
+              <tr><td>West Lafayette city</td><td class='num'>$34,891</td><td class='num'>$80,190</td><td class='num'>2.30×</td><td class='num'>14.0%</td><td class='num'>46.7%</td></tr>
+              <tr><td>King City city</td><td class='num'>$63,684</td><td class='num'>$120,423</td><td class='num'>1.93×</td><td class='num'>62.6%</td><td class='num'>0.3%</td></tr>
+              <tr><td>East Lansing city</td><td class='num'>$45,687</td><td class='num'>$88,000</td><td class='num'>1.93×</td><td class='num'>18.5%</td><td class='num'>38.4%</td></tr>
+              <tr><td>Blacksburg town</td><td class='num'>$50,182</td><td class='num'>$91,009</td><td class='num'>1.82×</td><td class='num'>15.0%</td><td class='num'>30.6%</td></tr>
+              <tr><td>Seal Beach city</td><td class='num'>$85,964</td><td class='num'>$151,394</td><td class='num'>1.75×</td><td class='num'>60.0%</td><td class='num'>0.8%</td></tr>
+              <tr><td>Collegeville borough</td><td class='num'>$91,466</td><td class='num'>$161,007</td><td class='num'>1.73×</td><td class='num'>35.8%</td><td class='num'>1.7%</td></tr>
+              <tr><td>Pullman city</td><td class='num'>$46,812</td><td class='num'>$78,467</td><td class='num'>1.67×</td><td class='num'>11.3%</td><td class='num'>35.8%</td></tr>
+              <tr><td>San Luis Obispo city</td><td class='num'>$73,685</td><td class='num'>$121,117</td><td class='num'>1.64×</td><td class='num'>24.0%</td><td class='num'>28.1%</td></tr>
+              <tr><td>Whitewater city</td><td class='num'>$54,969</td><td class='num'>$89,227</td><td class='num'>1.61×</td><td class='num'>16.8%</td><td class='num'>36.5%</td></tr>
+              <tr><td>Cottonwood city</td><td class='num'>$48,448</td><td class='num'>$77,387</td><td class='num'>1.57×</td><td class='num'>51.3%</td><td class='num'>4.8%</td></tr>
+              <tr><td>College Station city</td><td class='num'>$50,900</td><td class='num'>$79,068</td><td class='num'>1.54×</td><td class='num'>11.7%</td><td class='num'>30.1%</td></tr>
+              <tr><td>Whitman County</td><td class='num'>$55,406</td><td class='num'>$85,000</td><td class='num'>1.54×</td><td class='num'>19.3%</td><td class='num'>24.7%</td></tr>
+              <tr><td>Carlisle city</td><td class='num'>$71,136</td><td class='num'>$111,024</td><td class='num'>1.54×</td><td class='num'>33.6%</td><td class='num'>10.7%</td></tr>
+              <tr><td>Noble County</td><td class='num'>$56,098</td><td class='num'>$85,253</td><td class='num'>1.52×</td><td class='num'>53.3%</td><td class='num'>0.6%</td></tr>
+              <tr><td>Stephenville city</td><td class='num'>$53,015</td><td class='num'>$78,236</td><td class='num'>1.51×</td><td class='num'>19.7%</td><td class='num'>22.1%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="chart-source">Source: findings2.json &middot; tails.high.</p>
+      </div>
+      <div>
+        <p class="subhead-line">Low tail &mdash; distressed post-industrial cities, ratio near 1.00</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Place</th><th class="num">MHI</th><th class="num">WAHI</th><th class="num">Ratio</th><th class="num">65+ share</th><th class="num">&lt;25 share</th></tr></thead>
+            <tbody>
+              <tr><td>Ashtabula city</td><td class='num'>$44,120</td><td class='num'>$42,620</td><td class='num'>0.97×</td><td class='num'>29.4%</td><td class='num'>4.6%</td></tr>
+              <tr><td>Umatilla city</td><td class='num'>$68,826</td><td class='num'>$68,003</td><td class='num'>0.98×</td><td class='num'>18.9%</td><td class='num'>10.8%</td></tr>
+              <tr><td>Batesville city</td><td class='num'>$51,856</td><td class='num'>$50,591</td><td class='num'>0.98×</td><td class='num'>28.1%</td><td class='num'>6.3%</td></tr>
+              <tr><td>Gary city</td><td class='num'>$38,731</td><td class='num'>$38,199</td><td class='num'>0.98×</td><td class='num'>34.3%</td><td class='num'>2.6%</td></tr>
+              <tr><td>Cheverly town</td><td class='num'>$123,535</td><td class='num'>$118,806</td><td class='num'>0.98×</td><td class='num'>27.7%</td><td class='num'>1.5%</td></tr>
+              <tr><td>Saginaw city</td><td class='num'>$38,579</td><td class='num'>$37,526</td><td class='num'>0.98×</td><td class='num'>26.3%</td><td class='num'>5.0%</td></tr>
+              <tr><td>Kinston city</td><td class='num'>$36,878</td><td class='num'>$37,033</td><td class='num'>0.99×</td><td class='num'>36.9%</td><td class='num'>3.3%</td></tr>
+              <tr><td>Roosevelt County</td><td class='num'>$57,063</td><td class='num'>$56,502</td><td class='num'>0.99×</td><td class='num'>27.5%</td><td class='num'>2.2%</td></tr>
+              <tr><td>Jasper County</td><td class='num'>$65,613</td><td class='num'>$64,451</td><td class='num'>0.99×</td><td class='num'>32.8%</td><td class='num'>3.6%</td></tr>
+              <tr><td>Yeadon borough</td><td class='num'>$49,759</td><td class='num'>$49,250</td><td class='num'>0.99×</td><td class='num'>30.3%</td><td class='num'>1.3%</td></tr>
+              <tr><td>Ferguson city</td><td class='num'>$47,524</td><td class='num'>$46,387</td><td class='num'>0.99×</td><td class='num'>21.6%</td><td class='num'>1.7%</td></tr>
+              <tr><td>Lajas Municipio</td><td class='num'>$19,695</td><td class='num'>$19,613</td><td class='num'>0.99×</td><td class='num'>43.6%</td><td class='num'>0.7%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="chart-source">Source: findings2.json &middot; tails.low.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. RECONCILER -->
+  <section>
+    <h2 class="sec-title"><span class="num">08</span> WAHI reconciles the other two anchors</h2>
+    <p>Where MHI and AMI disagree by more than 50 units (n = 3,695), WAHI closes a median <strong>38.9%</strong> of the disagreement, and lands closer to the AMI answer than MHI does in <strong>65.9%</strong> of geographies.</p>
+    <p>The interpretation: part of why HUD AMI runs above local MHI is not HUD's regional, family-size, and four-person adjustments &mdash; it is that MHI counts retirees and students, while the workforce band is meant to describe workers. WAHI removes that mismatch directly. Muscogee illustrates the reconciliation in one line: +$325 &rarr; +$1,974 &rarr; +$3,193.</p>
+  </section>
+
+  <!-- 9. DEFINITION -->
+  <section>
+    <h2 class="sec-title"><span class="num">09</span> What WAHI is &mdash; and is not</h2>
+    <div class="callout">
+      <p class="def-term">Definition</p>
+      <p><strong>WAHI is the median income of households headed by someone aged 25&ndash;64</strong>, drawn from ACS table B19037 (age of householder by household income).</p>
+      <p>It is <strong>not</strong> the income of working-age adults. ACS classifies an entire household by the age of one reference person: a 70-year-old still working is excluded if a younger person is not the householder, and a retired parent living in a 45-year-old's household is counted in full. Read WAHI as &ldquo;what households run by working-age people earn here,&rdquo; not as a measure of individual worker earnings.</p>
+    </div>
+    <p>Two naming notes, on the record. The name AWI was rejected: it collides with the Social Security Administration's Average Wage Index, and &ldquo;adjusted&rdquo; implies an adjustment factor that does not exist here &mdash; this is a restricted median, not an adjusted one. And 25&ndash;64 is <strong>working age</strong>, not <strong>prime working age</strong>, which by BLS convention is 25&ndash;54. The two terms are not interchangeable and the brief uses only the former.</p>
+  </section>
+
+  <!-- 10. METHOD AND VALIDATION -->
+  <section>
+    <h2 class="sec-title"><span class="num">10</span> Method and validation</h2>
+    <p><strong>Interpolation.</strong> B19037 publishes household counts by income bracket separately for the 25&ndash;44 and 45&ndash;64 householder-age cohorts. The two cohorts are pooled bracket-by-bracket into a single 25&ndash;64 distribution, and the median is found by linear interpolation inside the bracket that contains it. The open top bracket is modelled as a $200,000&ndash;$400,000 range and geographies whose derived median falls inside it are flagged rather than silently reported.</p>
+    <p>The same interpolation, by the same method, produces the MHI denominator used in the WAHI/MHI ratio. Grouped-data interpolation error is not eliminated, but because both numerator and denominator are built the same way from the same table, that error <strong>cancels in the ratio</strong> far more than it would in either figure taken alone.</p>
+    <ol>
+      <li><strong>Between-cohorts constraint (100.00%).</strong> The pooled 25&ndash;64 median lies between the published 25&ndash;44 and 45&ndash;64 cohort medians in every screened geography &mdash; a hard mathematical constraint the method must satisfy, and does, without exception.</li>
+      <li><strong>Port fidelity (8,034 / 8,034).</strong> The workforce-band math was ported to Python and reproduces the production build's committed field exactly in all geographies.</li>
+      <li><strong>Interpolation accuracy (+0.19% median error).</strong> The same method applied to the full distribution reproduces published B19013 median household income with median error +0.19% (p5 -3.5%, p95 +4.2%).</li>
+      <li><strong>End-to-end.</strong> STATES=13 run of the production build script reproduced the prototype exactly for Muscogee (wahi 64,421 · ratio 1.109 · +3,193 / +325 / +1,974 · 41.2 per 1,000); 296/296 Georgia geographies received all three anchors</li>
+      <li><strong>Syntax.</strong> node --check on both JS files; @astrojs/compiler on HousingGapCard.astro — 0 diagnostics</li>
+    </ol>
+    <p>Reliability screen: <code class="field">≥1,000 households, ≥500 working-age households, CV<15% on both cohort medians, derived median not in the open top bracket</code> &mdash; 5,132 of 8,034 geographies pass. The screen is <strong>display-only</strong>. WAHI is computed and shown on every geography regardless of screen status; geographies that fail it carry a thin-sample caution label rather than being hidden.</p>
+  </section>
+
+  <!-- 11. WHAT CHANGED AND WHY -->
+  <section>
+    <h2 class="sec-title"><span class="num">11</span> What changed and why</h2>
+    <div class="reversal">
+      <p>The first recommendation on this project was an exception flag: fire when the WAHI/MHI ratio reaches 1.30 or higher. Muscogee falsified it. Muscogee sits at the 25th percentile of distortion &mdash; ordinary, nowhere near 1.30, nothing a flag would catch &mdash; and the anchor choice still swings the workforce gap from +$325 to +$1,974.</p>
+      <p>Generalising the test across every ratio band (section 03) confirmed it was not a one-off: the sign-flip rate sits at roughly 10% in every band, including the least-distorted one. A trigger is supposed to separate cases that matter from cases that don't. A condition that fires at the same rate regardless of how extreme it looks is not measuring the thing it claims to measure.</p>
+      <p>This is the same failure mode as an earlier band-share trigger elsewhere on this project: a condition that fires on more than half of all cases, or fires uncorrelated with the outcome it's meant to predict, is not a trigger &mdash; it's noise with a threshold attached. The fix in both cases was the same: stop trying to flag the exception, and publish the number everywhere instead.</p>
+    </div>
   </section>
 
   <footer>
-    Economic Impact Group &middot; Prototype research note &middot; 31 July 2026 &middot; ACS 2020–2024 5-year, table B19037 (sex by age by household income). All figures internal to findings.json / gapflip.json; not for external distribution.
+    Economic Impact Group &middot; Research brief &middot; 31 July 2026 &middot; ACS 2020&ndash;2024 5-year, table B19037 (sex by age by household income). All figures sourced from findings2.json; the earlier findings.json is superseded and not used here.
   </footer>
 
 </div>

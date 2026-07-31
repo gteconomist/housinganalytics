@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "housinganalytics.org — ACS housing data for every U.S. county",
+  "description": "housinganalytics.org \u2014 ACS housing data for every U.S. county",
   "scripts": {
     "hud": "node scripts/fetch-hud-ami.mjs",
     "gazetteer": "node scripts/fetch-gazetteer.mjs",
@@ -30,7 +30,8 @@
     "analysis-geo": "node scripts/build-analysis-geo.mjs",
     "analysis-summary": "SUMMARY_ONLY=1 node scripts/build-analysis-geo.mjs",
     "chas": "node scripts/fetch-chas.mjs",
-    "market": "node scripts/fetch-market.mjs"
+    "market": "node scripts/fetch-market.mjs",
+    "acs-extra": "node scripts/fetch-acs-extra.mjs"
   },
   "dependencies": {
     "astro": "^4.16.18",

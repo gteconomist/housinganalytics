@@ -38,3 +38,7 @@ yarn-error.log*
 
 # Build preview output
 preview/
+
+# Scratch dir used when a Cowork session needs to 'delete' a file it cannot
+# unlink over the device bridge. Never meant to be committed.
+_to_delete/

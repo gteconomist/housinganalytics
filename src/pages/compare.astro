@@ -1,5 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+// Content-hash /js/export.js so a new version busts the Cloudflare and browser
+// cache — Astro does not fingerprint anything under public/.
+const exportV = createHash('md5').update(readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 import manifest from '../data/generated/manifest.json';
 ---
 <Base title="Compare counties — housinganalytics.org"
@@ -70,7 +75,7 @@ import manifest from '../data/generated/manifest.json';
 <script type="application/json" id="counties-manifest" set:html={JSON.stringify(manifest.counties)}></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <!-- Export module: PNG buttons per chart (Excel/PDF come in a later phase). -->
-<script src="/js/export.js" defer is:inline></script>
+<script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
 <script>
   // ─────────────────────────────────────────────────────────────
   // Compare page — client-side state + rendering

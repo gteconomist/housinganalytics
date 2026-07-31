@@ -1,5 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+// Content-hash /js/export.js so a new version busts the Cloudflare and browser
+// cache — Astro does not fingerprint anything under public/.
+const exportV = createHash('md5').update(readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 ---
 <Base title="Rankings — housinganalytics.org"
       description="Sort and filter all 3,222 U.S. counties on every housing metric. Pick a metric, filter by state and population tier, export to CSV.">
@@ -102,7 +107,7 @@ import Base from '../layouts/Base.astro';
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <!-- Export module: PNG button on the top-10 chart (Excel/PDF come in a later phase). -->
-<script src="/js/export.js" defer is:inline></script>
+<script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
 <script type="module">
   // ─────────────────────────────────────────────────────────────
   // Rankings page — client-side data table + chart over all 3,222
