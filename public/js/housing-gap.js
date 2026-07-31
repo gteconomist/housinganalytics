@@ -254,12 +254,14 @@
   function marketPanel(mkt){
     if(!mkt) return '';
     return '<h3 class="hg-h3">Where the market is right now <span class="hg-pill hg-pill--live">live</span></h3>'+
-      '<p class="hg-sub">Current asking rents and sale prices — the timeliness layer. Dated and kept separate from the ACS/CHAS structural counts above.</p>'+
+      '<p class="hg-sub">Current asking rents, sale prices and home values — the timeliness layer. Dated and kept separate from the ACS/CHAS structural counts above.</p>'+
       '<div class="hg-market">'+
-        '<div class="hg-mcard"><div class="hg-mv">'+(mkt.rent?fmt$(mkt.rent)+'/mo':'—')+'</div><div class="hg-ml">Typical rent — '+(mkt.cbsaTitle||'metro')+'<br><span class="muted">Zillow ZORI · '+(mkt.rentAsOf||'')+'</span></div></div>'+
-        '<div class="hg-mcard"><div class="hg-mv">'+(mkt.price?fmt$(mkt.price):'—')+'</div><div class="hg-ml">Median sale price<br><span class="muted">Redfin · '+(mkt.priceAsOf||'')+'</span></div></div>'+
+        '<div class="hg-mcard"><div class="hg-mv">'+(mkt.rent?fmt$(mkt.rent)+'/mo':'—')+'</div><div class="hg-ml">Typical asking rent, all rental types — '+(mkt.cbsaTitle||'metro')+'<br><span class="muted">Zillow ZORI · '+(mkt.rentAsOf||'')+'</span></div></div>'+
+        '<div class="hg-mcard"><div class="hg-mv">'+(mkt.price?fmt$(mkt.price):'—')+'</div><div class="hg-ml">Median sale price — homes that closed<br><span class="muted">Redfin · '+(mkt.priceAsOf||'')+'</span></div></div>'+
+        '<div class="hg-mcard"><div class="hg-mv">'+(mkt.hval?fmt$(mkt.hval):'—')+'</div><div class="hg-ml">Typical home value — all homes, sold or not<br><span class="muted">Zillow ZHVI · '+(mkt.hvalAsOf||'')+'</span></div></div>'+
       '</div>'+
-      '<p class="hg-src" data-market-ctx></p>';
+      '<p class="hg-src" data-market-ctx></p>'+
+      '<p class="hg-src">Sale price is the median of homes that actually closed, so it swings with what happened to sell; ZHVI is a modeled mid-tier value across all homes, smoothed and seasonally adjusted, so it is the steadier series for trends. ZHVI covers single-family and condo only, while the rent index also includes multifamily.</p>';
   }
 
   function chasSection(chas){

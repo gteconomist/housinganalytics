@@ -30,6 +30,7 @@ const metroKey = (nm) => { const [c, st] = String(nm).split(',').map((x) => (x |
 const cbsaKey  = (t)  => { const [c, st] = String(t).split(',').map((x) => (x || '').trim()); return st ? c.split('-')[0].toLowerCase() + '|' + st.split('-')[0].toLowerCase() : null; };
 const zoriByKey = {}; for (const r of Object.values(MARKET.metros || {})) { const k = metroKey(r.name); if (k && r.zori != null) zoriByKey[k] = r.zori; }
 const ZORI_BY_CBSA = {}; for (const [code, title] of Object.entries(CBSA_NAME)) { const k = cbsaKey(title); if (k && zoriByKey[k] != null) ZORI_BY_CBSA[code] = zoriByKey[k]; }
+const ZHVI_FIPS_OK = Object.keys(MARKET.zhviCountyFips || {}).length > 0;
 
 function buildMarket(gid, cleanName, level, st) {
   const abbr = FIPS_USPS[st] || '';
@@ -37,8 +38,16 @@ function buildMarket(gid, cleanName, level, st) {
   const rent = cbsa ? (ZORI_BY_CBSA[cbsa] ?? null) : null;
   const pk = mNormKey(cleanName, abbr);
   const pr = level === 'place' ? (MARKET.redfinCity && MARKET.redfinCity[pk]) : (MARKET.redfinCounty && MARKET.redfinCounty[pk]);
-  if (rent == null && !pr) return null;
-  return { rent, rentAsOf: (MARKET.asOf && MARKET.asOf.zori) || null, price: pr ? pr.price : null, priceAsOf: pr ? pr.period : null, cbsaTitle: cbsa ? (CBSA_NAME[cbsa] || null) : null };
+  // ZHVI: modeled typical home VALUE — a separate field from the Redfin closed-sale price,
+  // never a fallback for it. Counties join on exact GEOID. The name key is NOT safe at county
+  // level (mNormKey strips the "county"/"city" suffix, so "St. Louis city" and "St. Louis
+  // County" collide), so only fall back to it if the FIPS map is empty — i.e. the upstream
+  // file lost its FIPS columns — rather than per-county.
+  const hv = level === 'place'
+    ? (MARKET.zhviCity && MARKET.zhviCity[pk])
+    : (ZHVI_FIPS_OK ? MARKET.zhviCountyFips[gid] : (MARKET.zhviCounty && MARKET.zhviCounty[pk]));
+  if (rent == null && !pr && !hv) return null;
+  return { rent, rentAsOf: (MARKET.asOf && MARKET.asOf.zori) || null, price: pr ? pr.price : null, priceAsOf: pr ? pr.period : null, hval: hv ? hv.hval : null, hvalAsOf: hv ? hv.hvalAsOf : null, cbsaTitle: cbsa ? (CBSA_NAME[cbsa] || null) : null };
 }
 
 let files = 0, updated = 0;

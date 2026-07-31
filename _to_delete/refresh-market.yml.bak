@@ -1,4 +1,4 @@
-name: Refresh market overlay (ZORI + ZHVI + Redfin)
+name: Refresh market overlay (ZORI + Redfin)
 on:
   schedule:
     - cron: '0 9 20 * *'   # 20th of each month, after Zillow's mid-month ZORI release
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fetch ZORI + ZHVI + Redfin
+      - name: Fetch ZORI + Redfin
         run: node scripts/fetch-market.mjs
       - name: Refresh market overlay in bundles
         run: node scripts/refresh-market.mjs
