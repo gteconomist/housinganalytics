@@ -61,7 +61,7 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
     <dl class="hg-card__stats">
       <div><dt>Renter households cost-burdened</dt><dd>{rec.rb != null ? `${rec.rb}%` : '—'}<span class="hg-card__dd2">{rec.rbn != null ? fmt(rec.rbn) : ''}</span></dd></div>
       <div><dt>Shortage at ≤ 30% AMI</dt><dd>{rec.eli != null ? fmt(rec.eli) : '—'}</dd></div>
-      <div><dt>Workforce gap, 80–120%<br/>on HUD AMI / local / working-age</dt><dd>{sgn(rec.wsh) ?? (rec.pg != null ? `${fmt(rec.pg)} under $${(rec.pc / 1000).toFixed(0)}k` : '—')}<span class="hg-card__dd2">{sgn(rec.msh) != null ? `local: ${sgn(rec.msh)}` : ''}</span><span class="hg-card__dd2">{sgn(rec.xsh) != null ? `working-age: ${sgn(rec.xsh)}` : ''}</span></dd></div>
+      <div><dt>Workforce gap, 80–120%<br/>on HUD AMI / working-age / local</dt><dd>{sgn(rec.wsh) ?? (rec.pg != null ? `${fmt(rec.pg)} under ${(rec.pc / 1000).toFixed(0)}k` : '—')}<span class="hg-card__dd2">{sgn(rec.xsh) != null ? `working-age: ${sgn(rec.xsh)}` : ''}</span><span class="hg-card__dd2">{sgn(rec.msh) != null ? `local: ${sgn(rec.msh)}` : ''}</span></dd></div>
     </dl>
 
     {rec.wahi != null && (

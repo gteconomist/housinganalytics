@@ -3,7 +3,8 @@
    Adds: PNG download per chart, in EIG or Georgia Tech colours (every page)
          Excel download per table (any .card containing a <table>)
          Excel + PDF buttons for the county profile (toolbar with [data-export-toolbar])
-   Loaded as: <script src="/js/export.js" defer></script>
+   Loaded as a deferred <script> with src="/js/export.js" (content-hashed by
+   each page — see the cache-busting note in the repo conventions).
    Depends on: Chart.js v4 (already loaded by each page).
    Lazy-loads ExcelJS, jsPDF, html2canvas only on first use.
    ───────────────────────────────────────────────────────────────────────── */
@@ -90,9 +91,9 @@
     const key = color.trim().toLowerCase();
     return EIG_TO_GT[key] || GT_SEQUENCE[i % GT_SEQUENCE.length];
   }
-  /* Swap a chart into GT colours. Returns an undo function. */
-  function applyGtScheme(chart) {
-    if (!chart) return function () {};
+  /* Recolour one Chart.js chart. Returns an undo function. */
+  function gtChart(chart) {
+    if (!chart || !chart.data) return function () {};
     const saved = [];
     chart.data.datasets.forEach((ds, di) => {
       saved.push({ ds, bg: ds.backgroundColor, border: ds.borderColor });
@@ -103,7 +104,7 @@
         ds.borderColor = toGt(ds.borderColor, di);
       }
     });
-    const dl = chart.options?.plugins?.datalabels;
+    const dl = chart.options && chart.options.plugins && chart.options.plugins.datalabels;
     const prevLabel = dl ? dl.color : undefined;
     if (dl) dl.color = GT.navy;
     chart.update('none');
@@ -112,6 +113,77 @@
       if (dl) dl.color = prevLabel;
       chart.update('none');
     };
+  }
+
+  /* Recolour a hand-built inline SVG chart (the housing-gap rental-gap
+     chart draws its own <rect fill="#…">) plus any inline-styled swatch
+     next to it (the legend squares). Only exact EIG hexes are touched, so
+     a colour we don't recognise is left alone rather than guessed at. */
+  const COLOUR_STYLE_PROPS = ['fill', 'stroke', 'backgroundColor', 'color', 'borderColor'];
+  function gtMarkup(root) {
+    const undo = [];
+    /* Inline styles come back from the DOM as "rgb(35, 31, 32)", not as the
+       "#231f20" that was written, so normalise before the lookup. */
+    const toHex = v => {
+      if (typeof v !== 'string') return null;
+      const t = v.trim().toLowerCase();
+      if (/^#[0-9a-f]{6}$/.test(t)) return t;
+      const m = t.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+      if (!m) return null;
+      return '#' + [1, 2, 3].map(i => Number(m[i]).toString(16).padStart(2, '0')).join('');
+    };
+    const mapped = v => {
+      const hex = toHex(v);
+      return hex ? (EIG_TO_GT[hex] || null) : null;
+    };
+    root.querySelectorAll('*').forEach(el => {
+      for (const attr of ['fill', 'stroke']) {
+        const gt = el.getAttribute && mapped(el.getAttribute(attr));
+        if (gt) { const prev = el.getAttribute(attr); undo.push(() => el.setAttribute(attr, prev)); el.setAttribute(attr, gt); }
+      }
+      if (!el.style || !el.getAttribute || !el.getAttribute('style')) return;
+      for (const prop of COLOUR_STYLE_PROPS) {
+        const gt = mapped(el.style[prop]);
+        if (gt) { const prev = el.style[prop]; undo.push(() => { el.style[prop] = prev; }); el.style[prop] = gt; }
+      }
+    });
+    return function () { undo.forEach(f => f()); };
+  }
+
+  /* A page whose figure can't be repainted by hex substitution — a d3
+     colour ramp on a choropleth, say — pushes its own handler onto
+     window.__haRecolor. Each entry is {match(figure)->bool, apply(figure,
+     scheme)->undo}. The array is created by whichever script runs first,
+     so load order between export.js and the page doesn't matter. */
+  window.__haRecolor = window.__haRecolor || [];
+
+  function chartsIn(figure) {
+    if (!window.Chart) return [];
+    return [...figure.querySelectorAll('canvas')]
+      .map(c => window.Chart.getChart(c))
+      .filter(Boolean);
+  }
+
+  /* Put a whole figure into GT colours. Returns an undo function. */
+  function applyScheme(figure, scheme) {
+    if (scheme !== 'gt') return function () {};
+    const hook = (window.__haRecolor || []).find(h => {
+      try { return h.match(figure); } catch (e) { return false; }
+    });
+    if (hook) {
+      /* A page handler repaints live data (the maps re-run a d3 render), so
+         a failure there must not take the download with it — fall through
+         to the generic substitution rather than throwing. */
+      try {
+        const undo = hook.apply(figure, scheme);
+        return typeof undo === 'function' ? undo : function () {};
+      } catch (e) {
+        console.error('page recolour handler failed; falling back', e);
+      }
+    }
+    const undos = chartsIn(figure).map(gtChart);
+    undos.push(gtMarkup(figure));
+    return function () { undos.forEach(f => f()); };
   }
 
   /* ── PNG button per chart ──────────────────────────────────────────── */
@@ -138,11 +210,26 @@
     if (c) return c.prefix;
     if (location.pathname.indexOf('/compare') === 0) return 'compare';
     if (location.pathname.indexOf('/rankings') === 0) return 'rankings';
-    return 'chart';
+    /* /housing-gap writes the selected geography into .hg-title; the maps
+       and the rest just have their <h1>. Either beats "chart". */
+    const h = document.querySelector('.hg-title, h1');
+    const t = h && h.textContent.trim();
+    if (t) return slug(t).slice(0, 60);
+    const seg = location.pathname.split('/').filter(Boolean).pop();
+    return seg ? slug(seg) : 'chart';
   }
   function chartTitleFor(figure) {
-    const h = figure.querySelector('h3, h4, [data-chart-title]');
-    return h ? h.textContent.trim() : 'chart';
+    const explicit = figure.getAttribute('data-export-figure');
+    if (explicit) return explicit;
+    const h = figure.querySelector('h2, h3, h4, [data-chart-title]');
+    if (h) return h.textContent.trim();
+    /* Unmarked and unheaded: fall back to the nearest heading above it. */
+    let el = figure.previousElementSibling;
+    while (el) {
+      if (/^H[1-4]$/.test(el.tagName)) return el.textContent.trim();
+      el = el.previousElementSibling;
+    }
+    return 'chart';
   }
   async function exportFigureAsPng(figure, filename, scheme) {
     /* Use html2canvas so the PNG includes the h3 title, the chart, the
@@ -160,26 +247,24 @@
     await loadScript(CDN.html2canvas);
     const html2canvas = window.html2canvas;
     const controls = figure.querySelector('.chart-dl');
-    const innerCanvas = figure.querySelector('canvas');
-    const chart = innerCanvas && window.Chart ? window.Chart.getChart(innerCanvas) : null;
     const prevDisplay = controls ? controls.style.display : null;
     if (controls) controls.style.display = 'none';
 
     /* Georgia Tech render: recolour, capture, put back. */
-    const undoScheme = (scheme === 'gt') ? applyGtScheme(chart) : function () {};
+    const undoScheme = applyScheme(figure, scheme);
     if (scheme === 'gt') figure.classList.add('gt-export');
 
     /* Force the chart to re-render at devicePixelRatio = 3 so its
        internal bitmap is dense enough to survive html2canvas's
        downsample. Restore after capture so the on-page chart stays
        crisp at the device's native DPR.                              */
-    let prevDpr = null;
-    if (chart && chart.options) {
-      prevDpr = chart.options.devicePixelRatio;
-      chart.options.devicePixelRatio = 3;
-      chart.resize();
-      chart.update('none');
-    }
+    const dprSaved = chartsIn(figure).map(ch => {
+      const prev = ch.options.devicePixelRatio;
+      ch.options.devicePixelRatio = 3;
+      ch.resize();
+      ch.update('none');
+      return { ch, prev };
+    });
 
     try {
       const canvas = await html2canvas(figure, {
@@ -190,11 +275,11 @@
       });
       await new Promise(resolve => canvas.toBlob(b => { downloadBlob(b, filename); resolve(); }, 'image/png'));
     } finally {
-      if (chart) {
-        chart.options.devicePixelRatio = prevDpr;
-        chart.resize();
-        chart.update('none');
-      }
+      dprSaved.forEach(d => {
+        d.ch.options.devicePixelRatio = d.prev;
+        d.ch.resize();
+        d.ch.update('none');
+      });
       undoScheme();
       figure.classList.remove('gt-export');
       if (controls) controls.style.display = prevDisplay;
@@ -208,16 +293,37 @@
   /* Split button: click "PNG" for the house (EIG) palette, click the caret
      for the Georgia Tech palette. Two clicks only when you want the
      non-default, which is the rarer case.                                 */
+  /* Does this figure actually contain a chart worth a download button?
+     A Chart.js canvas always counts. A bare <svg> counts only when it is
+     plainly a chart and not a UI icon — the download glyph in our own
+     button, a caret, a logo — so it must be reasonably large, outside any
+     button/link/nav, and not aria-hidden. */
+  const ICON_HOSTS = 'button, a, nav, header, footer, .site-nav, .site-footer';
+  function isChartSvg(svg) {
+    if (svg.closest(ICON_HOSTS)) return false;
+    if (svg.getAttribute('aria-hidden') === 'true') return false;
+    const box = svg.getBoundingClientRect();
+    if (Math.max(box.width, box.height) < 160) return false;
+    /* An icon is one or two paths; a chart has real structure. */
+    return svg.querySelectorAll('rect, circle, path, line, text, polygon').length >= 5;
+  }
+  function hasChart(figure) {
+    if (figure.querySelector('canvas')) return true;
+    return [...figure.querySelectorAll('svg')].some(isChartSvg);
+  }
+
   function attachPngButton(figure) {
     if (figure.dataset.exportReady === '1') return;
-    const canvas = figure.querySelector('canvas');
-    if (!canvas) return;
+    if (!hasChart(figure)) return;
     figure.dataset.exportReady = '1';
     /* The host figure already has `position: relative` via .card styles
        in most pages; force it as a safety net so absolute children land
        in the right place.                                                */
     const cs = getComputedStyle(figure);
     if (cs.position === 'static') figure.style.position = 'relative';
+    /* Marks the host so the hover rule works on ANY container, not just
+       figure.card — the housing-gap chart lives in a plain div. */
+    figure.classList.add('has-export-btn');
 
     const wrap = document.createElement('div');
     wrap.className = 'chart-dl';
@@ -285,26 +391,44 @@
     wrap.appendChild(menu);
     figure.appendChild(wrap);
   }
-  function attachPngButtons() {
-    document.querySelectorAll('figure.card').forEach(attachPngButton);
+  /* Where charts live across the site. `figure.card` covers the profile,
+     compare, rankings and map pages; `[data-export-figure]` is the opt-in
+     marker for anything that isn't a card — e.g. the housing-gap rental-gap
+     chart, which is a bare <div> inside a results panel. */
+  const FIGURE_SELECTOR = 'figure.card, [data-export-figure]';
+  function attachPngButtons(root) {
+    (root || document).querySelectorAll(FIGURE_SELECTOR).forEach(attachPngButton);
   }
 
   /* ── Compare/rankings build charts AFTER DOMContentLoaded, so watch
         the DOM for new figures and wire them on insert too.              */
+  /* Compare, rankings, the maps and the whole housing-gap results panel
+     build their charts and tables AFTER DOMContentLoaded — and housing-gap
+     re-renders its panel on every slider move. Rather than track each
+     page's lifecycle, watch the DOM and re-scan on a short debounce. Every
+     attach is idempotent via the data-*-ready flags, so a re-scan of
+     already-wired markup costs nothing.
+
+     The scan is scoped to added subtrees, but a full rescan is cheap and
+     avoids missing a table appended to an existing container, so we do
+     that on the trailing edge of the debounce. */
   function observeForNewCharts() {
     if (!window.MutationObserver) return;
+    let pending = null;
+    const rescan = () => {
+      pending = null;
+      try { attachPngButtons(); attachTableButtons(); }
+      catch (e) { console.error('export.js rescan failed', e); }
+    };
     const mo = new MutationObserver(muts => {
-      let touched = false;
-      muts.forEach(m => m.addedNodes.forEach(n => {
-        if (n.nodeType !== 1) return;
-        if (n.matches && n.matches('figure.card')) { attachPngButton(n); touched = true; }
-        if (n.matches && n.matches('.card')) { attachTableButton(n); touched = true; }
-        if (n.querySelectorAll) {
-          n.querySelectorAll('figure.card').forEach(f => { attachPngButton(f); touched = true; });
-          n.querySelectorAll('.card').forEach(f => { attachTableButton(f); touched = true; });
-        }
-      }));
-      if (touched) {/* no-op; per-figure attach is idempotent via data-export-ready */}
+      /* Ignore our own insertions or we would loop forever. */
+      const relevant = muts.some(m => [...m.addedNodes].some(n =>
+        n.nodeType === 1 &&
+        !n.classList?.contains('chart-dl') &&
+        !n.classList?.contains('table-xlsx-btn') &&
+        !n.classList?.contains('table-xlsx-bar')));
+      if (!relevant || pending) return;
+      pending = setTimeout(rescan, 120);
     });
     mo.observe(document.body, { childList: true, subtree: true });
   }
@@ -712,15 +836,25 @@
     return { value: n, fmt: Number.isInteger(n) ? 'int' : 'ratio' };
   }
 
-  function tableTitleFor(table, card, idx) {
+  function tableTitleFor(table, container, idx) {
     const explicit = table.getAttribute('data-table-name');
     if (explicit) return explicit;
     /* A toggle-driven table names itself via the data attribute on its
        wrapper div (that is what the toggle shows and hides). */
     const wrap = table.closest('[data-industry-table]');
     const toggle = wrap ? wrap.getAttribute('data-industry-table') : null;
-    const heading = card.querySelector('h3, h4');
-    const base = heading ? heading.textContent.trim() : 'Table';
+    let base = null;
+    const heading = container && container.querySelector && container.querySelector('h2, h3, h4');
+    if (heading && !heading.closest('table')) base = heading.textContent.trim();
+    if (!base) {
+      /* Loose table: the nearest heading above it on the page names it. */
+      let el = table.previousElementSibling;
+      while (el && !base) {
+        if (/^H[1-4]$/.test(el.tagName)) base = el.textContent.trim();
+        el = el.previousElementSibling;
+      }
+    }
+    if (!base) base = 'Table';
     if (toggle) return base + ' — ' + toggle;
     return idx === 0 ? base : base + ' (' + (idx + 1) + ')';
   }
@@ -761,8 +895,7 @@
     b.freezeAfter(3 + headerRows);
   }
 
-  async function exportCardTables(card) {
-    const tables = Array.from(card.querySelectorAll('table'));
+  async function exportTables(tables, context) {
     if (!tables.length) { alert('No table found.'); return; }
 
     await loadScript(CDN.exceljs);
@@ -772,51 +905,88 @@
     wb.created = new Date();
 
     const ctx = getCountyContext();
-    const place = ctx ? ctx.label : document.title;
+    const headingEl = document.querySelector('h1, .hg-title');
+    const place = ctx ? ctx.label : ((headingEl && headingEl.textContent) || document.title);
     const used = new Set();
     tables.forEach((t, i) => {
-      const title = tableTitleFor(t, card, i);
+      const title = tableTitleFor(t, context, i);
       const ws = wb.addWorksheet(sheetName(title, used), {
         properties: { tabColor: { argb: i % 2 ? XL.gold : XL.navy } },
         pageSetup: { fitToPage: true, fitToWidth: 1, fitToHeight: 0, orientation: 'landscape' },
       });
-      writeDomTable(ws, t, title, place + ' · housinganalytics.org');
+      writeDomTable(ws, t, title, String(place).trim() + ' · housinganalytics.org');
     });
 
     const buf = await wb.xlsx.writeBuffer();
-    const base = getPagePrefix() + '-' + slug(tableTitleFor(tables[0], card, 0));
+    const base = getPagePrefix() + '-' + slug(tableTitleFor(tables[0], context, 0));
     downloadBlob(
       new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
       base + '.xlsx',
     );
   }
 
-  function attachTableButton(card) {
-    if (card.dataset.tableExportReady === '1') return;
-    if (!card.querySelector('table')) return;
-    card.dataset.tableExportReady = '1';
-    const cs = getComputedStyle(card);
-    if (cs.position === 'static') card.style.position = 'relative';
-
+  function makeXlsxButton(onClick) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'chart-png-btn table-xlsx-btn';
-    /* If this card also carries a chart PNG control, sit to its left. */
-    if (card.querySelector('.chart-dl')) btn.classList.add('table-xlsx-btn--offset');
     btn.title = 'Download this table as an Excel workbook';
     btn.setAttribute('aria-label', 'Download this table as Excel');
     btn.innerHTML = DOWNLOAD_ICON + '<span>Excel</span>';
     btn.addEventListener('click', async function () {
       const label = btn.innerHTML;
       btn.disabled = true; btn.style.opacity = '1'; btn.textContent = '…';
-      try { await exportCardTables(card); }
+      try { await onClick(); }
       catch (e) { console.error('Table Excel export failed', e); alert('Could not generate the workbook.'); }
       finally { btn.disabled = false; btn.innerHTML = label; }
     });
-    card.appendChild(btn);
+    return btn;
   }
-  function attachTableButtons() {
-    document.querySelectorAll('.card').forEach(attachTableButton);
+
+  /* One button per card / figure that holds tables (it exports all of them,
+     one sheet each — that is how the Section 4 sectors + subsectors pair
+     comes out whole even though the toggle only ever shows one). Tables
+     that sit loose on a page — the housing-gap results panel builds five of
+     them as plain siblings — get their own inline button instead. */
+  const TABLE_CONTAINER_SELECTOR = '[data-export-figure], [data-export-tables], figure, .card';
+
+  function attachTableButton(container) {
+    if (container.dataset.tableExportReady === '1') return;
+    const tables = Array.from(container.querySelectorAll('table'));
+    if (!tables.length) return;
+    container.dataset.tableExportReady = '1';
+    tables.forEach(t => { t.dataset.tableExportReady = '1'; });
+
+    const cs = getComputedStyle(container);
+    if (cs.position === 'static') container.style.position = 'relative';
+    container.classList.add('has-export-btn');
+
+    const btn = makeXlsxButton(() => exportTables(tables, container));
+    /* If this card also carries a chart PNG control, sit to its left. */
+    if (container.querySelector('.chart-dl')) btn.classList.add('table-xlsx-btn--offset');
+    container.appendChild(btn);
+  }
+
+  function attachLooseTableButton(table) {
+    if (table.dataset.tableExportReady === '1') return;
+    table.dataset.tableExportReady = '1';
+    const bar = document.createElement('div');
+    bar.className = 'table-xlsx-bar';
+    /* Pass no container: the parent here is the whole results panel, whose
+       first heading is the page title, not this table's. tableTitleFor
+       falls back to the nearest heading ABOVE the table, which is right. */
+    bar.appendChild(makeXlsxButton(() => exportTables([table], null)));
+    table.parentNode.insertBefore(bar, table);
+  }
+
+  function attachTableButtons(root) {
+    const scope = root || document;
+    scope.querySelectorAll(TABLE_CONTAINER_SELECTOR).forEach(attachTableButton);
+    /* Anything still unclaimed is a loose table. */
+    scope.querySelectorAll('table').forEach(t => {
+      if (t.dataset.tableExportReady === '1') return;
+      if (t.closest(TABLE_CONTAINER_SELECTOR)) return;
+      attachLooseTableButton(t);
+    });
   }
 
   /* ── PDF export ────────────────────────────────────────────────────── */
@@ -916,6 +1086,9 @@
     observeForNewCharts();
     wireToolbar();
   }
+  /* Exposed so a page that rebuilds its own DOM can force a re-scan
+     immediately rather than waiting on the observer's debounce. */
+  window.HAExport = { rescan: function () { attachPngButtons(); attachTableButtons(); } };
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {

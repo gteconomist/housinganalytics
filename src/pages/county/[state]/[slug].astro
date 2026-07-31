@@ -400,16 +400,19 @@ function attainableFrom(income) {
 // together is a standing rule — they disagree on the sign of the housing gap
 // in about a quarter of places — and WAHI is the third anchor that reconciles
 // them. See the /housing-gap methodology.
+// Order matches /housing-gap: AMI (the program threshold) → WAHI (what the
+// workforce earns) → MHI (what all residents earn), with WAHI in the middle
+// because it is the measure that reconciles the outer two.
 const incomeAnchors = [
-  ['Median household income (MHI)',
-   gap?.mhii ?? county.hh_income_median,
-   'All households — ACS B19013. Includes retiree- and student-headed households.'],
-  ['Working-age household income (WAHI)',
-   gap?.wahi ?? null,
-   'Households headed by someone aged 25–64 — ACS B19037, interpolated.'],
   ['HUD Area Median Income (4-person, 100%)',
    hud?.ami_100_4p ?? null,
    'HUD FY2026 income limit, published for the county / metro area.'],
+  ['Working-age household income (WAHI)',
+   gap?.wahi ?? null,
+   'Households headed by someone aged 25–64 — ACS B19037, interpolated.'],
+  ['Median household income (MHI)',
+   gap?.mhii ?? county.hh_income_median,
+   'All households — ACS B19013. Includes retiree- and student-headed households.'],
 ].filter(([, v]) => v != null);
 
 // ── Section 4: Industry & Workforce Wages (BLS QCEW) ──────────────

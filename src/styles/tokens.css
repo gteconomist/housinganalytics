@@ -253,7 +253,8 @@ figure.card:hover > .chart-png-btn,
   border-left: none;
   padding: 4px 6px;
 }
-figure.card:hover > .chart-dl .chart-png-btn,
+.has-export-btn:hover > .chart-dl .chart-png-btn,
+.chart-dl:hover .chart-png-btn,
 .chart-dl:focus-within .chart-png-btn,
 .chart-dl__caret[aria-expanded="true"] { opacity: 1; }
 
@@ -286,9 +287,21 @@ figure.card:hover > .chart-dl .chart-png-btn,
 
 /* Excel download on any card that holds a table. */
 .table-xlsx-btn { opacity: 0; }
-.card:hover > .table-xlsx-btn,
+.has-export-btn:hover > .table-xlsx-btn,
+.table-xlsx-btn:hover,
 .table-xlsx-btn:focus-visible { opacity: 1; }
 .table-xlsx-btn--offset { right: 92px; }
+/* A table that isn't inside a card has nothing to hover, so its button sits
+   inline above the table and stays visible. */
+.table-xlsx-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: var(--space-4) 0 calc(-1 * var(--space-1));
+}
+.table-xlsx-bar .table-xlsx-btn {
+  position: static;
+  opacity: 1;
+}
 @media (hover: none) {
   .chart-dl .chart-png-btn,
   .table-xlsx-btn { opacity: 1; }

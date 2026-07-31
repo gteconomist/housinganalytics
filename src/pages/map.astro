@@ -1,5 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
+import { readFileSync as __readFileSync } from 'node:fs';
+import { createHash as __createHash } from 'node:crypto';
+// Content-hash /js/export.js so a new version busts the Cloudflare and browser
+// cache — Astro does not fingerprint anything under public/.
+const exportV = __createHash('md5').update(__readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 ---
 <Base title="National map — housinganalytics.org"
       description="Choropleth map of all 3,222 U.S. counties on every housing metric. Pick a metric, choose a state to zoom, hover for county values, click through to the county profile.">
@@ -99,6 +104,8 @@ import Base from '../layouts/Base.astro';
       </aside>
     </div>
   </section>
+
+  <script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
 </Base>
 
 <script type="module">
@@ -174,7 +181,19 @@ import Base from '../layouts/Base.astro';
     'good-low':  [C.cream, C.red],
     'neutral':   [C.cream, C.gold],
   };
-  const NO_DATA       = '#ece6da';   // counties with no metric value
+  // Georgia Tech equivalents, used ONLY when a chart PNG is exported in GT
+  // colours. Same semantics as above — teal reads good, red reads bad, gold
+  // is directionless — in official GT hues (brand.gatech.edu/our-look/colors).
+  const RAMP_GT = {
+    'good-high': ['#F9F6E5', '#008C95'],   // Diploma → Olympic Teal
+    'good-low':  ['#F9F6E5', '#E04F39'],   // Diploma → New Horizon
+    'neutral':   ['#F9F6E5', '#B3A369'],   // Diploma → Tech Gold
+  };
+  let PALETTE = 'eig';
+  const rampFor = dir => (PALETTE === 'gt' ? RAMP_GT : RAMP)[dir];
+  const noData      = () => (PALETTE === 'gt' ? '#EDEBE2' : '#ece6da');
+  const neighborGray = () => (PALETTE === 'gt' ? '#D6DBD4' : '#ddd6c8');
+  const NO_DATA       = '#ece6da';   // counties with no metric value (initial paint)
   const NEIGHBOR_GRAY = '#ddd6c8';   // counties in non-selected states when zoomed
 
   // ── Per-metric direction classifier ─────────────────────────
@@ -552,11 +571,25 @@ import Base from '../layouts/Base.astro';
     currentSpecialState = '';
   }
 
+  // Georgia Tech PNG export: swap the ramp, repaint, hand back an undo.
+  // export.js calls this instead of its generic hex substitution, which
+  // cannot touch d3-interpolated fills.
+  window.__haRecolor = window.__haRecolor || [];
+  window.__haRecolor.push({
+    match: figure => !!(els.svg && figure.contains(els.svg)),
+    apply: (figure, scheme) => {
+      if (scheme !== 'gt') return () => {};
+      PALETTE = 'gt';
+      repaint();
+      return () => { PALETTE = 'eig'; repaint(); };
+    },
+  });
+
   // ── Render: color + zoom + legend + callouts + summary ──────
   function render() {
     const metric = METRIC_BY_FIELD[state.metric];
     const dir = directionFor(state.metric);
-    const ramp = RAMP[dir];
+    const ramp = rampFor(dir);
     const idx = COL[state.metric];
 
     // Validate scale: state-rebased only makes sense when a state is selected.
@@ -615,7 +648,14 @@ import Base from '../layouts/Base.astro';
     writeState();
   }
 
+  // The GT export needs to repaint without re-running the zoom animation
+  // render() would trigger, so the last paint's inputs are kept here.
+  let lastPaint = null;
+  function repaint() {
+    if (lastPaint) applyColorAndLegend(lastPaint.metric, lastPaint.dir, rampFor(lastPaint.dir), lastPaint.idx);
+  }
   function applyColorAndLegend(metric, dir, ramp, idx) {
+    lastPaint = { metric, dir, idx };
     // Build the value array to set the percentile clip.
     let valueRows;
     if (state.state && state.scale === 'state') {
@@ -640,19 +680,19 @@ import Base from '../layouts/Base.astro';
     }
     const scale = d3.scaleLinear().domain(domain).range([0, 1]).clamp(true);
     const interp = d3.interpolateRgb(ramp[0], ramp[1]);
-    const colorFor = v => (v == null || !isFinite(v)) ? NO_DATA : interp(scale(v));
+    const colorFor = v => (v == null || !isFinite(v)) ? noData() : interp(scale(v));
 
     // Decide which county set is currently on-screen + how to color each.
     const colorPath = (sel) => {
       sel
         .attr('fill', d => {
           const row = ROW_BY_FIPS.get(d.id);
-          if (!row) return NO_DATA;
+          if (!row) return noData();
           const fips = String(d.id);
           const sFips = fips.slice(0, 2);
           const sName = STATE_NAME_BY_FIPS.get(sFips);
           // If a state is selected and this county isn't in it → neighbor gray.
-          if (state.state && sName !== state.state) return NEIGHBOR_GRAY;
+          if (state.state && sName !== state.state) return neighborGray();
           return colorFor(row[COL[state.metric]]);
         })
         .style('pointer-events', d => {

@@ -1,5 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
+import { readFileSync as __readFileSync } from 'node:fs';
+import { createHash as __createHash } from 'node:crypto';
+// Content-hash /js/export.js so a new version busts the Cloudflare and browser
+// cache — Astro does not fingerprint anything under public/.
+const exportV = __createHash('md5').update(__readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 ---
 <Base title="City map — housinganalytics.org"
       description="Proportional-dot map of ~4,800 U.S. cities on any housing metric, including the Housing Stress Index. Size shows population; color shows the metric. Hover for values, click through to the city profile.">
@@ -27,24 +32,26 @@ import Base from '../layouts/Base.astro';
         </div>
       </div>
 
-      <div class="map-wrap">
-        <svg class="map-svg" viewBox="0 0 975 610" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Proportional-dot map of U.S. cities">
-          <g data-zoom>
-            <g data-base></g>
-            <g data-dots></g>
-          </g>
-        </svg>
-        <div class="map-loading" data-loading>Loading map…</div>
-        <div class="map-tooltip" data-tooltip hidden></div>
-      </div>
+      <figure class="card map-card" data-export-figure="U.S. city map">
+        <div class="map-wrap">
+          <svg class="map-svg" viewBox="0 0 975 610" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Proportional-dot map of U.S. cities">
+            <g data-zoom>
+              <g data-base></g>
+              <g data-dots></g>
+            </g>
+          </svg>
+          <div class="map-loading" data-loading>Loading map…</div>
+          <div class="map-tooltip" data-tooltip hidden></div>
+        </div>
 
-      <div class="map-legend" data-legend hidden>
-        <div class="legend-bar" data-legend-bar></div>
-        <div class="legend-scale"><span data-legend-lo></span><span data-legend-hi></span></div>
-        <div class="legend-size muted">Dot size ∝ population</div>
-      </div>
+        <div class="map-legend" data-legend hidden>
+          <div class="legend-bar" data-legend-bar></div>
+          <div class="legend-scale"><span data-legend-lo></span><span data-legend-hi></span></div>
+          <div class="legend-size muted">Dot size ∝ population</div>
+        </div>
 
-      <small class="source" data-source>Source: ACS 5-year. City centroids: U.S. Census Gazetteer. State boundaries: us-atlas.</small>
+        <small class="source" data-source>Source: ACS 5-year. City centroids: U.S. Census Gazetteer. State boundaries: us-atlas.</small>
+      </figure>
     </div>
   </section>
 
@@ -70,8 +77,13 @@ import Base from '../layouts/Base.astro';
     const VIEW_W = 975, VIEW_H = 610;
 
     // Brand-ish ramps. Stress/"bad-high" goes teal→gold→red; neutral goes pale→teal.
-    const RAMP_DIVERGE = d3.interpolateRgbBasis(['#3f7d52', '#e8c86b', '#a8432f']); // good→bad
-    const RAMP_NEUTRAL = d3.interpolateRgbBasis(['#e9efe9', '#7fae86', '#3f7d52']);
+    let RAMP_DIVERGE = d3.interpolateRgbBasis(['#3f7d52', '#e8c86b', '#a8432f']); // good→bad
+    let RAMP_NEUTRAL = d3.interpolateRgbBasis(['#e9efe9', '#7fae86', '#3f7d52']);
+    // Georgia Tech equivalents — same good→bad reading, official GT hues.
+    // Used only by the GT chart-PNG export; the page always shows EIG.
+    const RAMP_DIVERGE_EIG = RAMP_DIVERGE, RAMP_NEUTRAL_EIG = RAMP_NEUTRAL;
+    const RAMP_DIVERGE_GT = d3.interpolateRgbBasis(['#008C95', '#EAAA00', '#E04F39']);
+    const RAMP_NEUTRAL_GT = d3.interpolateRgbBasis(['#F9F6E5', '#7FB9BD', '#008C95']);
     const NO_DATA = '#c9c9c1';
 
     // Direction: which metrics are "higher is worse" vs "higher is better".
@@ -188,6 +200,23 @@ import Base from '../layouts/Base.astro';
     const drawOrder = [...CITIES].sort((a, b) => (b[COL.population_total] || 0) - (a[COL.population_total] || 0));
     const dotsSel = d3.select(els.dots);
 
+    // Georgia Tech PNG export — swap both ramps, re-render, hand back an
+    // undo. The dot fills come from a d3 interpolator, so export.js's hex
+    // substitution can't reach them; this handler takes precedence.
+    window.__haRecolor = window.__haRecolor || [];
+    window.__haRecolor.push({
+      match: figure => !!(els.dots && figure.contains(els.dots)),
+      apply: (figure, scheme) => {
+        if (scheme !== 'gt') return () => {};
+        RAMP_DIVERGE = RAMP_DIVERGE_GT; RAMP_NEUTRAL = RAMP_NEUTRAL_GT;
+        render();
+        return () => {
+          RAMP_DIVERGE = RAMP_DIVERGE_EIG; RAMP_NEUTRAL = RAMP_NEUTRAL_EIG;
+          render();
+        };
+      },
+    });
+
     function render() {
       const field = currentMetric;
       const col = COL[field];
@@ -285,4 +314,6 @@ import Base from '../layouts/Base.astro';
     .legend-size { font-size: var(--fs-xs); }
     .source { display: block; margin-top: var(--space-4); font-size: var(--fs-xs); color: var(--color-navy); opacity: .6; }
   </style>
+
+  <script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
 </Base>

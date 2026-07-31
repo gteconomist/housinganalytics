@@ -1,5 +1,10 @@
 ---
 import Base from '../../layouts/Base.astro';
+import { readFileSync as __readFileSync } from 'node:fs';
+import { createHash as __createHash } from 'node:crypto';
+// Content-hash /js/export.js so a new version busts the Cloudflare and browser
+// cache — Astro does not fingerprint anything under public/.
+const exportV = __createHash('md5').update(__readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 import manifest from '../../data/generated/manifest.json';
 import { fmtInt } from '../../lib/format.js';
 const cityCount = (manifest.places ?? []).length;
@@ -118,4 +123,6 @@ const cityCount = (manifest.places ?? []).length;
     .note { font-size: var(--fs-sm); opacity: .8; border-left: 3px solid var(--color-gold, #f19623); padding-left: var(--space-3); }
     code { background: rgba(0,0,0,.05); padding: .05em .35em; border-radius: 4px; font-size: .9em; }
   </style>
+
+  <script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
 </Base>

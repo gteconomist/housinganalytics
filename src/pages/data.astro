@@ -1,5 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
+import { readFileSync as __readFileSync } from 'node:fs';
+import { createHash as __createHash } from 'node:crypto';
+// Content-hash /js/export.js so a new version busts the Cloudflare and browser
+// cache — Astro does not fingerprint anything under public/.
+const exportV = __createHash('md5').update(__readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 import manifest from '../data/generated/manifest.json';
 import { fmtInt } from '../lib/format.js';
 const compiled = new Date(manifest.generated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -78,4 +83,6 @@ const datasets = [
     .data-table__ed { white-space: nowrap; }
     @media (max-width: 640px) { .data-table, .data-table thead, .data-table tbody, .data-table th, .data-table td, .data-table tr { display: block; } .data-table thead { display: none; } .data-table tr { border: 1px solid var(--color-sage,#d6dbd4); border-radius: 8px; margin-bottom: var(--space-3); padding: var(--space-2); } .data-table td { border: 0; padding: .25rem .4rem; } }
   </style>
+
+  <script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
 </Base>

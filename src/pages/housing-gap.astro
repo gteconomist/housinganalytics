@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 // (files in public/ aren't fingerprinted by Astro).
 const genV = createHash('md5').update(readFileSync('public/js/housing-gap.js')).digest('hex').slice(0, 10);
 const cssV = createHash('md5').update(readFileSync('public/css/housing-gap.css')).digest('hex').slice(0, 10);
+const exportV = createHash('md5').update(readFileSync('public/js/export.js')).digest('hex').slice(0, 10);
 ---
 <Base title="Housing gap analysis — housinganalytics.org"
       description="Cost burden by income and tenure, and the existing shortage of housing by price point, for any U.S. city or county.">
@@ -38,6 +39,10 @@ const cssV = createHash('md5').update(readFileSync('public/css/housing-gap.css')
     <div class="hg-result" data-result></div>
   </section>
 
+  <!-- PNG (EIG / Georgia Tech) per chart + Excel per table. The results panel
+       is built client-side, so export.js watches the DOM and wires each
+       render — including every re-render an assumption slider triggers. -->
+  <script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
   <script src={`/js/housing-gap.js?v=${genV}`} is:inline></script>
   <script is:inline>
     (async function () {

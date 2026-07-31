@@ -284,8 +284,11 @@
           : '');
     }
     return '<h3 class="hg-h3">Three income anchors — and why they disagree <span class="hg-pill">read all three</span></h3>'+
-      '<p class="hg-sub">The same shortage calculation, run against the three income definitions this field uses: what programs fund, what residents earn, and what the workforce earns. Nationally the first two disagree on the <i>direction</i> of the gap in 26% of communities and by more than 2× in 41%; adding the workforce anchor changes the direction again in a further 11%. None is wrong — they answer different questions.</p>'+
-      '<div class="hg-anchors">'+anchorCard(w,'ami',A)+anchorCard(l,'mhi',A)+anchorCard(x,'wahi',A)+'</div>'+
+      '<p class="hg-sub">The same shortage calculation, run against the three income definitions this field uses: what programs fund, what the workforce earns, and what all residents earn. Nationally the first two disagree on the <i>direction</i> of the gap in 26% of communities and by more than 2× in 41%; adding the workforce anchor changes the direction again in a further 11%. None is wrong — they answer different questions.</p>'+
+      // Order is deliberate: AMI (the program threshold) → WAHI (what the
+      // workforce earns) → MHI (what all residents earn). WAHI sits in the
+      // middle because it is the measure that reconciles the outer two.
+      '<div class="hg-anchors">'+anchorCard(w,'ami',A)+anchorCard(x,'wahi',A)+anchorCard(l,'mhi',A)+'</div>'+
       (recon?'<p class="hg-recon">'+recon+'</p>':'')+
       (wrecon?'<p class="hg-recon">'+wrecon+'</p>':'')+ flag +
       '<p class="hg-note"><b>On working-age household income (WAHI).</b> WAHI is the median income of households <i>headed by</i> someone aged 25–64, computed from ACS table B19037 (age of householder × household income). It is <i>not</i> the income of working-age adults: ACS classifies an entire household by the age of one reference person, so a 70-year-old still working is excluded, and a retired parent living in a 45-year-old\'s household is counted in full. Read it as <i>what households run by working-age people earn here</i>. WAHI is higher than the local median household income in almost every community — nationally by a median of <b>1.16×</b> — because retiree- and student-headed households sit below both. Judge this area\'s figure against that 1.16 norm, not against 1.00. Use it when the question is whether the people who <i>work</i> here can afford to live here; use local median household income when the question is about all residents, retirees included.</p>'+
@@ -477,9 +480,11 @@
 
     ${meta.model && meta.model.market ? marketPanel(meta.model.market) : ''}
 
-    <h3 class="hg-h3">Rental gap by price point <span class="hg-pill">AMI ladder</span></h3>
-    <p class="hg-legend"><span class="hg-sq" style="background:${C.ink}"></span>Renter households (cumulative) &nbsp; <span class="hg-sq" style="background:${C.accent}"></span>Affordable rental units (cumulative)</p>
-    <div data-gapchart></div>
+    <div class="hg-figure" data-export-figure="Rental gap by price point">
+      <h3 class="hg-h3">Rental gap by price point <span class="hg-pill">AMI ladder</span></h3>
+      <p class="hg-legend"><span class="hg-sq" style="background:${C.ink}"></span>Renter households (cumulative) &nbsp; <span class="hg-sq" style="background:${C.accent}"></span>Affordable rental units (cumulative)</p>
+      <div data-gapchart></div>
+    </div>
     <table class="hg-tbl"><thead><tr><th>Income tier</th><th class="n">Aff. rent</th><th class="n">Renter HH</th><th class="n">Aff. units</th><th class="n">Gap</th><th></th></tr></thead><tbody data-gaprows></tbody></table>
     <p class="hg-src" data-medline></p>
     <p class="hg-note" data-gapnote></p>
