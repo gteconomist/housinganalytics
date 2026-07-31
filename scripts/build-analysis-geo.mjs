@@ -34,7 +34,7 @@ const ALL_STATES = [...new Set(MANIFEST.counties.map((c) => c.geoid.slice(0, 2))
 const STATES = (process.env.STATES ? process.env.STATES.split(',').map((s) => s.trim().padStart(2, '0')) : ALL_STATES);
 
 // Tables we pull whole (group()) then slice by known offsets.
-const TABLES = ['B25074', 'B25095', 'B25118', 'B25063', 'B25075', 'B25003', 'B19013', 'B25064', 'B25077', 'B25122'];
+const TABLES = ['B25074', 'B25095', 'B25118', 'B25063', 'B25075', 'B25003', 'B19013', 'B25064', 'B25077', 'B25122', 'B19037'];
 
 const num = (v) => { const n = Number(v); return (v == null || !Number.isFinite(n) || n <= -666666666) ? 0 : n; };
 const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
@@ -102,6 +102,64 @@ function burdenTriplet(vars, table, starts) {
   }
   return { total, burd, sev };
 }
+// ── WAHI — working-age household income (ACS B19037) ─────────────────────────
+// Median income of households HEADED by someone 25–64. It is NOT "the income of
+// prime working-age adults": ACS classifies a whole household by the age of its
+// reference person, so a 70-year-old still working is excluded, and a retired
+// parent living in a 45-year-old's household is counted in full. Say so wherever
+// this number is published.
+//
+// Method: pool the 25–44 and 45–64 bracket counts and take the median by linear
+// interpolation inside the containing bracket — the same method Census uses for
+// B19013. The open top bracket ($200k+) is modelled at $200k–$400k and flagged.
+const B19037_EDGES = [[0, 10000], [10000, 15000], [15000, 20000], [20000, 25000], [25000, 30000],
+  [30000, 35000], [35000, 40000], [40000, 45000], [45000, 50000], [50000, 60000], [60000, 75000],
+  [75000, 100000], [100000, 125000], [125000, 150000], [150000, 200000], [200000, 400000]];
+const B19037_BASE = { u25: 3, a2544: 20, a4564: 37, a65: 54 };   // first bracket variable of each cohort
+const B19037_TOT = { u25: 2, a2544: 19, a4564: 36, a65: 53 };    // cohort totals
+const cohortB = (vars, base) => Array.from({ length: 16 }, (_, i) => V(vars, 'B19037', base + i));
+
+function medianFromBrackets(counts) {
+  const n = counts.reduce((a, b) => a + b, 0);
+  if (!(n > 0)) return null;
+  const half = n / 2;
+  let cum = 0;
+  for (let i = 0; i < counts.length; i++) {
+    if (counts[i] > 0 && cum + counts[i] >= half) {
+      const [lo, hi] = B19037_EDGES[i];
+      return { med: lo + (half - cum) / counts[i] * (hi - lo), top: i === 15 };
+    }
+    cum += counts[i];
+  }
+  return null;
+}
+
+function wahiBlock(vars) {
+  const tot = V(vars, 'B19037', 1);
+  if (!(tot > 0)) return {};
+  const b2544 = cohortB(vars, B19037_BASE.a2544), b4564 = cohortB(vars, B19037_BASE.a4564);
+  const bu25 = cohortB(vars, B19037_BASE.u25), b65 = cohortB(vars, B19037_BASE.a65);
+  const pooled = b2544.map((x, i) => x + b4564[i]);
+  const w = medianFromBrackets(pooled);
+  if (!w) return {};
+  // The ratio's denominator is interpolated from the SAME table by the SAME method,
+  // NOT taken from published B19013. Grouped-data interpolation error runs ±4–7% per
+  // median but largely CANCELS in the ratio; mixing the two sources reintroduces it.
+  const all = pooled.map((x, i) => x + bu25[i] + b65[i]);
+  const m = medianFromBrackets(all);
+  const nWork = V(vars, 'B19037', B19037_TOT.a2544) + V(vars, 'B19037', B19037_TOT.a4564);
+  return {
+    wahi: Math.round(w.med),
+    wahiRatio: m && m.med > 0 ? +(w.med / m.med).toFixed(3) : null,
+    wahiN: Math.round(nWork),
+    s65: +(V(vars, 'B19037', B19037_TOT.a65) / tot * 100).toFixed(1),
+    su25: +(V(vars, 'B19037', B19037_TOT.u25) / tot * 100).toFixed(1),
+    // Reliability: small geographies make a 64-cell cross-tab far too thin to trust.
+    // Under 1,000 households the ratio's p90 blows out from 1.25 to 1.42.
+    wahiRel: (nWork >= 500 && tot >= 1000 && !w.top) ? 1 : 0,
+  };
+}
+
 function buildModel(vars) {
   const ren = burdenTriplet(vars, 'B25074', REN_STARTS);
   const own = burdenTriplet(vars, 'B25095', OWN_STARTS);
@@ -118,6 +176,7 @@ function buildModel(vars) {
   });
   return {
     mhi: Math.round(V(vars, 'B19013', 1)),
+    ...wahiBlock(vars),
     medRent: Math.round(V(vars, 'B25064', 1)),
     medValue: Math.round(V(vars, 'B25077', 1)),
     tenure: { total: Math.round(V(vars, 'B25003', 1)), owner: Math.round(V(vars, 'B25003', 2)), renter: Math.round(V(vars, 'B25003', 3)) },
@@ -217,6 +276,17 @@ function workforceLocal(model, A) {
   if (!model.mhi || model.mhi <= 0) return null;
   return workforceBand(model, A, model.mhi * 0.8, model.mhi * 1.2);
 }
+// Anchor C — WAHI, working-age household income: what the local WORKFORCE earns, with
+// retiree- and student-headed households removed from the median. Published everywhere,
+// not as an exception flag: WAHI exceeds MHI in nearly every community (national median
+// 1.16×), and the SIZE of that gap does not predict whether it changes the answer —
+// re-anchoring flips the sign of the gap in ~10% of geographies in EVERY ratio band,
+// including below-average ones. What moves the gap is the band shifting up 10–16% and
+// landing in a thin part of the local rent distribution.
+function workforceWorking(model, A) {
+  if (!model.wahi || model.wahi <= 0) return null;
+  return workforceBand(model, A, model.wahi * 0.8, model.wahi * 1.2);
+}
 
 function summarize(model) {
   const A = DEFAULTS;
@@ -236,6 +306,7 @@ function summarize(model) {
   const c = model.chas;
   const w = workforce(model, A);
   const wl = workforceLocal(model, A);
+  const ww = workforceWorking(model, A);
   const ratio = (model.ami && model.ami.ami && model.mhi > 0) ? model.ami.ami / model.mhi : null;
   const bandShare = (w && renT > 0) ? w.hh / renT : null;
   return {
@@ -256,6 +327,20 @@ function summarize(model) {
     // same calculation anchored on LOCAL median household income — never publish one without the other
     mlo: wl ? wl.lo : null, mhii: wl ? wl.hi : null,
     mhh: wl ? wl.hh : null, mav: wl ? wl.available : null, msh: wl ? wl.shortage : null,
+    // ...and anchored on WAHI — working-age household income (households headed 25–64)
+    xlo: ww ? ww.lo : null, xhi: ww ? ww.hi : null,
+    xhh: ww ? ww.hh : null, xav: ww ? ww.available : null, xsh: ww ? ww.shortage : null,
+    wahi: model.wahi ?? null,
+    wr: model.wahiRatio ?? null,        // WAHI / MHI, both interpolated from B19037
+    s65: model.s65 ?? null,             // % of households headed 65+
+    su25: model.su25 ?? null,           // % of households headed under 25
+    wrel: model.wahiRel ?? 0,           // 1 = passes the thin-cross-tab reliability screen
+    // How far the WAHI anchor moves the answer, per 1,000 renter households. NEVER express
+    // this as a % of the MHI-anchored gap: that gap is frequently near zero, so the
+    // percentage is unstable and produces absurd headline numbers (Muscogee GA reads as a
+    // "507% move" on +325 → +1,974, which is really 41 units per 1,000 renters).
+    xd1k: (ww && wl && ww.shortage != null && wl.shortage != null && renT > 0)
+      ? +((ww.shortage - wl.shortage) / renT * 1000).toFixed(1) : null,
     amiRatio: ratio == null ? null : +ratio.toFixed(2),          // HUD AMI / local MHI
     bandShare: bandShare == null ? null : +(bandShare * 100).toFixed(1),  // % of local renters inside the AMI band
     // divergence flag — opposite conclusions, or an AMI far from local incomes (~29% of geographies)

@@ -39,6 +39,7 @@
   --color-blue:        var(--color-bar);
   --color-light-teal:  #7fa98a;  /* light forest tint */
   --color-purple:      #9c867a;  /* warm brown (echoes EIG logo bar) */
+  --color-taupe:       #9c867a;  /* EIG taupe — third income anchor (WAHI); same value as --color-purple, honest name */
   --color-lime:        #c9a227;  /* muted gold */
   --color-red:         var(--color-brick);
 

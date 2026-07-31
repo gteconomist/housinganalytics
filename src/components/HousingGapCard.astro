@@ -61,8 +61,18 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
     <dl class="hg-card__stats">
       <div><dt>Renter households cost-burdened</dt><dd>{rec.rb != null ? `${rec.rb}%` : '—'}<span class="hg-card__dd2">{rec.rbn != null ? fmt(rec.rbn) : ''}</span></dd></div>
       <div><dt>Shortage at ≤ 30% AMI</dt><dd>{rec.eli != null ? fmt(rec.eli) : '—'}</dd></div>
-      <div><dt>Workforce gap, 80–120%<br/>on HUD AMI / on local income</dt><dd>{sgn(rec.wsh) ?? (rec.pg != null ? `${fmt(rec.pg)} under $${(rec.pc / 1000).toFixed(0)}k` : '—')}<span class="hg-card__dd2">{sgn(rec.msh) != null ? `local: ${sgn(rec.msh)}` : ''}</span></dd></div>
+      <div><dt>Workforce gap, 80–120%<br/>on HUD AMI / local / working-age</dt><dd>{sgn(rec.wsh) ?? (rec.pg != null ? `${fmt(rec.pg)} under $${(rec.pc / 1000).toFixed(0)}k` : '—')}<span class="hg-card__dd2">{sgn(rec.msh) != null ? `local: ${sgn(rec.msh)}` : ''}</span><span class="hg-card__dd2">{sgn(rec.xsh) != null ? `working-age: ${sgn(rec.xsh)}` : ''}</span></dd></div>
     </dl>
+
+    {rec.wahi != null && (
+      <p class="hg-card__wahi">
+        <b>Working-age household income (WAHI) {`$${fmt(rec.wahi)}`}</b>
+        {rec.wr != null ? ` — ${rec.wr.toFixed(2)}× this area's median household income (national median 1.16×).` : '.'}
+        {' '}The median for households <em>headed by</em> someone 25–64, from ACS B19037 — retiree- and student-headed
+        households are out of it. Not the income of working-age adults: ACS types a whole household by one reference person.
+        {rec.wrel === 0 ? ' Thin sample here — treat as indicative.' : ''}
+      </p>
+    )}
 
     {rec.dvg === 1 && (
       <p class="hg-card__flag">
@@ -77,7 +87,7 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
     )}
 
     <a class="hg-card__cta" href={href}>See the full housing-gap analysis →</a>
-    <p class="hg-card__note muted">Headline shortage: HUD CHAS 2018–2022 (Table 15C), HAMFI 2018–2022 tiers. Cost burden and the workforce band: ACS 2020–2024 5-year with HUD FY2026 income limits — a different AMI vintage. All counts are households.</p>
+    <p class="hg-card__note muted">Headline shortage: HUD CHAS 2018–2022 (Table 15C), HAMFI 2018–2022 tiers. Cost burden and the workforce band: ACS 2020–2024 5-year with HUD FY2026 income limits — a different AMI vintage. WAHI: ACS 2020–2024 B19037. All counts are households.</p>
   </div>
 )}
 
@@ -117,6 +127,11 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
   .hg-card__stats dd { margin: .15rem 0 0; font-weight: 600; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
   .hg-card__dd2 { display: block; font-weight: 400; font-size: var(--fs-xs); color: var(--text-muted); }
   .hg-card__flag { font-size: var(--fs-xs); color: var(--color-brick); margin: .6rem 0 0; }
+  .hg-card__wahi {
+    font-size: var(--fs-xs); line-height: 1.45; color: var(--text-muted);
+    margin: .7rem 0 0; padding-left: .6rem; border-left: 3px solid var(--color-taupe);
+  }
+  .hg-card__wahi b { color: var(--text-primary); }
   .hg-card__cta { display: inline-block; margin: .8rem 0 0; font-size: var(--fs-sm); font-weight: 600; }
   .hg-card__note { font-size: var(--fs-xs); margin: .5rem 0 0; }
   @media (max-width: 520px) { .hg-card__stats { grid-template-columns: 1fr 1fr; } }

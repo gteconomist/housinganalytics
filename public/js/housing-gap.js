@@ -155,6 +155,20 @@
     return w;
   }
 
+  // Anchor C — WAHI, working-age household income. What the local WORKFORCE earns, once
+  // retiree- and student-headed households are out of the median. Shown everywhere, not as
+  // an exception: WAHI exceeds MHI in nearly every community (national median 1.16×), and
+  // the size of that gap does NOT predict whether it changes the answer — re-anchoring flips
+  // the sign of the gap in ~10% of places in every ratio band, including below-average ones.
+  function workforceWorking(model, A){
+    if(!model.wahi || model.wahi <= 0) return null;
+    const w = workforceBand(model, A, model.wahi*0.8, model.wahi*1.2);
+    if(!w) return null;
+    w.basis='wahi'; w.label='Working-age household income';
+    w.wahi=model.wahi; w.wr=model.wahiRatio; w.s65=model.s65; w.su25=model.su25; w.rel=model.wahiRel;
+    return w;
+  }
+
   // ---- affordability math ----
   function mortConst(rate){ const r=rate/12, n=360; return r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1); }
   function affordRent(income, A){ return A.front*income/12; }
@@ -191,7 +205,7 @@
       return {cut, price, hh:Math.round(hh), units:Math.round(units)};
     });
     const peak=rentGap.reduce((a,b)=>b.gap>a.gap?b:a, rentGap[0]);
-    const wf=workforce(m,A), wfLocal=workforceLocal(m,A);
+    const wf=workforce(m,A), wfLocal=workforceLocal(m,A), wfWork=workforceWorking(m,A);
     // divergence between the two anchors — drives the caution flag
     const ratio = (wf && m.mhi>0) ? wf.ami/m.mhi : null;
     const bandShare = (wf && renT>0) ? wf.hh/renT : null;
@@ -200,7 +214,13 @@
     // Fires on ~29% of geographies; a looser rule fired on 40% and stopped meaning anything.
     const signSplit = !!(wf && wfLocal && wf.shortage!=null && wfLocal.shortage!=null && (wf.shortage>0)!==(wfLocal.shortage>0));
     const diverges = !!(signSplit || (ratio!=null && (ratio>2.0 || ratio<0.80)));
-    return {renT,renB,renS,ownT,ownB,ownS, afford, rentGap, ownGap, peak, wf, wfLocal, ratio, bandShare, signSplit, diverges};
+    // How far the WAHI anchor moves the answer, per 1,000 renter households. Deliberately NOT
+    // a percentage of the MHI-anchored gap — that gap is often near zero, so a percentage is
+    // unstable and produces absurd numbers (Muscogee GA: +325 → +1,974 reads as "507%", when
+    // it is really 41 units per 1,000 renters, the 78th percentile nationally).
+    const wahiShift = (wfWork && wfLocal && wfWork.shortage!=null && wfLocal.shortage!=null && renT>0)
+      ? (wfWork.shortage - wfLocal.shortage)/renT*1000 : null;
+    return {renT,renB,renS,ownT,ownB,ownS, afford, rentGap, ownGap, peak, wf, wfLocal, wfWork, ratio, bandShare, signSplit, diverges, wahiShift};
   }
 
   // ---- rendering ----
@@ -212,9 +232,12 @@
     const short=w.shortage>0;
     const basisLine = kind==='ami'
       ? `HUD AMI ${fmt$(w.ami)} — 4-person family median${w.area?', '+w.area:''}`
+      : kind==='wahi'
+      ? `WAHI ${fmt$(w.wahi)} — households headed 25–64${w.wr?', '+w.wr.toFixed(2)+'× local median':''}`
       : `Median household income ${fmt$(w.mhi)} — this jurisdiction, all households`;
+    const kick = kind==='ami' ? 'Program threshold' : kind==='wahi' ? 'Workforce earnings' : 'Local affordability';
     return '<div class="hg-anchor hg-anchor--'+kind+'">'+
-      '<div class="hg-akick">'+(kind==='ami'?'Program threshold':'Local affordability')+'</div>'+
+      '<div class="hg-akick">'+kick+'</div>'+
       '<div class="hg-atitle">'+w.label+'</div>'+
       '<div class="hg-abasis">'+basisLine+'</div>'+
       '<div class="hg-av" style="color:'+(short?C.alert:C.ok)+'">'+(short?'+':'')+fmtN(w.shortage)+'</div>'+
@@ -225,12 +248,16 @@
         '<div><dt>Renter households in band</dt><dd>'+fmtN(w.hh)+'</dd></div>'+
         '<div><dt>Affordable &amp; available</dt><dd>'+fmtN(w.available)+'</dd></div>'+
         '<div><dt>Affordable home price</dt><dd>'+fmt$r(w.priceLo)+'–'+fmt$r(w.priceHi)+'</dd></div>'+
-      '</dl></div>';
+      '</dl>'+
+      (kind==='wahi' && w.rel===0
+        ? '<p class="hg-athin">Thin sample — too few households here for a reliable age &times; income cross-tab. Treat the WAHI figure as indicative.</p>'
+        : '')+
+      '</div>';
   }
 
   function anchorPanel(c, A){
-    if(!c.wf && !c.wfLocal) return '';
-    const w=c.wf, l=c.wfLocal;
+    if(!c.wf && !c.wfLocal && !c.wfWork) return '';
+    const w=c.wf, l=c.wfLocal, x=c.wfWork;
     let recon='';
     if(w && c.ratio!=null){
       const x=c.ratio, hi=x>=1;
@@ -244,10 +271,24 @@
           ? 'These two anchors reach opposite conclusions here — one shows a shortage, the other a surplus.'
           : 'HUD\'s AMI is far from local incomes here.')+'</b> The AMI figure is a regional program threshold, not a description of local incomes; quoting it on its own will mislead a local reader. Use the AMI number when the audience is a funder, a developer pro forma or an ordinance. Use the local-income number when the question is whether the people who live here can afford to stay. Say which one you are citing.</p>'
       : '';
-    return '<h3 class="hg-h3">Two income anchors — and why they disagree <span class="hg-pill">read both</span></h3>'+
-      '<p class="hg-sub">The same shortage calculation, run against the two income definitions this field uses. Nationally they disagree on the <i>direction</i> of the gap in 26% of communities and by more than 2× in 41%. Neither is wrong; they answer different questions.</p>'+
-      '<div class="hg-anchors">'+anchorCard(w,'ami',A)+anchorCard(l,'mhi',A)+'</div>'+
-      (recon?'<p class="hg-recon">'+recon+'</p>':'')+ flag +
+    // Per-geography WAHI reconciliation: what taking retirees and students out of the
+    // median actually does here, and what that does to the answer.
+    let wrecon='';
+    if(x && l && x.wahi>0){
+      wrecon = 'Households headed by someone <b>65 or older are '+(x.s65!=null?x.s65.toFixed(1)+'%':'—')+'</b> of households here'+
+        (x.su25!=null && x.su25>=5 ? ', and those headed by someone under 25 are <b>'+x.su25.toFixed(1)+'%</b>' : '')+
+        '. Taking both out of the median moves it from <b>'+fmt$(l.mhi)+'</b> to <b>'+fmt$(x.wahi)+'</b>'+
+        (x.wr?' ('+x.wr.toFixed(2)+'×, against a national median of 1.16×)':'')+'. '+
+        (c.wahiShift!=null
+          ? 'Run against the same rent stock, that shifts the gap by <b>'+(c.wahiShift>0?'+':'')+c.wahiShift.toFixed(0)+' units per 1,000 renter households</b> (national median 15).'
+          : '');
+    }
+    return '<h3 class="hg-h3">Three income anchors — and why they disagree <span class="hg-pill">read all three</span></h3>'+
+      '<p class="hg-sub">The same shortage calculation, run against the three income definitions this field uses: what programs fund, what residents earn, and what the workforce earns. Nationally the first two disagree on the <i>direction</i> of the gap in 26% of communities and by more than 2× in 41%; adding the workforce anchor changes the direction again in a further 11%. None is wrong — they answer different questions.</p>'+
+      '<div class="hg-anchors">'+anchorCard(w,'ami',A)+anchorCard(l,'mhi',A)+anchorCard(x,'wahi',A)+'</div>'+
+      (recon?'<p class="hg-recon">'+recon+'</p>':'')+
+      (wrecon?'<p class="hg-recon">'+wrecon+'</p>':'')+ flag +
+      '<p class="hg-note"><b>On working-age household income (WAHI).</b> WAHI is the median income of households <i>headed by</i> someone aged 25–64, computed from ACS table B19037 (age of householder × household income). It is <i>not</i> the income of working-age adults: ACS classifies an entire household by the age of one reference person, so a 70-year-old still working is excluded, and a retired parent living in a 45-year-old\'s household is counted in full. Read it as <i>what households run by working-age people earn here</i>. WAHI is higher than the local median household income in almost every community — nationally by a median of <b>1.16×</b> — because retiree- and student-headed households sit below both. Judge this area\'s figure against that 1.16 norm, not against 1.00. Use it when the question is whether the people who <i>work</i> here can afford to live here; use local median household income when the question is about all residents, retirees included.</p>'+
       '<p class="hg-note"><b>On area median income.</b> HUD\'s AMI is a regulatory threshold, not a local statistic: it is a <i>family</i> median for an entire metro or HUD-defined area, adjusted to a 4-person household, and subject to statutory high-housing-cost adjustments and rural floors. It is higher than the local median household income in 92% of U.S. communities, and more than 1.5× higher in 38%. Figures anchored on AMI describe <i>program eligibility</i>; figures anchored on local median household income describe <i>local affordability</i>. Both are shown above, and they will not agree.</p>';
   }
 
