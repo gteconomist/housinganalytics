@@ -11,6 +11,18 @@
  *
  * Data: src/data/generated/housing-gap-summary.json (built by
  * scripts/build-analysis-geo.mjs). Purely presentational.
+ *
+ * LAYOUT NOTE (2026-08-06): readers were misreading the stats row. Two fixes,
+ * both structural rather than cosmetic:
+ *  1. The stat labels are laid out with `display:contents` so every <dt> shares
+ *     grid row 1 and every <dd> shares row 2. A two-line label can no longer
+ *     shove its own number below its neighbour's — the numbers align no matter
+ *     how the labels wrap.
+ *  2. The three workforce anchors (HUD AMI / working-age / local) used to be
+ *     stacked inside one narrow column under a <br/>-broken label, so "+82",
+ *     "+29" and "-22" read as one run-on number. They are now their own
+ *     full-width label→value list, one anchor per line.
+ * Methodology prose moved behind a <details> so the card reads as figures.
  */
 const { rec = null, count = null, mode = 'county', geoid = '' } = Astro.props;
 const universeLabel = mode === 'county' ? 'U.S. counties' : 'U.S. cities';
@@ -27,9 +39,25 @@ function band(s) {
 const b = band(hasData ? rec.score : null);
 const href = `/housing-gap?geo=${geoid}&mode=${mode === 'county' ? 'county' : 'city'}`;
 const fmt = (n) => Number(n).toLocaleString();
-// Signed, so a surplus never reads as a shortage. The AMI and local-income anchors disagree on
-// SIGN in ~26% of geographies, so both are always shown — see the AMI-vs-MHI methodology memo.
-const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
+const usd = (n) => `$${Number(n).toLocaleString()}`;
+// Never a minus. The figure is always "+magnitude"; the WORD beside it and the
+// colour say which way it runs — a shortage is red, a surplus green. The stored
+// value is a shortage, so a surplus is a negative one, and printing that minus
+// next to the word "surplus" stated the direction twice and cancelled it out.
+// The three anchors disagree on direction in ~26% of geographies, so all three
+// are always shown — see the AMI-vs-MHI methodology memo.
+const gapFig = (n) => (n == null ? null : {
+  text: `+${fmt(Math.abs(n))}`,
+  word: n > 0 ? 'short' : 'surplus',
+  cls:  n > 0 ? 'is-short' : 'is-surplus',
+});
+// The workforce band, one row per income anchor. Order is fixed: HUD AMI first
+// (it is the published, citable one), then working-age, then local median.
+const anchors = [
+  { key: 'HUD area median income',       fig: gapFig(rec?.wsh), lo: rec?.wlo,  hi: rec?.whi },
+  { key: 'Working-age income (WAHI)',    fig: gapFig(rec?.xsh), lo: rec?.xlo,  hi: rec?.xhi },
+  { key: 'Local median income',          fig: gapFig(rec?.msh), lo: rec?.mlo,  hi: rec?.mhii },
+].filter((a) => a.fig);
 ---
 {hasData && (
   <div class={`hg-card hg-card--${b.key}`}>
@@ -50,8 +78,9 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
     </div>
 
     <p class="hg-card__lede">
-      Rental homes affordable <em>and available</em> to renter <em>households</em> earning ≤&nbsp;50% of area
-      median income, after removing units already occupied by higher-income households.
+      Rental homes affordable <em>and available</em> to renter households earning
+      50% or less of area median income, after removing units already occupied by
+      higher-income households.
     </p>
 
     <div class="hg-card__bar" role="img" aria-label={`Shortage intensity ${rec.score} of 100`}>
@@ -59,26 +88,62 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
     </div>
 
     <dl class="hg-card__stats">
-      <div><dt>Renter households cost-burdened</dt><dd>{rec.rb != null ? `${rec.rb}%` : '—'}<span class="hg-card__dd2">{rec.rbn != null ? fmt(rec.rbn) : ''}</span></dd></div>
-      <div><dt>Shortage at ≤ 30% AMI</dt><dd>{rec.eli != null ? fmt(rec.eli) : '—'}</dd></div>
-      <div><dt>Workforce gap, 80–120%<br/>on HUD AMI / working-age / local</dt><dd>{sgn(rec.wsh) ?? (rec.pg != null ? `${fmt(rec.pg)} under ${(rec.pc / 1000).toFixed(0)}k` : '—')}<span class="hg-card__dd2">{sgn(rec.xsh) != null ? `working-age: ${sgn(rec.xsh)}` : ''}</span><span class="hg-card__dd2">{sgn(rec.msh) != null ? `local: ${sgn(rec.msh)}` : ''}</span></dd></div>
+      <div>
+        <dt>Renter households cost-burdened</dt>
+        <dd>
+          {rec.rb != null ? `${rec.rb}%` : '—'}
+          {rec.rbn != null && (
+            <span class="hg-card__dd2">{fmt(rec.rbn)}{rec.rt != null ? ` of ${fmt(rec.rt)}` : ''} households</span>
+          )}
+        </dd>
+      </div>
+      <div>
+        <dt>Shortage at 30% AMI or below</dt>
+        <dd>
+          {gapFig(rec.eli)
+            ? <span class={gapFig(rec.eli).cls}>{gapFig(rec.eli).text} <small>{gapFig(rec.eli).word}</small></span>
+            : '—'}
+          <span class="hg-card__dd2">rental homes</span>
+        </dd>
+      </div>
     </dl>
+
+    <div class="hg-card__wf">
+      <p class="hg-card__wf-hd">
+        Workforce gap, 80–120% of area income
+        <span class="hg-card__wf-note">measured against three income anchors — they are not interchangeable</span>
+      </p>
+      {anchors.length > 0 ? (
+        <ul class="hg-card__wf-list">
+          {anchors.map((a) => (
+            <li>
+              <span class="hg-card__wf-k">
+                {a.key}
+                {a.lo != null && a.hi != null && (
+                  <span class="hg-card__wf-band">{usd(a.lo)}–{usd(a.hi)}</span>
+                )}
+              </span>
+              <span class={`hg-card__wf-v ${a.fig.cls}`}>{a.fig.text} <small>{a.fig.word}</small></span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul class="hg-card__wf-list">
+          <li>
+            <span class="hg-card__wf-k">Widest gap by price point</span>
+            <span class="hg-card__wf-v">
+              {rec.pg != null ? `${fmt(rec.pg)} under $${(rec.pc / 1000).toFixed(0)}k` : '—'}
+            </span>
+          </li>
+        </ul>
+      )}
+    </div>
 
     {rec.wahi != null && (
       <p class="hg-card__wahi">
-        <b>Working-age household income (WAHI) {`$${fmt(rec.wahi)}`}</b>
+        <b>Working-age household income (WAHI): {usd(rec.wahi)}</b>
         {rec.wr != null ? ` — ${rec.wr.toFixed(2)}× this area's median household income (national median 1.16×).` : '.'}
-        {' '}The median for households <em>headed by</em> someone 25–64, from ACS B19037 — retiree- and student-headed
-        households are out of it. Not the income of working-age adults: ACS types a whole household by one reference person.
         {rec.wrel === 0 ? ' Thin sample here — treat as indicative.' : ''}
-      </p>
-    )}
-
-    {rec.dvg === 1 && (
-      <p class="hg-card__flag">
-        HUD's AMI for this area and this jurisdiction's own median household income
-        {rec.amiRatio != null ? ` differ by ${rec.amiRatio >= 1 ? `${rec.amiRatio}×` : `${(1 / rec.amiRatio).toFixed(2)}× the other way`}` : ' diverge sharply'} —
-        the two workforce figures above are not interchangeable. Say which one you are citing.
       </p>
     )}
 
@@ -87,7 +152,27 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
     )}
 
     <a class="hg-card__cta" href={href}>See the full housing-gap analysis →</a>
-    <p class="hg-card__note muted">Headline shortage: HUD CHAS 2018–2022 (Table 15C), HAMFI 2018–2022 tiers. Cost burden and the workforce band: ACS 2020–2024 5-year with HUD FY2026 income limits — a different AMI vintage. WAHI: ACS 2020–2024 B19037. All counts are households.</p>
+
+    <details class="hg-card__more">
+      <summary>Definitions and sources</summary>
+      <p>
+        <b>WAHI</b> is the median income for households <em>headed by</em> someone aged 25–64,
+        from ACS B19037 — retiree- and student-headed households are out of it. It is not the
+        income of working-age adults: ACS types a whole household by one reference person.
+      </p>
+      {rec.dvg === 1 && (
+        <p class="hg-card__flag">
+          HUD's AMI for this area and this jurisdiction's own median household income
+          {rec.amiRatio != null ? ` differ by ${rec.amiRatio >= 1 ? `${rec.amiRatio}×` : `${(1 / rec.amiRatio).toFixed(2)}× the other way`}` : ' diverge sharply'} —
+          the three workforce figures above are not interchangeable. Say which one you are citing.
+        </p>
+      )}
+      <p>
+        Headline shortage: HUD CHAS 2018–2022 (Table 15C), HAMFI 2018–2022 tiers.
+        Cost burden and the workforce band: ACS 2020–2024 5-year with HUD FY2026 income
+        limits — a different AMI vintage. WAHI: ACS 2020–2024 B19037. All counts are households.
+      </p>
+    </details>
   </div>
 )}
 
@@ -111,28 +196,71 @@ const sgn = (n) => (n == null ? null : `${n > 0 ? '+' : ''}${fmt(n)}`);
   .hg-card__band {
     font-size: var(--fs-xs); font-weight: 600; color: var(--accent-band);
     border: 1px solid var(--accent-band); border-radius: 999px; padding: .1rem .55rem;
+    white-space: nowrap;
   }
-  .hg-card__body { display: flex; align-items: baseline; gap: 1rem; margin: .5rem 0 .4rem; flex-wrap: wrap; }
+
+  /* Headline row: figure left, rank right. The rank block is right-aligned so it
+     reads as one unit instead of drifting into the headline when it wraps. */
+  .hg-card__body { display: flex; align-items: flex-end; justify-content: space-between; gap: .35rem 1rem; margin: .5rem 0 .5rem; flex-wrap: wrap; }
   .hg-card__score { display: flex; align-items: baseline; gap: .35rem; }
   .hg-card__num { font-size: 2.4rem; line-height: 1; font-weight: 700; color: var(--accent-band); font-variant-numeric: tabular-nums; }
-  .hg-card__den { font-size: .95rem; color: var(--text-muted); }
-  .hg-card__rank { font-weight: 600; }
+  .hg-card__den { font-size: .95rem; color: var(--text-muted); white-space: nowrap; }
+  .hg-card__meta { text-align: right; margin-left: auto; }
+  .hg-card__rank { font-weight: 600; font-variant-numeric: tabular-nums; }
   .hg-card__sub { font-size: var(--fs-xs); }
-  .hg-card__lede { font-size: var(--fs-xs); color: var(--text-muted); margin: 0 0 .6rem; line-height: 1.45; }
+
+  .hg-card__lede { font-size: var(--fs-xs); color: var(--text-muted); margin: 0 0 .6rem; line-height: 1.5; }
   .hg-card__bar { height: 8px; border-radius: 999px; background: var(--color-panel-2); overflow: hidden; }
   .hg-card__fill { height: 100%; background: var(--accent-band); border-radius: 999px; }
-  .hg-card__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .75rem 0 0; }
-  .hg-card__stats div { min-width: 0; }
-  .hg-card__stats dt { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.3; }
-  .hg-card__stats dd { margin: .15rem 0 0; font-weight: 600; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-  .hg-card__dd2 { display: block; font-weight: 400; font-size: var(--fs-xs); color: var(--text-muted); }
-  .hg-card__flag { font-size: var(--fs-xs); color: var(--color-brick); margin: .6rem 0 0; }
+
+  /* Two stats, two grid ROWS: every <dt> is placed in row 1 and every <dd> in
+     row 2 (the wrapper divs are display:contents), so a label that wraps to two
+     lines can never push its own value out of line with its neighbour's. */
+  .hg-card__stats { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1rem; row-gap: .2rem; margin: .8rem 0 0; }
+  .hg-card__stats > div { display: contents; }
+  .hg-card__stats dt { grid-row: 1; align-self: end; font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.35; }
+  .hg-card__stats dd { grid-row: 2; margin: 0; font-weight: 600; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+  .hg-card__dd2 { display: block; font-weight: 400; font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.35; }
+
+  /* Workforce anchors: full width, one anchor per line, label left / value
+     right. Previously all three sat stacked in a third narrow column and read
+     as a single run-on figure. */
+  .hg-card__wf { margin: .85rem 0 0; padding: .6rem .7rem; background: var(--color-panel); border-radius: 8px; }
+  .hg-card__wf-hd { margin: 0 0 .4rem; font-size: var(--fs-xs); font-weight: 700; color: var(--text-primary); line-height: 1.35; }
+  .hg-card__wf-note { display: block; font-weight: 400; color: var(--text-muted); }
+  .hg-card__wf-list { list-style: none; margin: 0; padding: 0; }
+  .hg-card__wf-list li {
+    display: flex; align-items: baseline; justify-content: space-between; gap: .75rem;
+    padding: .3rem 0; border-top: 1px solid var(--color-hair);
+  }
+  .hg-card__wf-list li:first-child { border-top: 0; }
+  .hg-card__wf-k { font-size: var(--fs-xs); color: var(--text-body); line-height: 1.3; }
+  .hg-card__wf-band { display: block; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .hg-card__wf-v { flex: 0 0 auto; font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hg-card__wf-v small { font-weight: 400; font-size: var(--fs-xs); }
+
+  /* Direction of a gap figure: shortage red, surplus green. Never a minus —
+     the word and the colour carry it. */
+  .is-short   { color: var(--color-brick); }
+  .is-surplus { color: var(--color-green); }
+  .hg-card__stats small { font-weight: 400; font-size: var(--fs-xs); }
+
+  .hg-card__flag { font-size: var(--fs-xs); color: var(--color-brick); margin: .6rem 0 0; line-height: 1.45; }
   .hg-card__wahi {
-    font-size: var(--fs-xs); line-height: 1.45; color: var(--text-muted);
-    margin: .7rem 0 0; padding-left: .6rem; border-left: 3px solid var(--color-taupe);
+    font-size: var(--fs-xs); line-height: 1.5; color: var(--text-muted);
+    margin: .8rem 0 0; padding-left: .6rem; border-left: 3px solid var(--color-taupe);
   }
   .hg-card__wahi b { color: var(--text-primary); }
-  .hg-card__cta { display: inline-block; margin: .8rem 0 0; font-size: var(--fs-sm); font-weight: 600; }
-  .hg-card__note { font-size: var(--fs-xs); margin: .5rem 0 0; }
-  @media (max-width: 520px) { .hg-card__stats { grid-template-columns: 1fr 1fr; } }
+  .hg-card__cta { display: inline-block; margin: .85rem 0 0; font-size: var(--fs-sm); font-weight: 600; }
+
+  .hg-card__more { margin: .6rem 0 0; font-size: var(--fs-xs); color: var(--text-muted); }
+  .hg-card__more summary { cursor: pointer; font-weight: 600; color: var(--text-muted); }
+  .hg-card__more p { margin: .5rem 0 0; line-height: 1.5; }
+
+  @media (max-width: 400px) {
+    .hg-card__stats { grid-template-columns: 1fr; row-gap: 0; }
+    .hg-card__stats > div { display: block; margin-top: .55rem; }
+    .hg-card__meta { text-align: left; margin-left: 0; }
+    .hg-card__wf-list li { flex-wrap: wrap; gap: .15rem .75rem; }
+  }
 </style>

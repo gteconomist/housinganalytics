@@ -224,7 +224,12 @@
   }
 
   // ---- rendering ----
-  function tile(v,l,alert,sub,small){ return `<div class="hg-tile${alert?' hg-alert':''}"><div class="hg-tv${small?' hg-tv--sm':''}">${v}</div><div class="hg-tl">${l}</div>${sub?`<div class="hg-ts">${sub}</div>`:''}</div>`; }
+  // `tone`: true or 'alert' → shortage, red. 'ok' → surplus, green.
+  // Anything falsy → the default charcoal. Boolean callers are unchanged.
+  function tile(v,l,tone,sub,small){
+    const cls = (tone===true||tone==='alert') ? ' hg-alert' : (tone==='ok' ? ' hg-ok' : '');
+    return `<div class="hg-tile${cls}"><div class="hg-tv${small?' hg-tv--sm':''}">${v}</div><div class="hg-tl">${l}</div>${sub?`<div class="hg-ts">${sub}</div>`:''}</div>`;
+  }
 
   // ---- the two-anchor panel: same calculation, two income definitions, side by side ----
   function anchorCard(w, kind, A){
@@ -240,7 +245,8 @@
       '<div class="hg-akick">'+kick+'</div>'+
       '<div class="hg-atitle">'+w.label+'</div>'+
       '<div class="hg-abasis">'+basisLine+'</div>'+
-      '<div class="hg-av" style="color:'+(short?C.alert:C.ok)+'">'+(short?'+':'')+fmtN(w.shortage)+'</div>'+
+      // Always "+magnitude" — the word below and the colour carry the direction.
+      '<div class="hg-av" style="color:'+(short?C.alert:C.ok)+'">+'+fmtN(Math.abs(w.shortage))+'</div>'+
       '<div class="hg-al">rental units '+(short?'short':'surplus')+' at 80–120% of this anchor</div>'+
       '<dl class="hg-adl">'+
         '<div><dt>Income band</dt><dd>'+fmt$(w.lo)+'–'+fmt$(w.hi)+'</dd></div>'+
@@ -348,7 +354,7 @@
     root.querySelector('[data-gapchart]').innerHTML = gapChart(c.rentGap);
     root.querySelector('[data-gaprows]').innerHTML = c.rentGap.map(x=>{
       const col=x.gap>0?C.alert:C.ok;
-      return `<tr><td><b>${tierLabel(x)}</b>${x.pctAmi!=null?` <span style="color:${C.faint}">${fmt$(x.cut)}</span>`:''}</td><td class="n">${fmt$(x.aff)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n" style="color:${col};font-weight:700">${x.gap>0?'+':''}${fmtN(x.gap)}</td><td style="color:${col}">${x.gap>0?'short':'surplus'}</td></tr>`;
+      return `<tr><td><b>${tierLabel(x)}</b>${x.pctAmi!=null?` <span style="color:${C.faint}">${fmt$(x.cut)}</span>`:''}</td><td class="n">${fmt$(x.aff)}</td><td class="n">${fmtN(x.hh)}</td><td class="n">${fmtN(x.units)}</td><td class="n" style="color:${col};font-weight:700">+${fmtN(Math.abs(x.gap))}</td><td style="color:${col}">${x.gap>0?'short':'surplus'}</td></tr>`;
     }).join('');
     // ownership
     root.querySelector('[data-ownrows]').innerHTML = c.ownGap.map(x=>{
@@ -363,10 +369,10 @@
       tile(fmtN(c.renS), 'renter households severely burdened (>50%)', false,
            `${pct(c.renS/c.renT)} of ${fmtN(c.renT)} renter households`) +
       (w && w.shortage!=null
-        ? tile((w.shortage>0?'+':'')+fmtN(w.shortage), `workforce rental units ${w.shortage>0?'short':'surplus'} — 80–120% <b>HUD AMI</b> (${fmt$(w.lo)}–${fmt$(w.hi)})`, w.shortage>0,
+        ? tile('+'+fmtN(Math.abs(w.shortage)), `workforce rental units ${w.shortage>0?'short':'surplus'} — 80–120% <b>HUD AMI</b> (${fmt$(w.lo)}–${fmt$(w.hi)})`, w.shortage>0?'alert':'ok',
                `${fmtN(w.available)} affordable &amp; available for ${fmtN(w.hh)} households` +
                (c.wfLocal && c.wfLocal.shortage!=null
-                 ? `<br><span class="hg-alt">On local median income: <b>${c.wfLocal.shortage>0?'+':''}${fmtN(c.wfLocal.shortage)}</b></span>` : ''))
+                 ? `<br><span class="hg-alt">On local median income: <b style="color:${c.wfLocal.shortage>0?C.alert:C.ok}">+${fmtN(Math.abs(c.wfLocal.shortage))} ${c.wfLocal.shortage>0?'short':'surplus'}</b></span>` : ''))
         : tile('+'+fmtN(c.peak.gap), `rental units short for households ≤ ${fmt$(c.peak.cut)} (peak)`, true,
                'HUD AMI unavailable here — showing the peak ACS price point')) +
       (w
@@ -422,11 +428,12 @@
         return '<tr><td><b>'+t[0]+'</b><br><span style="color:'+C.faint+';font-size:11px">'+t[1]+'</span></td>'+
           '<td class="n">'+fmtN(c.hh)+'</td><td class="n">'+fmtN(c.affordable)+'</td>'+
           '<td class="n" style="font-weight:600;color:'+C.ink+'">'+fmtN(c.affAndAvail)+'</td>'+
-          '<td class="n" style="color:'+C.alert+';font-weight:700">'+(c.shortage>0?'-':'')+fmtN(Math.abs(c.shortage))+'</td></tr>';
+          '<td class="n" style="color:'+(c.shortage>0?C.alert:C.ok)+';font-weight:700">+'+fmtN(Math.abs(c.shortage))+
+          ' <span style="font-weight:400;font-size:11px">'+(c.shortage>0?'short':'surplus')+'</span></td></tr>';
       }).join('');
     return '<h3 class="hg-h3">Affordable <em>and available</em> — the headline shortage <span class="hg-pill">HUD CHAS · HAMFI 2018–2022</span></h3>'+
       '<p class="hg-sub">Renter units affordable to each income tier, minus those already occupied by higher-income households. This is the figure behind “City X is short N affordable units.” Source: HUD CHAS 2018–2022 (Table 15C), by HAMFI income tier. <b>Note the vintage:</b> these AMI tiers use HUD’s HAMFI for 2018–2022, while the workforce band above uses HUD’s FY2026 income limits — they are not the same AMI.</p>'+
-      '<table class="hg-tbl"><thead><tr><th>Renter income (AMI)</th><th class="n">Households</th><th class="n">Affordable units</th><th class="n">Affordable &amp; available</th><th class="n">Shortage</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<table class="hg-tbl"><thead><tr><th>Renter income (AMI)</th><th class="n">Households</th><th class="n">Affordable units</th><th class="n">Affordable &amp; available</th><th class="n">Shortage / surplus</th></tr></thead><tbody>'+rows+'</tbody></table>'+
       '<p class="hg-note"><b>Why this is the credible number:</b> “available” removes affordable units occupied by higher-income renters. Look at the ≤ 80% row — there can be more <i>affordable</i> units than households, yet still a shortage once the unavailable ones are removed, which a simple affordability count misses. CHAS is 2018–2022 (HUD’s latest); the cost-burden and price-point figures above are ACS 2020–2024. (Vacant-for-rent affordable units are a small pending addition.)</p>';
   }
 
