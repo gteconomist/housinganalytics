@@ -322,10 +322,21 @@ function addDerived(c) {
     (c.rent_burden_40_49 ?? 0) +
     (c.rent_burden_50_plus ?? 0);
   const rb_severe = c.rent_burden_50_plus ?? 0;
-  const rb_denom =
-    (c.rent_burden_total ?? 0) - (c.rent_burden_not_computed ?? 0);
-  c.renter_cost_burden_rate        = pct(rb_30_plus, rb_denom || null);
-  c.renter_severe_cost_burden_rate = pct(rb_severe, rb_denom || null);
+  // DENOMINATOR = ALL renter households (B25070_001), including the "not
+  // computed" group (no cash rent, zero or negative income). This is the same
+  // base the /housing-gap analysis and the owner rate below use, so every
+  // cost-burden figure on the site reconciles. Census DP04 instead EXCLUDES
+  // the not-computed units, which gives a higher figure; that alternative is
+  // published as renter_cost_burden_rate_computed and footnoted on the page.
+  // (Until 2026-11-19 the profile used the DP04 base and the gap page used
+  // this one — Washington County, GA read 56.3% on one and 43.6% on the other.)
+  const rb_total = c.rent_burden_total ?? 0;
+  const rb_computed = rb_total - (c.rent_burden_not_computed ?? 0);
+  c.renter_cost_burdened_hh        = rb_total ? rb_30_plus : null;
+  c.renter_severe_cost_burdened_hh = rb_total ? rb_severe  : null;
+  c.renter_cost_burden_rate        = pct(rb_30_plus, rb_total || null);
+  c.renter_severe_cost_burden_rate = pct(rb_severe, rb_total || null);
+  c.renter_cost_burden_rate_computed = pct(rb_30_plus, rb_computed || null);
 
   // Owner cost burden (B25106): sum of all 30%+ owner buckets / owner total
   const ob_30_plus =
@@ -386,7 +397,7 @@ function addDerived(c) {
 
   // ── Vacancy analytics (B25004 + tenure) ─────────────────────────
   // Census formula for the official vacancy rates (HVR / RVR):
-  //   HVR = vacant_for_sale / (owner_occupied + vacant_for_sale)
+  //   HVR = vacant_for_sale / (owner_occupied + vacant_for_sale + sold_not_occ)
   //   RVR = vacant_for_rent / (renter_occupied + vacant_for_rent + rented_not_occ)
   // These OVERRIDE whatever DP04_0004E / DP04_0005E held in the spreadsheet
   // (those columns were accidentally loaded with owner/renter unit counts).
@@ -401,8 +412,8 @@ function addDerived(c) {
   const owner_occ    = c.tenure_owner_occupied  ?? 0;
   const renter_occ   = c.tenure_renter_occupied ?? 0;
 
-  c.homeowner_vacancy_rate = (owner_occ + v_for_sale) > 0
-    ? (v_for_sale / (owner_occ + v_for_sale)) * 100
+  c.homeowner_vacancy_rate = (owner_occ + v_for_sale + v_sold_no) > 0
+    ? (v_for_sale / (owner_occ + v_for_sale + v_sold_no)) * 100
     : null;
   c.rental_vacancy_rate = (renter_occ + v_for_rent + v_rented_no) > 0
     ? (v_for_rent / (renter_occ + v_for_rent + v_rented_no)) * 100
@@ -524,7 +535,9 @@ function aggregate(group, name) {
     }
     out[f] = any ? s : null;
   }
-  // Weighted medians (population-weighted approximation)
+  // Weighted averages of county values. These are a FALLBACK ONLY: a weighted
+  // average of county medians is not a median. applyPublished() below replaces
+  // every one of them with the Census Bureau's own state / national figure.
   for (const [field, weight] of WEIGHTED_MEDIAN_FIELDS) {
     let num = 0, denom = 0;
     for (const c of group) {
@@ -542,6 +555,36 @@ function aggregate(group, name) {
   return out;
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Published ACS values (src/data/acs-published.json, committed; written by
+// scripts/fetch-acs-published.mjs). Three things come from here and from
+// nowhere else:
+//   · poverty_rate          S1701_C03_001E (all ages). The workbook column is
+//                           S1701_C03_006E — ages 18–64 — kept as poverty_rate_18_64.
+//   · hh_with_children_u18  B11005_002E, households with anyone under 18.
+//   · every state / national median, mean and rate (see aggregate()).
+// If the file is missing the affected fields are NULL — never a wrong number.
+// ─────────────────────────────────────────────────────────────────
+let acsPublished = null;
+try {
+  acsPublished = JSON.parse(await readFile(join(__dirname, '..', 'src', 'data', 'acs-published.json'), 'utf8'));
+} catch {
+  console.warn('! acs-published.json not found — poverty rate, households with children and ' +
+               'state/national medians will be null. Run: npm run acs-published');
+}
+function applyPublishedGeo(rec, arr) {
+  const order = acsPublished?.order?.g ?? ['poverty_rate', 'hh_with_children_u18'];
+  for (const f of order) rec[f] = null;
+  if (Array.isArray(arr)) order.forEach((f, i) => { rec[f] = arr[i] ?? null; });
+}
+function applyPublishedAgg(agg, pub) {
+  applyPublishedGeo(agg, pub?.g);
+  for (const [f] of WEIGHTED_MEDIAN_FIELDS) if (f !== 'poverty_rate') agg[f] = null;
+  (acsPublished?.order?.m ?? []).forEach((f, i) => { agg[f] = pub?.m?.[i] ?? null; });
+  addDerived(agg);   // price-to-income etc. must use the published medians
+}
+for (const c of counties) applyPublishedGeo(c, acsPublished?.counties?.[c.geoid]);
+
 const nationalAgg = aggregate(counties, 'United States');
 nationalAgg.type = 'national';
 
@@ -555,8 +598,11 @@ for (const [state, group] of byState) {
   const agg = aggregate(group, state);
   agg.type = 'state';
   agg.state_fips = group[0]?.state_fips ?? null;
+  applyPublishedAgg(agg, agg.state_fips
+    ? acsPublished?.states?.[String(agg.state_fips).padStart(2, '0')] : null);
   stateAggs[state] = agg;
 }
+applyPublishedAgg(nationalAgg, acsPublished?.national);
 
 // ─────────────────────────────────────────────────────────────────
 // ACS extras (src/data/acs-extra.json) — ethnicity, labor force, and
@@ -823,13 +869,25 @@ for (const [geoid, raw] of Object.entries(placesRaw.places ?? {})) {
 // Sections 4 & 5 entirely on place pages — QCEW industries and OEWS wages
 // aren't published at place geography and inheriting them would mislead.
 let placesWithHud = 0, placesWithGaz = 0;
+let placeCounty = {};
+try {
+  placeCounty = JSON.parse(await readFile(
+    join(__dirname, '.master-crosswalk', 'crosswalk-places.json'), 'utf8'));
+} catch { console.warn('! crosswalk-places.json not found — places cannot inherit HUD AMI.'); }
 for (const p of places) {
   const stateAgg = stateAggs[p.state_name];
   p._context = {
     state: stateAgg ? lightContext(stateAgg) : null,
     national: lightContext(nationalAgg),
   };
-  p.hud_ami = p.parent_county_fips ? (hudAmi[p.parent_county_fips] ?? null) : null;
+  // Parent county: the workbook column when present, otherwise the committed
+  // place→county crosswalk (the same one /housing-gap uses). The workbook has
+  // no parent_county_fips column, so before 2026-11-19 EVERY city profile
+  // printed "HUD AMI data not available".
+  const parentFips = p.parent_county_fips ?? placeCounty[p.geoid]?.county_fips ?? null;
+  p.parent_county_fips = parentFips;
+  p.hud_ami = parentFips ? (hudAmi[parentFips] ?? null) : null;
+  applyPublishedGeo(p, acsPublished?.places?.[p.geoid]);
   if (p.hud_ami) placesWithHud++;
   const gaz = gazetteerPlaces[p.geoid];
   if (gaz?.land_area_sqmi && p.population_total != null) {
@@ -866,6 +924,7 @@ function lightContext(a) {
     renter_rate: a.renter_rate,
     vacancy_rate: a.vacancy_rate,
     renter_cost_burden_rate: a.renter_cost_burden_rate,
+    poverty_rate: a.poverty_rate,
     owner_cost_burden_rate: a.owner_cost_burden_rate,
     price_to_income_ratio: a.price_to_income_ratio,
     aging_stock_share: a.aging_stock_share,

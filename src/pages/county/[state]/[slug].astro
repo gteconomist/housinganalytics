@@ -411,7 +411,9 @@ const incomeAnchors = [
    gap?.wahi ?? null,
    'Households headed by someone aged 25–64 — ACS B19037, interpolated.'],
   ['Median household income (MHI)',
-   gap?.mhii ?? county.hh_income_median,
+   // NOT gap.mhii — that is the UPPER EDGE of the local 80–120% band (MHI × 1.2).
+   // Using it here printed 120% of MHI in a row labelled MHI on every profile.
+   county.hh_income_median,
    'All households — ACS B19013. Includes retiree- and student-headed households.'],
 ].filter(([, v]) => v != null);
 
@@ -544,7 +546,7 @@ const occRows = (occupations?.rows ?? [])
           <div class="kpi__delta muted">≥30% of income</div></div>
         <div class="kpi"><div class="kpi__label">Homeowner vacancy</div>
           <div class="kpi__value">{fmtPct(county.homeowner_vacancy_rate)}</div>
-          <div class="kpi__delta muted">Of owner-occupied + for-sale units</div></div>
+          <div class="kpi__delta muted">Of owner-occupied, for-sale and sold-not-occupied units</div></div>
         <div class="kpi"><div class="kpi__label">Rental vacancy</div>
           <div class="kpi__value">{fmtPct(county.rental_vacancy_rate)}</div>
           <div class="kpi__delta muted">Of renter-occupied + for-rent units</div></div>
@@ -809,14 +811,15 @@ const occRows = (occupations?.rows ?? [])
         <p class="muted">Average size: {fmtRatio(county.hh_avg_size)} people</p>
       </div>
       <div class="card">
-        <h4>Households with children</h4>
-        <p class="big-num">{fmtInt(county.hh_with_children)}</p>
-        <p class="muted">{fmtPct(pct(county.hh_with_children, county.hh_total_s1101))} of households</p>
+        <h4>Households with children under 18</h4>
+        <p class="big-num">{fmtInt(county.hh_with_children_u18)}</p>
+        <p class="muted">{fmtPct(pct(county.hh_with_children_u18, county.hh_total_s1101))} of households · ACS B11005</p>
+        <p class="muted">{fmtInt(county.hh_with_children)} are the householder's own children (S1101)</p>
       </div>
       <div class="card">
         <h4>Per-capita income</h4>
         <p class="big-num">{fmtMoney(county.per_capita_income)}</p>
-        <p class="muted">Poverty rate: {fmtPct(county.poverty_rate)}</p>
+        <p class="muted">Poverty rate, all ages: {fmtPct(county.poverty_rate)} · ACS S1701</p>
       </div>
     </div>
   </section>
@@ -856,10 +859,10 @@ const occRows = (occupations?.rows ?? [])
         <h3>Housing stock by decade</h3>
         <canvas data-chart="yearBuilt"></canvas>
         <figcaption class="muted">
-          {fmtPct(county.aging_stock_share)} built before 1980 ·
-          Median structure age {fmtRatio(county.structure_median_age)} yrs.
+          {fmtPct(county.aging_stock_share)} of occupied homes were built before 1980 ·
+          Median year built, all units: {county.structure_median_age != null ? String(Math.round(county.structure_median_age)) : '—'}.
         </figcaption>
-        <small class="source">Source: ACS 5-year 2024, Table S2504.</small>
+        <small class="source">Source: ACS 5-year 2024, Tables S2504 (occupied units by year built) and B25035 (median year built).</small>
       </figure>
 
       <figure class="card">
@@ -1084,7 +1087,11 @@ const occRows = (occupations?.rows ?? [])
             </table>
             <p class="muted">
               HUD FMR Area: <strong>{hud.fmr_area ?? '—'}</strong>. 80% AMI uses HUD's published
-              Section 8 Low Income Limits; 100% is HUD MFI; 120% is the standard workforce convention.
+              Section 8 Low Income Limits (4-person), which include HUD's state non-metro floor and high-housing-cost
+              adjustments. 100% is that limit ÷ 0.8 and 120% is that limit × 1.5 — the same basis as the housing-gap analysis.
+              {hud.mfi_4p != null && Math.abs(hud.mfi_4p - hud.ami_100_4p) > 1 && (
+                <Fragment> HUD's unadjusted median family income estimate for this area is {fmtMoney(hud.mfi_4p)}.</Fragment>
+              )}
             </p>
           </Fragment>
         ) : (
@@ -1140,10 +1147,13 @@ const occRows = (occupations?.rows ?? [])
         <h3>Renter cost burden</h3>
         <canvas data-chart="renterBurden"></canvas>
         <figcaption class="muted">
-          {fmtPct(county.renter_cost_burden_rate)} of renter households spend ≥30% of income on rent
-          ({fmtPct(county.renter_severe_cost_burden_rate)} spend ≥50%).
+          {fmtInt(county.renter_cost_burdened_hh)} of {fmtInt(county.rent_burden_total)} renter households
+          ({fmtPct(county.renter_cost_burden_rate)}) spend ≥30% of income on rent;
+          {fmtInt(county.renter_severe_cost_burdened_hh)} ({fmtPct(county.renter_severe_cost_burden_rate)}) spend ≥50%.
         </figcaption>
-        <small class="source">Source: ACS 5-year 2024, Table B25070.</small>
+        <small class="source">Source: ACS 5-year 2024, Table B25070. Rates are shares of <em>all</em> renter households,
+          including the {fmtInt(county.rent_burden_not_computed)} for which Census could not compute a ratio (no cash rent, or zero
+          or negative income). Census profile DP04 leaves those households out of the base, which gives {fmtPct(county.renter_cost_burden_rate_computed)}.</small>
       </figure>
       <figure class="card">
         <h3>Owner cost burden by income</h3>

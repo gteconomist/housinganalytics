@@ -36,7 +36,7 @@ export const METRICS = [
   // ─── Affordability & burden ───────────────────────────────────────
   { field: 'price_to_income_ratio',         label: 'Price-to-income ratio',                 group: 'Affordability', format: 'ratio', source: 'ACS 2024 (derived)' },
   { field: 'rent_to_income_ratio',          label: 'Rent-to-income ratio',                  group: 'Affordability', format: 'ratio', source: 'ACS 2024 (derived)' },
-  { field: 'renter_cost_burden_rate',       label: 'Renter cost burden (30%+ of income)',   group: 'Affordability', format: 'pct',   source: 'ACS 2024, B25070 (derived)' },
+  { field: 'renter_cost_burden_rate',       label: 'Renter cost burden (30%+ of income)',   group: 'Affordability', format: 'pct',   source: 'ACS 2024, B25070 (share of all renter households)' },
   { field: 'renter_severe_cost_burden_rate',label: 'Renter severe cost burden (50%+)',      group: 'Affordability', format: 'pct',   source: 'ACS 2024, B25070 (derived)' },
   { field: 'owner_cost_burden_rate',        label: 'Owner cost burden (30%+ of income)',    group: 'Affordability', format: 'pct',   source: 'ACS 2024, B25106 (derived)' },
 
@@ -48,7 +48,7 @@ export const METRICS = [
   // ─── Income ───────────────────────────────────────────────────────
   { field: 'hh_income_mean',             label: 'Mean household income',                   group: 'Income',  format: 'money', source: 'ACS 2024, S1901' },
   { field: 'per_capita_income',          label: 'Per-capita income',                       group: 'Income',  format: 'money', source: 'ACS 2024, DP03' },
-  { field: 'poverty_rate',               label: 'Poverty rate',                            group: 'Income',  format: 'pct',   source: 'ACS 2024, S1701' },
+  { field: 'poverty_rate',               label: 'Poverty rate (all ages)',                 group: 'Income',  format: 'pct',   source: 'ACS 2024, S1701' },
   { field: 'income_median_owner',        label: 'Median income — owner-occupied',          group: 'Income',  format: 'money', source: 'ACS 2024, B25119' },
   { field: 'income_median_renter',       label: 'Median income — renter-occupied',         group: 'Income',  format: 'money', source: 'ACS 2024, B25119' },
   { field: 'income_median_under25',      label: 'Median income — householder under 25',    group: 'Income',  format: 'money', source: 'ACS 2024, B19049' },
@@ -170,7 +170,7 @@ export const METRICS = [
   // ─── Households ───────────────────────────────────────────────────
   { field: 'hh_total_s1101',             label: 'Households',                              group: 'Households', format: 'count', source: 'ACS 2024, S1101' },
   { field: 'hh_avg_size',                label: 'Average household size',                  group: 'Households', format: 'ratio', source: 'ACS 2024, S1101' },
-  { field: 'hh_with_children',           label: 'Households with children',                group: 'Households', format: 'count', source: 'ACS 2024, S1101' },
+  { field: 'hh_with_children',           label: 'Households with own children under 18',   group: 'Households', format: 'count', source: 'ACS 2024, S1101' },
   { field: 'hh_size_1',                  label: '1-person households',                     group: 'Households', format: 'count', source: 'ACS 2024, S2501' },
   { field: 'hh_size_2',                  label: '2-person households',                     group: 'Households', format: 'count', source: 'ACS 2024, S2501' },
   { field: 'hh_size_3',                  label: '3-person households',                     group: 'Households', format: 'count', source: 'ACS 2024, S2501' },

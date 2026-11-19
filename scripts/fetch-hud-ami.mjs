@@ -214,15 +214,21 @@ for (const row of rows) {
   const ami_80_2p = n(row[LK.l80_2]) ?? round50(mfi_2p * 0.80);
   const ami_80_4p = n(row[LK.l80_4]) ?? round50(mfi_4p * 0.80);
 
-  // 100% AMI: equals HUD MFI for 4-person; 0.80 × MFI for 2-person; 0.70 for 1-person.
-  const ami_100_1p = mfi_1p;
-  const ami_100_2p = mfi_2p;
-  const ami_100_4p = mfi_4p;
+  // 100% and 120% AMI are DERIVED FROM HUD'S PUBLISHED 80% LIMIT, not from the
+  // raw median family income: 100% = limit ÷ 0.8, 120% = limit × 1.5. The
+  // published limit carries HUD's state non-metro floor and its high-housing-
+  // cost adjustment; the raw MFI does not. Washington County, GA: raw MFI
+  // $65,800, 80% limit $61,600 → 100% AMI $77,000. This is the SAME rule
+  // build-analysis-geo.mjs uses for /housing-gap — before 2026-11-19 this file
+  // used raw MFI and the profile and the gap analysis disagreed in ~45% of
+  // counties. mfi_* below remain HUD's raw figures, for reference only.
+  const ami_100_1p = Math.round(ami_80_1p / 0.8);
+  const ami_100_2p = Math.round(ami_80_2p / 0.8);
+  const ami_100_4p = Math.round(ami_80_4p / 0.8);
 
-  // 120% AMI: HUD doesn't publish; standard workforce convention.
-  const ami_120_1p = round50(mfi_1p * 1.20);
-  const ami_120_2p = round50(mfi_2p * 1.20);
-  const ami_120_4p = round50(mfi_4p * 1.20);
+  const ami_120_1p = Math.round(ami_80_1p * 1.5);
+  const ami_120_2p = Math.round(ami_80_2p * 1.5);
+  const ami_120_4p = Math.round(ami_80_4p * 1.5);
 
   out[fips] = {
     fmr_area: areaKey ? row[areaKey] : null,

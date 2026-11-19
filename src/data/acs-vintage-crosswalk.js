@@ -240,14 +240,18 @@ export const FIELDS = [
     vars: ['B25004_001E', 'B25004_002E', 'B25004_004E'],
     derive: (g) => { const t = g('B25004_001E'), r = g('B25004_002E'), s = g('B25004_004E'); return t != null ? t - (r || 0) - (s || 0) : null; } },
 
-  // Homeowner vacancy rate = for-sale-only / (owner-occ + for-sale-only).
-  // Rental vacancy rate = for-rent / (renter-occ + for-rent).
+  // Census Bureau definitions:
+  //   Homeowner vacancy rate = for-sale-only / (owner-occ + for-sale-only + sold-not-occupied)
+  //   Rental vacancy rate    = for-rent / (renter-occ + for-rent + rented-not-occupied)
+  // (Before 2026-11-19 the "not occupied" terms were left out of both
+  //  denominators, overstating each rate by up to ~0.1 point. Bundles under
+  //  public/master-data/ carry the old values until `npm run master-geo` is re-run.)
   { id: 'homeowner_vacancy_rate', tab: 'Housing', label: 'Homeowner Vacancy Rate', unit: 'rate', status: 'stable',
-    vars: ['B25003_002E', 'B25004_004E'],
-    derive: (g) => ratio(g('B25004_004E'), sum(g, ['B25003_002E', 'B25004_004E'])) },
+    vars: ['B25003_002E', 'B25004_004E', 'B25004_005E'],
+    derive: (g) => ratio(g('B25004_004E'), sum(g, ['B25003_002E', 'B25004_004E', 'B25004_005E'])) },
   { id: 'rental_vacancy_rate', tab: 'Housing', label: 'Rental Vacancy Rate', unit: 'rate', status: 'stable',
-    vars: ['B25003_003E', 'B25004_002E'],
-    derive: (g) => ratio(g('B25004_002E'), sum(g, ['B25003_003E', 'B25004_002E'])) },
+    vars: ['B25003_003E', 'B25004_002E', 'B25004_003E'],
+    derive: (g) => ratio(g('B25004_002E'), sum(g, ['B25003_003E', 'B25004_002E', 'B25004_003E'])) },
 
   // B25024 Units in Structure. 001 total; 002 1-detached ... 011 boat/RV/van.
   { id: 'total_housing_units', tab: 'Housing', label: 'Total Housing Units', unit: 'count', status: 'stable',

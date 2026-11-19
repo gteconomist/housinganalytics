@@ -31,7 +31,8 @@
     "analysis-summary": "SUMMARY_ONLY=1 node scripts/build-analysis-geo.mjs",
     "chas": "node scripts/fetch-chas.mjs",
     "market": "node scripts/fetch-market.mjs",
-    "acs-extra": "node scripts/fetch-acs-extra.mjs"
+    "acs-extra": "node scripts/fetch-acs-extra.mjs",
+    "acs-published": "node scripts/fetch-acs-published.mjs"
   },
   "dependencies": {
     "astro": "^4.16.18",

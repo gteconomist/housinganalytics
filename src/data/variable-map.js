@@ -83,7 +83,10 @@ export const VARIABLES = [
   { field: 'tenure_renter_occupied',    label: 'Renter-Occupied Housing Units',          acs: 'DP04_0047E',  group: 'tenure' },
 
   // ── Income (S1701, S1901) ────────────────────────────────────────
-  { field: 'poverty_rate',              label: 'Poverty Rate (%)',                       acs: 'S1701_C03_006E', group: 'income' },
+  // S1701_C03_006E is the poverty rate for ages 18–64 ONLY. The all-ages rate
+  // (S1701_C03_001E) is not in the workbooks; it arrives as `poverty_rate` from
+  // src/data/acs-published.json. Do not rename this field back to poverty_rate.
+  { field: 'poverty_rate_18_64',        label: 'Poverty Rate, Ages 18–64 (%)',           acs: 'S1701_C03_006E', group: 'income' },
   { field: 'hh_income_median',          label: 'Median Household Income',                acs: 'S1901_C01_012E', group: 'income' },
   { field: 'hh_income_mean',            label: 'Mean Household Income',                  acs: 'S1901_C01_013E', group: 'income' },
   { field: 'per_capita_income',         label: 'Per Capita Income',                      acs: 'DP03_0088E',     group: 'income' },
@@ -128,11 +131,13 @@ export const VARIABLES = [
   { field: 'hh_total_s2501',            label: 'Total Households (S2501)',               acs: 'S2501_C01_001E', group: 'household' },
   { field: 'hh_total_s1101',            label: 'Total Households (S1101)',               acs: 'S1101_C01_001E', group: 'household' },
   { field: 'hh_avg_size',               label: 'Average Household Size',                 acs: 'S1101_C01_002E', group: 'household' },
-  { field: 'hh_with_children',          label: 'Households with Children',               acs: 'S1101_C01_005E', group: 'household' },
+  // Own children of the householder only. Households with ANY person under 18
+  // (B11005_002E) arrive as `hh_with_children_u18` from acs-published.json.
+  { field: 'hh_with_children',          label: 'Households with Own Children Under 18',  acs: 'S1101_C01_005E', group: 'household' },
 
   // ── Mortgage data ────────────────────────────────────────────────
   { field: 'mortgage_total',            label: 'Total Housing Units with Mortgage',      acs: 'S2506_C01_001E', group: 'mortgage' },
-  { field: 'mortgage_median',           label: 'Median Mortgage Payment',                acs: 'S2506_C01_009E', group: 'mortgage' },
+  { field: 'mortgage_median',           label: 'Median Value — Mortgaged Units',              acs: 'S2506_C01_009E', group: 'mortgage' },
 
   // ── Education (S1501) ────────────────────────────────────────────
   { field: 'edu_lt_9th',                label: 'Less than 9th Grade',                    acs: 'S1501_C01_007E', group: 'education' },
