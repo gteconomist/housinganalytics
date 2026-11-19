@@ -95,7 +95,11 @@
     const wg = f.workforce_gap || {}, wgLo = Math.max(0, wg.min || 0), wgHi = wg.max || 0, wgShort = wgHi > 0;
     const wgText = !wgShort ? 'no shortage' : wgLo === wgHi ? n0(wgHi) : wgLo === 0 ? `up to ${n0(wgHi)}` : `${n0(wgLo)} to ${n0(wgHi)}`;
     const sub = f.subsidy_2br || {}, rc = f.rent_ceiling_2br || {}, rn2 = f.rent_needed ? f.rent_needed.br2 : null;
-    const hasInv = f.inventory_properties > 0, noMarket = hasInv && f.inventory_market_units === 0;
+    // Federal records list only subsidized properties, so they cannot show that market-rate apartments are absent.
+    // The test is the Census count of units in buildings of five or more: if the subsidized units account for
+    // all of it, no market-rate apartment stock is evident.
+    const st5 = ex('structure_type'), mf5 = st5 ? st5.rows.filter((r) => /^(5 to 9|10 to 19|20 to 49|50 or more)/.test(r[0])).reduce((a, r) => a + (r[1] || 0), 0) : null;
+    const hasInv = f.inventory_properties > 0, noMarket = hasInv && f.inventory_market_units === 0 && mf5 != null && mf5 <= f.inventory_units * 1.15;
     const permits = f.permits, pY = permits ? `${permits.years[0]} through ${permits.years[1]}` : '', pYears = permits ? permits.years[1] - permits.years[0] + 1 : 0;
     const hhBase = isPlace ? hhCounty : f.households, buildRate = permits && hhBase ? permits.total / pYears / hhBase * 100 : null;   // units a year per 100 households
     const slowBuild = buildRate != null && buildRate < 0.5;
@@ -114,7 +118,7 @@
     P(`This assessment documents housing conditions in ${f.name}, ${f.state}, and measures the need for workforce housing: homes affordable to households earning 80% to 120% of area median income (AMI). Rental and owner-occupied findings are presented separately so each can be read alone.`);
     B.push({ t: 'eyebrow', text: `${nm} at a glance  ·  ${period}` });
     tiles([
-      noMarket ? ['0', 'Market-rate apartment communities', `All ${n0(f.inventory_units)} apartment units found are restricted`] : [p1(f.renter_share), 'Households that rent', `${n0(f.renter_households)} of ${n0(f.households)} households`],
+      noMarket ? [n0(f.inventory_units), 'Subsidized apartment units', 'No market-rate apartment stock is evident'] : [p1(f.renter_share), 'Households that rent', `${n0(f.renter_households)} of ${n0(f.households)} households`],
       [p1(f.renters_cost_burdened_share), 'Renters cost-burdened', `${n0(f.renters_cost_burdened)} of ${n0(f.renter_households)} renter households`],
       rn2 ? [usd(rn2), 'Rent to finance a new two-bedroom', f.no_unit_rents_at_or_above ? `Nothing in the ${area} rents above ${usd(f.no_unit_rents_at_or_above)}` : `Median rent today is ${usd(f.rent_median)}`] : [usd(f.rent_median), 'Median gross rent', `${stateName}: ${usd(f.state_rent_median)}`],
     ]);
@@ -125,8 +129,8 @@
       [n0(f.vacant_for_sale || 0), 'Vacant homes for sale', 'Census Bureau estimate'],
     ]);
     B.push({ t: 'eyebrow', text: 'Key findings' });
-    if (noMarket) bullet(`**No market-rate apartment community was found.** Public records show ${num(f.inventory_properties)} apartment ${plural(f.inventory_properties, 'property', 'properties')} with ${n0(f.inventory_units)} units, all of them subsidized or income-restricted. A household at 80% to 120% of AMI earns too much for that stock and has nothing newer to rent.`);
-    else if (hasInv) bullet(`**Most identified apartments are income-restricted.** Public records show ${num(f.inventory_properties)} apartment ${plural(f.inventory_properties, 'property', 'properties')} with ${n0(f.inventory_units)} units, of which ${n0(f.inventory_restricted_units)} are subsidized or income-restricted.`);
+    if (noMarket) bullet(`**No market-rate apartment stock is evident.** Federal records list ${num(f.inventory_properties)} subsidized or income-restricted apartment ${plural(f.inventory_properties, 'property', 'properties')} with ${n0(f.inventory_units)} units, and the Census Bureau counts only ${n0(mf5)} units in buildings of five or more. A household at 80% to 120% of AMI earns too much for the subsidized stock and has little or nothing newer to rent.`);
+    else if (hasInv) bullet(`**A sizable subsidized apartment stock.** Federal records list ${n0(f.inventory_properties)} subsidized or income-restricted apartment ${plural(f.inventory_properties, 'property', 'properties')} with ${n0(f.inventory_restricted_units)} units${mf5 ? `, against ${n0(mf5)} units in buildings of five or more` : ''}.`);
     else bullet(`**Renters are stretched.** ${n0(f.renters_cost_burdened)} of ${n0(f.renter_households)} renter households (${p1(f.renters_cost_burdened_share)}) spend more than 30% of income on housing, and ${n0(f.renters_severely_burdened)} spend more than half.`);
     if (rn2 && sub.p100 > 0) bullet(`**New apartments do not finance without subsidy.** At planning-level costs a new two-bedroom needs about ${usd(rn2)} a month. Workforce households can pay ${usd(rc.p80)} at 80% of AMI and ${usd(rc.p120)} at 120%. The gap is ${usd(sub.p80)} per unit at 80% of AMI and ${sub.p120 > 0 ? usd(sub.p120) + ' at 120%' : 'closes at 120%'}.`);
     else if (rn2) bullet(`**New apartments are close to financeable in the upper workforce band.** At planning-level costs a new two-bedroom needs about ${usd(rn2)} a month, against ${usd(rc.p100)} affordable at 100% of AMI and ${usd(rc.p120)} at 120%.`);
@@ -239,7 +243,7 @@
     tiles([[n0(f.renter_households), 'Renter households', `${p1(f.renter_share)} of all households`],
       [p1(f.renters_cost_burdened_share), 'Cost-burdened renters', `${p1(f.renters_severely_burdened_share)} pay more than half of income`],
       [p1(rvr), 'Rental vacancy rate', rvrWord === 'tight' ? 'Below the balanced range' : rvrWord === 'balanced' ? 'Within the balanced range' : 'Above the balanced range'],
-      hasInv ? [n0(f.inventory_market_units), 'Market-rate apartment units', `${n0(f.inventory_units)} apartment units identified`] : [usd(f.rent_median), 'Median gross rent', `${stateName}: ${usd(f.state_rent_median)}`]]);
+      hasInv ? [n0(f.inventory_restricted_units), 'Subsidized apartment units', `${n0(f.inventory_properties)} ${plural(f.inventory_properties, 'property', 'properties')} in federal records`] : [usd(f.rent_median), 'Median gross rent', `${stateName}: ${usd(f.state_rent_median)}`]]);
     P('This section stands alone for a developer or funder evaluating a rental project.');
     H2('Rental affordability');
     P(`A household is cost-burdened when it spends more than 30% of gross income on housing, and severely burdened above 50%. In ${nm}, ${n0(f.renters_cost_burdened)} of ${n0(f.renter_households)} renter households (${p1(f.renters_cost_burdened_share)}) are cost-burdened and ${n0(f.renters_severely_burdened)} (${p1(f.renters_severely_burdened_share)}) are severely burdened.`);
@@ -254,9 +258,9 @@
     else P('Program eligibility follows the HUD band. The two local anchors show how closely that band matches what households here earn.');
     if (hasInv) {
       H2('The apartment inventory');
-      P(`Federal housing records identify ${num(f.inventory_properties)} apartment ${plural(f.inventory_properties, 'property', 'properties')} with ${n0(f.inventory_units)} units, about ${p0(f.inventory_share_of_renters)} of the ${area}'s ${n0(f.renter_households)} renter households. The remaining renters live in single-family houses, mobile homes, duplexes and small buildings. These records cover subsidized and income-restricted properties; a privately financed complex would not appear in them and should be confirmed locally.`);
-      T('inventory', { title: `Apartment Properties Identified in ${nm}`, widths: [4160, 900, 900, 3400], align: ['l', 'r', 'r', 'l'], total: true });
-      if (noMarket) banner(`All ${n0(f.inventory_units)} apartment units identified in ${nm} are subsidized or income-restricted.`);
+      P(`Federal housing records identify ${n0(f.inventory_properties)} subsidized or income-restricted apartment ${plural(f.inventory_properties, 'property', 'properties')} with ${n0(f.inventory_restricted_units)} units, about ${p0(f.inventory_share_of_renters)} of the ${area}'s ${n0(f.renter_households)} renter households.${mf5 != null ? ` The Census Bureau counts ${n0(mf5)} units in buildings of five or more units.` : ''} ${noMarket ? 'The subsidized units account for all of that larger-building stock, so no market-rate apartment community is evident in the data. Confirm this locally: these records list only subsidized properties, and a new or privately financed complex would not appear in them.' : mf5 > f.inventory_units ? `That leaves roughly ${n0(Math.round((mf5 - f.inventory_units) / 10) * 10)} units in larger buildings outside the subsidized inventory, a rough measure of the market-rate apartment stock. These records list only subsidized properties, so market-rate complexes are not named here.` : 'These records list only subsidized properties, so any market-rate complex is not named here.'}`);
+      T('inventory', { title: `Subsidized Apartment Properties Identified in ${nm}`, widths: [4160, 900, 900, 3400], align: ['l', 'r', 'r', 'l'], total: true });
+      if (noMarket) banner(`No market-rate apartment community is evident in ${nm}. The ${n0(f.inventory_units)} apartment units on record are subsidized or income-restricted.`);
     }
     chartOf('rent_distribution', { title: 'Rental Units by Monthly Gross Rent', height: 2500000, colors: ['PRIMARY'] });
     if (rn2 && f.no_unit_rents_at_or_above && f.no_unit_rents_at_or_above < rn2) banner(`No unit in the ${area} rents for ${usd(f.no_unit_rents_at_or_above)} or more. A new two-bedroom needs ${usd(rn2)}.`);
@@ -296,7 +300,7 @@
         : 'On all three anchors the units affordable to the workforce band and available to it meet or exceed the households in the band. The rental need here is not a count shortage in the band; it is a question of quality, product type and the deeper need below.');
     if (f.shortage_le_50_ami != null) P(f.shortage_le_50_ami > 0 ? `A ${wgShort ? 'larger ' : ''}shortage sits below the band. HUD's affordability data estimate that ${n0(f.shortage_le_50_ami)} more rental units are needed for renter households at or below 50% of AMI${f.shortage_le_30_ami > 0 ? `, and ${n0(f.shortage_le_30_ami)} for those at or below 30%` : ''}.` : 'HUD\'s affordability data do not show a shortage of rental units for households at or below 50% of AMI.');
     callout('Rental housing takeaways', [
-      noMarket ? `**No market-rate apartment product was found.** All ${n0(f.inventory_units)} apartment units identified are restricted or subsidized.` : null,
+      noMarket ? `**No market-rate apartment product is evident.** The ${n0(f.inventory_units)} apartment units on record are restricted or subsidized.` : null,
       `**Renters are cost-burdened.** ${n0(f.renters_cost_burdened)} of ${n0(f.renter_households)} households pay more than 30% of income, and ${n0(f.renters_severely_burdened)} pay more than half.`,
       wgShort ? `**The documented workforce gap is ${wgText} units.**` : '**No count shortage shows in the workforce band.**',
       rn2 && sub.p100 > 0 ? `**New construction needs subsidy at planning-level costs**, from ${usd(sub.p80)} per two-bedroom unit at 80% of AMI to ${sub.p120 > 0 ? usd(sub.p120) + ' at 120%' : 'none at 120%'}.` : null]);
@@ -354,8 +358,8 @@
     P(`The recommendations follow from the findings above. They are grouped by product type and are general directions, not a plan for a specific site.`);
     let rn = 0; const R = (lead, text) => B.push({ t: 'num', n: ++rn, lead, text });
     H2('Rental housing');
-    if (wgShort || noMarket) R(`Pursue a first workforce rental phase, sized modestly.`, `The documented gap is ${wgShort ? wgText + ' units' : 'one of product type, not unit count'}${noMarket ? ' and there is no market-rate apartment product to prove the concept' : ''}. A first phase scaled to the low end of the gap fits both the evidence and the absorption risk.${GA && f.program_over_finance_cap > 0 ? ` Pair any construction finance request with the infrastructure grant, because the vertical gap on the illustrative ${n0(f.program_units)}-unit program alone exceeds the ${usd(prog.financeCap)} cap.` : ''}`);
-    if (noMarket) R('Build it as market-rate or shallow-subsidy product.', `The apartments identified are already restricted, and the workforce band is served by nothing. New two-bedroom units should be underwritten to gross rents between ${usd(rc.p80)} and ${usd(rc.p100)}.`);
+    if (wgShort || noMarket) R(`Pursue a first workforce rental phase, sized modestly.`, `The documented gap is ${wgShort ? wgText + ' units' : 'one of product type, not unit count'}${noMarket ? ' and no market-rate apartment product is evident to prove the concept' : ''}. A first phase scaled to the low end of the gap fits both the evidence and the absorption risk.${GA && f.program_over_finance_cap > 0 ? ` Pair any construction finance request with the infrastructure grant, because the vertical gap on the illustrative ${n0(f.program_units)}-unit program alone exceeds the ${usd(prog.financeCap)} cap.` : ''}`);
+    if (noMarket) R('Build it as market-rate or shallow-subsidy product.', `The apartments on record are already restricted, and the workforce band is served by little or nothing. New two-bedroom units should be underwritten to gross rents between ${usd(rc.p80)} and ${usd(rc.p100)}.`);
     if (smallShort) R('Build small.', `One-person households are ${p1(small.household_share)} of households and studios and one-bedrooms are ${p1(small.stock_share)} of the stock. Concentrate on one-bedroom and two-bedroom units.`);
     if (f.small_multifamily_share > 15) R('Use the building form the community already has.', `Small buildings of two to nine units are ${p1(f.small_multifamily_share)} of the stock. Duplexes, quadplexes and cottage courts on infill lots fit the existing pattern and can be phased a few buildings at a time.`);
     if (f.shortage_le_50_ami > 0) R('Treat the low-income gap as a separate track.', `The ${n0(f.shortage_le_50_ami)}-unit shortage at or below 50% of AMI needs tax-credit, voucher and other deep-subsidy tools, not a workforce program.${hasInv ? ' The affordability terms of the existing subsidized properties should be confirmed, because losing even one would widen the deepest gap.' : ''}`);
