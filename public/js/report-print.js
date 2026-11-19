@@ -75,7 +75,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 9pt; line-height: 1.3; } th { background: ${C.PRIMARY}; color: #fff; font-size: 8pt; text-align: left; vertical-align: bottom; padding: 4.5pt 7pt; } td { padding: 3.5pt 7pt; border-bottom: .5pt solid ${C.HAIR}; vertical-align: top; }
   .r { text-align: right; } tr.total td { border-top: 1.5pt solid ${C.ACCENT}; border-bottom: 0; font-weight: 700; color: ${C.PRIMARY}; } td.bf { font-weight: 700; color: ${C.PRIMARY}; } table.sm { font-size: 8pt; } table.sm th { font-size: 7.5pt; padding: 4pt 4pt; } table.sm td { padding: 3pt 4pt; }
   .src { font-size: 6.5pt; line-height: 1.35; color: ${C.MUTED}; margin: 3pt 0 0; text-align: left; }
-  .toc h1 { page-break-before: auto; break-before: auto; } .toc .t1 { font-weight: 700; color: ${C.PRIMARY}; margin: 9pt 0 2pt; } .toc .t1 .n { display: inline-block; width: 21pt; color: ${C.ACCENT}; } .toc .t2 { color: ${C.MUTED}; font-size: 8.5pt; margin: 0 0 1pt 21pt; }
+  .toc h1 { page-break-before: auto; break-before: auto; } .toc .t1 { font-weight: 700; color: ${C.PRIMARY}; margin: 6pt 0 1pt; line-height: 1.3; break-after: avoid; } .toc .t1 .n { display: inline-block; width: 21pt; color: ${C.ACCENT}; } .toc .t2 { color: ${C.MUTED}; font-size: 8pt; line-height: 1.3; margin: 0 0 0 21pt; }
   @media screen { body { background: #e9ecec; } .sheet { background: #fff; width: 8.5in; margin: 16px auto; padding: 1in; box-shadow: 0 1px 6px rgba(0,0,0,.15); } .cover { margin: 16px auto; } .hint { font: 13px Arial, sans-serif; text-align: center; padding: 10px; background: ${C.PRIMARY}; color: #fff; } }
   @media print { .hint { display: none; } }`;
 
