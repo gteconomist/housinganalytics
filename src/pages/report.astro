@@ -10,6 +10,7 @@ const pageV = hash('public/js/report-page.js');
 const cssV = hash('public/css/report.css');
 const narrV = hash('public/js/report-narrative.js');
 const docxV = hash('public/js/report-docx.js');
+const printV = hash('public/js/report-print.js');
 const skelV = hash('public/report-template/skeleton.json');
 const gapCssV = hash('public/css/housing-gap.css');
 const exportV = hash('public/js/export.js');
@@ -22,7 +23,7 @@ const exportV = hash('public/js/export.js');
       <p class="eyebrow">Analysis</p>
       <h1>Housing study report builder.</h1>
       <p class="hero__lede">
-        Pick a city or county and download a finished Word report: a workforce housing needs
+        Pick a city or county and download a finished report, as Word or PDF: a workforce housing needs
         assessment built entirely from public data. The analyst inputs below are optional. The
         builder also flags the conditions that change how a community's numbers should be read.
       </p>
@@ -51,6 +52,7 @@ const exportV = hash('public/js/export.js');
   <script src={`/js/report-engine.js?v=${engineV}`} is:inline></script>
   <script src={`/js/report-narrative.js?v=${narrV}`} is:inline></script>
   <script src={`/js/report-docx.js?v=${docxV}`} is:inline></script>
+  <script src={`/js/report-print.js?v=${printV}`} is:inline></script>
   <script src={`/js/report-page.js?v=${pageV}`} defer is:inline></script>
 </Base>
 

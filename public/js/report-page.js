@@ -174,6 +174,17 @@
     btn.textContent = label; btn.disabled = false;
   }
 
+  // The PDF: the same report as a print page in a new tab, saved through the browser's print dialog.
+  function pdf(btn) {
+    const label = btn.textContent;
+    try {
+      const w = window.open('', '_blank');
+      if (!w) throw new Error('pop-up blocked');
+      w.document.open(); w.document.write(window.HAPrint.html(window.HANarrative.build(pack))); w.document.close(); w.focus();
+      setTimeout(() => { try { w.print(); } catch (e) { /* the tab stays open; the user can print it */ } }, 700);
+    } catch (e) { console.error(e); btn.textContent = e.message === 'pop-up blocked' ? 'Allow pop-ups for this site, then try again' : 'Could not build the report'; setTimeout(() => { btn.textContent = label; }, 5000); }
+  }
+
   function download() {
     const blob = new Blob([JSON.stringify(pack, null, 1)], { type: 'application/json' });
     const a = el('a', { href: URL.createObjectURL(blob), download: `housing-report-pack-${pack.target.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pack.target.state_fips}.json` });
@@ -205,7 +216,7 @@
       const nm = rec.f.place_name || rec.f.county_name || rec.f.name;
       result.innerHTML = `<div class="hg-head"><div class="hg-kick">Report builder</div><h2 class="hg-title">${esc(nm)}, ${esc(rec.f.state_name)}</h2>
         <p class="hg-sub">${place && ctx.county ? 'Compared with ' + esc(ctx.county.rec.f.county_name) + ' and ' : 'Compared with '}${esc(rec.f.state_name)} · ${esc(meta.acs_label)}</p></div>
-        <div class="rp-bar"><button type="button" class="btn" data-word>Download Word report</button><button type="button" class="link-btn" data-download>Download data pack</button><button type="button" class="link-btn" data-reset>Reset inputs to defaults</button></div>
+        <div class="rp-bar"><button type="button" class="btn" data-word>Download Word report</button><button type="button" class="btn" data-pdf>Download PDF report</button><button type="button" class="link-btn" data-download>Download data pack</button><button type="button" class="link-btn" data-reset>Reset inputs to defaults</button></div>
         <section class="rp-inputs"><h2>Analyst inputs</h2><p class="rp-hint">Saved in this browser for this community. Every change recomputes the exhibits below.</p>${formHTML()}</section><div data-pack></div>`;
       fillForm(result); recompute();
       history.replaceState(null, '', `?geo=${geoid}&mode=${place ? 'city' : 'county'}`);
@@ -216,6 +227,7 @@
   result.addEventListener('click', (e) => {
     const t = e.target;
     if (t.matches('[data-word]')) word(t);
+    else if (t.matches('[data-pdf]')) pdf(t);
     else if (t.matches('[data-download]')) download();
     else if (t.matches('[data-reset]')) { inputs = clone(E.DEFAULTS); fillForm(result); recompute(); }
     else if (t.matches('[data-add-inv]')) { inputs.inventory.push({ name: '', built: '', units: null, program: '', restricted: true }); fillForm(result); }
