@@ -117,8 +117,12 @@ async function inventory() {
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
       const [ka, a] = list[i], [kb, b] = list[j]; if (!merged.has(ka) || !merged.has(kb)) continue;
       const na = keyOf(a.name), nb = keyOf(b.name), shared = [...a.programs].some((p) => b.programs.has(p));
-      const contains = na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na));
-      const twin = !shared && a.city && a.city === b.city && a.units === b.units && a.units >= 8;
+      // A name that differs only by a phase marker (II, 2, B) is a separate phase, not a duplicate.
+      const [lo, hi] = na.length <= nb.length ? [na, nb] : [nb, na], extra = hi.replace(lo, '');
+      const contains = lo.length >= 6 && hi.includes(lo) && !/^(i{1,3}|iv|v|vi{1,3}|ix|x|\d+|[a-e])$/.test(extra);
+      // Same city and unit count under different programs counts as one property only when the names share a real word.
+      const wordsOf = (n) => new Set(n.toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 4 && !/^(apartments?|homes?|housing|village|villas?|estates?|phase|manor|place|park|court|senior|family|limited|mgmt|management|properties|partners|associates)$/.test(w)));
+      const wa = wordsOf(a.name), twin = !shared && a.city && a.city === b.city && a.units === b.units && a.units >= 8 && ([...wordsOf(b.name)].some((w) => wa.has(w)) || /\b(Lp|Llc|Ltd|Mgmt|Inc)\b/i.test(a.name + ' ' + b.name));
       if (!contains && !twin) continue;
       const keep = a.units >= b.units ? a : b, drop = keep === a ? b : a;
       if (/\b(Lp|Llc|Ltd|Mgmt|Inc)\b/i.test(keep.name) && !/\b(Lp|Llc|Ltd|Mgmt|Inc)\b/i.test(drop.name)) keep.name = drop.name;
