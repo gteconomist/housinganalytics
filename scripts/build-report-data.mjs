@@ -76,7 +76,14 @@ async function main() {
   // subsidized apartment inventory, FHFA county price index, mortgage rate.
   const src = await J(join(ROOT, 'src', 'data', 'report-sources.json'), {});
   const fmrOf = (fips) => { const r = src.fmr?.counties?.[fips]; return r ? { br0: r[0], br1: r[1], br2: r[2], br3: r[3], br4: r[4] } : undefined; };
-  const invOf = (fips, place) => { const l = (src.inventory?.counties?.[fips] || []).filter((p) => !place || p[4] === place).map((p) => p.slice(0, 4)); return l.length ? l : undefined; };
+  // A property belongs to a city when HUD's place code says so or when its mailing city is the city's name.
+  // HUD's place codes use older boundaries (McRae and Helena are still separate there), so the name match matters.
+  const cityKey = (v) => String(v || '').toLowerCase().replace(/\b(city|town|village|borough|cdp|municipality)\b/g, '').replace(/\bmc /g, 'mc').replace(/\bst\.? /g, 'saint ').replace(/[^a-z]/g, '');
+  const invOf = (fips, place, name) => {
+    const full = String(name || ''), keys = new Set([full, ...full.split(/[-\/]/)].map(cityKey).filter(Boolean));
+    const l = (src.inventory?.counties?.[fips] || []).filter((p) => !place || p[4] === place || (p[5] && keys.has(cityKey(p[5])))).map((p) => p.slice(0, 4));
+    return l.length ? l : undefined;
+  };
   const mIdx = await J(join(ROOT, 'public', 'master-data', 'index.json'), { places: [] });
   const placeCounty = Object.fromEntries(mIdx.places.map((p) => [p.geoid, p.county_fips]));
   // Census-PUBLISHED state medians and rates (never a weighted average of counties).
@@ -105,7 +112,7 @@ async function main() {
     const b = bucket(p.state_fips, p.state_name);
     if (!b.state.ctx && p._context) b.state.ctx = { state: p._context.state || null, national: p._context.national || null };
     b.places[p.geoid] = { f: slim(p), x: x(extra.places[p.geoid], false), gap: gap.places?.[p.geoid] || null, county: p.parent_county_fips || placeCounty[p.geoid] || null,
-      inv: invOf(p.parent_county_fips || placeCounty[p.geoid], p.geoid) };
+      inv: invOf(p.parent_county_fips || placeCounty[p.geoid], p.geoid, p.place_name || p.name) };
   }
 
   await mkdir(join(OUT, 'states'), { recursive: true });

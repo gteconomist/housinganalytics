@@ -28,7 +28,8 @@ const YY = String(new Date().getFullYear() + (new Date().getMonth() >= 8 ? 1 : 0
 
 const URLS = {
   fmr: process.env.HUD_FMR_URL ? [process.env.HUD_FMR_URL] : [YY, String(+YY - 1)].flatMap((y) => [`https://www.huduser.gov/portal/datasets/fmr/fmr20${y}/FY${y}_FMRs_revised.xlsx`, `https://www.huduser.gov/portal/datasets/fmr/fmr20${y}/FY${y}_FMRs.xlsx`]),
-  hpi: [process.env.FHFA_HPI_URL || 'https://www.fhfa.gov/hpi/download/annually/hpi_at_bdl_county.xlsx'],
+  hpi: process.env.FHFA_HPI_URL ? [process.env.FHFA_HPI_URL] : ['https://www.fhfa.gov/hpi/download/annual/hpi_at_county.xlsx', 'https://www.fhfa.gov/hpi/download/annually/hpi_at_county.xlsx', 'https://www.fhfa.gov/hpi/download/annually/hpi_at_bdl_county.xlsx', 'https://www.fhfa.gov/hpi/download/annual/hpi_at_bdl_county.xlsx'],
+  hpiPage: 'https://www.fhfa.gov/data/hpi/datasets?tab=additional-data',
   pmms: [process.env.PMMS_URL || 'https://www.freddiemac.com/pmms/docs/PMMS_history.csv'],
   arcgis: process.env.HUD_ARCGIS || 'https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services',
 };
@@ -86,33 +87,56 @@ const year = (v) => { const n = Number(v); if (n > 1900 && n < 2100) return Stri
 
 async function inventory() {
   const [lihtc, mf, ph, usda] = await Promise.all([
-    layer('LIHTC', ['PROJECT', 'N_UNITS', 'LI_UNITS', 'YR_PIS', 'TRGT_ELD', 'FMHA_515', 'NONPROG', ...GEO]),
-    layer('MULTIFAMILY_PROPERTIES_ASSISTED', ['PROPERTY_NAME_TEXT', 'TOTAL_UNIT_COUNT', 'TOTAL_ASSISTED_UNIT_COUNT', 'PROGRAM_TYPE1', 'IS_202_811_IND', 'IS_SEC8_IND', 'OCCUPANCY_DATE', ...GEO]),
-    layer('Public_Housing_Developments', ['PROJECT_NAME', 'FORMAL_PARTICIPANT_NAME', 'TOTAL_DWELLING_UNITS', 'TOTAL_UNITS', ...GEO]),
-    layer('USDA_Rural_Housing_Assets', ['PROJECT_NAME', 'TOTAL_UNITS', 'RA_UNITS', 'RENTAL_DESIGNATION', ...GEO]),
+    layer('LIHTC', ['PROJECT', 'PROJ_CTY', 'STD_CITY', 'N_UNITS', 'LI_UNITS', 'YR_PIS', 'TRGT_ELD', 'FMHA_515', 'NONPROG', ...GEO]),
+    layer('MULTIFAMILY_PROPERTIES_ASSISTED', ['PROPERTY_NAME_TEXT', 'STD_CITY', 'PLACED_BASE_CITY_NAME_TEXT', 'TOTAL_UNIT_COUNT', 'TOTAL_ASSISTED_UNIT_COUNT', 'PROGRAM_TYPE1', 'IS_202_811_IND', 'IS_SEC8_IND', 'OCCUPANCY_DATE', ...GEO]),
+    layer('Public_Housing_Developments', ['PROJECT_NAME', 'STD_CITY', 'FORMAL_PARTICIPANT_NAME', 'TOTAL_DWELLING_UNITS', 'TOTAL_UNITS', ...GEO]),
+    layer('USDA_Rural_Housing_Assets', ['PROJECT_NAME', 'PRJ_ADDRESS_CITY', 'STD_CITY', 'TOTAL_UNITS', 'RA_UNITS', 'RENTAL_DESIGNATION', ...GEO]),
   ]);
   const items = [];   // { fips, place, name, built, units, programs:Set }
-  const push = (a, name, built, units, program) => { const fips = fipsOf(a); if (!fips || !name || !(units > 0)) return; items.push({ fips, place: placeOf(a), name: title(name), built, units, programs: new Set([program]) }); };
+  const cityOf = (a) => String(a.STD_CITY || a.PROJ_CTY || a.PRJ_ADDRESS_CITY || a.PLACED_BASE_CITY_NAME_TEXT || '').trim().toUpperCase();
+  const push = (a, name, built, units, program) => { const fips = fipsOf(a); if (!fips || !name || !(units > 0)) return; items.push({ fips, place: placeOf(a), city: cityOf(a), name: title(name).replace(/\bApts?\b/g, 'Apartments'), built, units, programs: new Set([program]) }); };
+  const unnamed = (n) => !n || /unnamed|^project$|^n\/?a$/i.test(String(n).trim());
+  const usdaKind = { fa: 'family', el: 'elderly', mx: 'mixed', cg: 'congregate', gh: 'group home' };
   for (const a of lihtc) { if (String(a.NONPROG) === '1') continue; push(a, a.PROJECT, year(a.YR_PIS), num(a.N_UNITS) || num(a.LI_UNITS), `Tax credit (LIHTC)${String(a.TRGT_ELD) === '1' ? ', senior' : ''}`); }
   for (const a of mf) push(a, a.PROPERTY_NAME_TEXT, year(a.OCCUPANCY_DATE), num(a.TOTAL_UNIT_COUNT) || num(a.TOTAL_ASSISTED_UNIT_COUNT), String(a.IS_202_811_IND).toUpperCase().startsWith('Y') ? 'HUD Section 202/811' : `HUD-assisted${a.PROGRAM_TYPE1 ? ' (' + String(a.PROGRAM_TYPE1).trim() + ')' : ''}`);
-  for (const a of ph) push(a, a.PROJECT_NAME || a.FORMAL_PARTICIPANT_NAME, '', num(a.TOTAL_DWELLING_UNITS) || num(a.TOTAL_UNITS), 'Public housing');
-  for (const a of usda) push(a, a.PROJECT_NAME, '', num(a.TOTAL_UNITS), `USDA Rural Development${a.RENTAL_DESIGNATION ? ' (' + String(a.RENTAL_DESIGNATION).trim().toLowerCase() + ')' : ''}`);
+  for (const a of ph) push(a, unnamed(a.PROJECT_NAME) ? a.FORMAL_PARTICIPANT_NAME : a.PROJECT_NAME, '', num(a.TOTAL_DWELLING_UNITS) || num(a.TOTAL_UNITS), 'Public housing');
+  for (const a of usda) push(a, a.PROJECT_NAME, '', num(a.TOTAL_UNITS), (() => { const k = String(a.RENTAL_DESIGNATION || '').trim().toLowerCase().slice(0, 2); return `USDA Section 515${usdaKind[k] ? ', ' + usdaKind[k] : ''}`; })());
   // The same property often sits in two programs (tax credits layered on a USDA or HUD loan): merge by name within a county.
   const merged = new Map();
   for (const it of items) {
     const k = it.fips + '|' + (keyOf(it.name) || it.name.toLowerCase()), m = merged.get(k);
     if (!m) { merged.set(k, it); continue; }
-    m.units = Math.max(m.units, it.units); m.built = m.built || it.built; m.place = m.place || it.place; it.programs.forEach((p) => m.programs.add(p));
+    m.units = Math.max(m.units, it.units); m.built = m.built || it.built; m.place = m.place || it.place; m.city = m.city || it.city; it.programs.forEach((p) => m.programs.add(p));
+  }
+  // Second pass: the agencies name the same property differently ("Heritage Villas" / "Heritage Villas of Helena",
+  // or an owner's name in one file).  Within a county, merge when one name contains the other, or when two
+  // records from different programs share a city and a unit count.
+  const byCounty = {};
+  for (const [k, it] of merged) (byCounty[it.fips] ||= []).push([k, it]);
+  for (const list of Object.values(byCounty)) {
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const [ka, a] = list[i], [kb, b] = list[j]; if (!merged.has(ka) || !merged.has(kb)) continue;
+      const na = keyOf(a.name), nb = keyOf(b.name), shared = [...a.programs].some((p) => b.programs.has(p));
+      const contains = na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na));
+      const twin = !shared && a.city && a.city === b.city && a.units === b.units && a.units >= 8;
+      if (!contains && !twin) continue;
+      const keep = a.units >= b.units ? a : b, drop = keep === a ? b : a;
+      if (/\b(Lp|Llc|Ltd|Mgmt|Inc)\b/i.test(keep.name) && !/\b(Lp|Llc|Ltd|Mgmt|Inc)\b/i.test(drop.name)) keep.name = drop.name;
+      keep.built = keep.built || drop.built; keep.place = keep.place || drop.place; keep.city = keep.city || drop.city; drop.programs.forEach((p) => keep.programs.add(p));
+      merged.delete(keep === a ? kb : ka);
+    }
   }
   const counties = {};
-  for (const it of merged.values()) (counties[it.fips] ||= []).push([it.name, it.built, it.units, [...it.programs].join('; '), it.place]);
+  for (const it of merged.values()) (counties[it.fips] ||= []).push([it.name, it.built, it.units, [...it.programs].join('; '), it.place, it.city]);
   for (const l of Object.values(counties)) l.sort((a, z) => z[2] - a[2]);
-  return { source: 'HUD open data: LIHTC, Multifamily Properties - Assisted, Public Housing Developments, USDA Rural Housing Assets', counts: { lihtc: lihtc.length, hud_multifamily: mf.length, public_housing: ph.length, usda: usda.length, properties: merged.size }, counties };
+  return { source: 'HUD open data: LIHTC, Multifamily Properties - Assisted, Public Housing Developments, USDA Rural Housing Assets', counts: { lihtc: lihtc.length, hud_multifamily: mf.length, public_housing: ph.length, usda: usda.length, properties: Object.values(counties).reduce((n, l) => n + l.length, 0) }, counties };
 }
 
 // ── FHFA annual county House Price Index ─────────────────────────────────
 async function hpi() {
-  const { url, body } = await get(URLS.hpi);
+  let found = [];
+  try { const html = (await get([URLS.hpiPage], 'text')).body; found = [...html.matchAll(/href="([^"]*count[^"]*\.xlsx[^"]*)"/gi)].map((m) => new URL(m[1].replace(/&amp;/g, '&'), URLS.hpiPage).href); } catch (e) { /* fall back to the known addresses */ }
+  const { url, body } = await get([...found, ...URLS.hpi]);
   const wb = XLSX.read(body), aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null });
   const h = aoa.findIndex((r) => r && r.some((c) => /fips/i.test(String(c))) && r.some((c) => /^year$/i.test(String(c).trim())));
   if (h < 0) throw new Error('FHFA header row not found');
