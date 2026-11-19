@@ -1,0 +1,72 @@
+---
+import Base from '../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+// Nothing under public/ is fingerprinted by Astro, so content-hash each asset
+// or Cloudflare and the browser keep serving the previous version.
+const hash = (p) => createHash('md5').update(readFileSync(p)).digest('hex').slice(0, 10);
+const engineV = hash('public/js/report-engine.js');
+const pageV = hash('public/js/report-page.js');
+const cssV = hash('public/css/report.css');
+const gapCssV = hash('public/css/housing-gap.css');
+const exportV = hash('public/js/export.js');
+---
+<Base title="Report builder — housinganalytics.org"
+      description="Assemble the exhibits and data pack for a workforce housing needs assessment of any U.S. city or county.">
+
+  <section class="hero">
+    <div class="container hero__inner">
+      <p class="eyebrow">Analysis</p>
+      <h1>Housing study report builder.</h1>
+      <p class="hero__lede">
+        Pick a city or county and answer the analyst questions. The builder assembles every exhibit
+        of a workforce housing needs assessment from the site's data, flags the conditions that
+        would mislead a templated report, and packages it all as a data pack the narrative is
+        written from.
+      </p>
+    </div>
+  </section>
+
+  <section class="container gen">
+    <div class="step">
+      <p class="step__num">Step 1</p>
+      <h2>Choose a community</h2>
+      <div class="toggle" role="group" aria-label="Target type">
+        <button type="button" class="toggle__btn is-active" data-mode="city">City</button>
+        <button type="button" class="toggle__btn" data-mode="county">County</button>
+      </div>
+      <div class="search" data-target-search>
+        <input type="search" placeholder="Search a city — e.g. McRae-Helena, Sandersville…" autocomplete="off" aria-label="Search for a community" />
+        <ul class="search__results" hidden></ul>
+      </div>
+    </div>
+    <div class="hg-result" data-result></div>
+  </section>
+
+  <!-- export.js watches the DOM, so every exhibit the page builds (and rebuilds
+       on each input change) gets its PNG and Excel downloads without wiring. -->
+  <script src={`/js/export.js?v=${exportV}`} defer is:inline></script>
+  <script src={`/js/report-engine.js?v=${engineV}`} is:inline></script>
+  <script src={`/js/report-page.js?v=${pageV}`} defer is:inline></script>
+</Base>
+
+<style>
+  .hero { background: var(--bg-section); padding: var(--space-9) 0 var(--space-7); border-bottom: 1px solid var(--border-soft); }
+  .hero h1 { max-width: 24ch; margin-bottom: var(--space-4); }
+  .hero__lede { max-width: 66ch; font-size: var(--fs-md); color: var(--text-muted); }
+  .gen { padding-top: var(--space-7); padding-bottom: var(--space-9); }
+  .step { margin-bottom: var(--space-6); }
+  .step__num { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-navy); font-weight: var(--fw-medium); margin: 0 0 var(--space-2); }
+  .step h2 { margin: 0 0 var(--space-4); font-size: var(--fs-xl); }
+  .toggle { display: inline-flex; margin: 0 0 var(--space-4); border: 2px solid var(--color-navy); border-radius: var(--radius-md); overflow: hidden; }
+  .toggle__btn { padding: var(--space-2) var(--space-5); font: inherit; font-weight: var(--fw-medium); font-size: var(--fs-sm); background: var(--bg-page); color: var(--color-navy); border: none; cursor: pointer; }
+  .toggle__btn + .toggle__btn { border-left: 2px solid var(--color-navy); }
+  .toggle__btn.is-active { background: var(--color-navy); color: #ffffff; }
+  .search { position: relative; max-width: 520px; }
+  .search input { width: 100%; padding: var(--space-4) var(--space-5); font-size: var(--fs-md); font-family: inherit; border: 2px solid var(--color-navy); border-radius: var(--radius-md); background: var(--bg-page); box-shadow: var(--shadow-soft); }
+  .search input:focus { outline: 3px solid var(--color-gold); outline-offset: 1px; }
+  .search__results { position: absolute; top: 100%; left: 0; right: 0; list-style: none; margin: var(--space-2) 0 0; padding: 0; background: var(--bg-page); border: 1px solid var(--border-soft); border-radius: var(--radius-md); box-shadow: var(--shadow-card); z-index: 10; }
+</style>
+
+<link rel="stylesheet" href={`/css/housing-gap.css?v=${gapCssV}`}/>
+<link rel="stylesheet" href={`/css/report.css?v=${cssV}`}/>

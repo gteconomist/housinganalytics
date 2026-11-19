@@ -11,6 +11,9 @@ dist/
 # (NOT public/data/), is produced by `npm run master-geo`, and IS committed.
 src/data/generated/
 public/data/
+# Report-builder bundle: rebuilt from public/data by `npm run report-data`
+# on every build (its Census/permit inputs are committed under src/data/).
+public/report-data/
 
 # Cached raw Census API pull from build-places-xlsx.mjs (only useful for
 # iterating on the script — the published XLSX is the source of truth)

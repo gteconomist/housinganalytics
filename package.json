@@ -20,8 +20,8 @@
     "master-geo": "node scripts/build-master-geo.mjs",
     "master": "npm run acs-vintages && npm run master-data && npm run master-xlsx",
     "validate-master": "node scripts/validate.mjs",
-    "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && npm run rankings-places && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js dev",
-    "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && npm run rankings-places && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js build",
+    "dev": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && npm run rankings-places && npm run report-data && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js dev",
+    "build": "npm run hud && npm run gazetteer && npm run gazetteer-places && npm run qcew && npm run oews && npm run data && npm run rankings && npm run index && npm run index-places && npm run rankings-places && npm run report-data && node --max-old-space-size=${NODE_HEAP_MB:-8192} node_modules/astro/astro.js build",
     "preview": "astro preview",
     "astro": "astro",
     "index": "node scripts/build-index.mjs",
@@ -32,7 +32,10 @@
     "chas": "node scripts/fetch-chas.mjs",
     "market": "node scripts/fetch-market.mjs",
     "acs-extra": "node scripts/fetch-acs-extra.mjs",
-    "acs-published": "node scripts/fetch-acs-published.mjs"
+    "acs-published": "node scripts/fetch-acs-published.mjs",
+    "report-extra": "node scripts/fetch-report-extra.mjs",
+    "permits": "node scripts/fetch-permits.mjs",
+    "report-data": "node scripts/build-report-data.mjs"
   },
   "dependencies": {
     "astro": "^4.16.18",

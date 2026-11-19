@@ -140,3 +140,27 @@ Priority order for v5:
 ---
 
 *End of re-baseline. Mark up directly or send notes; I'll cut v0.2 when you next pick this up.*
+
+---
+
+## Progress — 2026-11-19: report builder (`/report`), the study generator's deterministic half
+
+The Sandersville workforce housing assessment became the template for the study generator parked in §5. Split in two: the site assembles every exhibit and number as a **data pack**; the narrative is written from the pack in a Claude session. McRae-Helena, GA was the first report written this way.
+
+**Shipped in this cut**
+- `/report` (`src/pages/report.astro`, `public/js/report-page.js`, `public/css/report.css`) — pick a city or county, answer the analyst questions (construction cost, cap rate, expense ratio, program mix, mortgage terms, FMRs, apartment inventory, optional proposed development), preview ~26 exhibits, download the pack as JSON. Inputs persist per community in the browser. Deep link `?geo=&mode=`.
+- `public/js/report-engine.js` — all arithmetic, no DOM; runs in the browser and under Node. Reproduces the Sandersville and McRae figures to the dollar.
+- **Flags** — the engine reports the conditions under which a templated report misleads: group quarters share (prison and college towns), the 2010→2020 Census benchmark break (suppresses count trends), wide margins of error, suppressed medians, thin CHAS samples, HUD floor vs county median, no apartment inventory.
+- `scripts/build-report-data.mjs` (`npm run report-data`, **in the build chain** after build-data) → `public/report-data/` (gitignored, public, bundled by state).
+- `scripts/fetch-report-extra.mjs` (`npm run report-extra`) → `src/data/report-extra.json` (committed): group quarters, margins of error, 2010/2020 Census counts.
+- `scripts/fetch-permits.mjs` (`npm run permits`) → `src/data/permits-county.json` (committed): Building Permits Survey, county, 2015 onward. This is v5.2's "building permits" item, delivered early.
+
+**Replaces commercial multifamily data with:** permits (new supply), ACS non-occupancy by structure (vacancy by type), an analyst-entered inventory from HUD/USDA/state records (restricted vs market-rate).
+
+**Next**
+1. HUD Fair Market Rents in the pipeline (now a manual input on the page).
+2. National property inventory: HUD LIHTC + HUD multifamily + USDA Section 515, joined to place, pre-filling the inventory table.
+3. A Claude skill that writes the report from a pack.
+4. Word export of the exhibits; `/report` behind the Cloudflare Access gate (`/report-data` stays public).
+
+**Annual refresh:** add `npm run report-extra` and `npm run permits` to the December ACS refresh.
