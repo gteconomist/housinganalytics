@@ -114,6 +114,22 @@
     const mfPermits = permits ? permits.units_5_plus + permits.units_2_to_4 : 0;
 
     // ══ SUMMARY ══════════════════════════════════════════════════════════
+    // ══ ABOUT THIS REPORT ════════════════════════════════════════════════
+    H1('About This Report');
+    P(`This report was generated automatically from public data sources. Its tables, charts and text are assembled by fixed rules from published figures for ${f.name}, ${f.state}. No one visited the community, interviewed residents, employers or landlords, or reviewed local records in preparing it.`);
+    P('**It is a general overview, not a market study, appraisal or feasibility analysis, and it is not investment, lending or legal advice.** Verify the findings locally before relying on them for a funding application, a loan or a development decision.');
+    B.push({ t: 'eyebrow', text: 'Limitations' });
+    bullet(`**Survey estimates, not counts.** Most figures come from the Census Bureau's American Community Survey, a sample survey averaged over five years (${period}). Every estimate carries a margin of error, which is wide for small communities, and none describes conditions today.`);
+    bullet(`**Sources cover different periods.** The survey data, HUD income limits (${pack.vintages.hud_income_limits || 'current year'})${inp.fmr && inp.fmr.year ? `, Fair Market Rents (${inp.fmr.year})` : ''}${(pack.vintages.gap || {}).chas ? `, HUD affordability data (${pack.vintages.gap.chas.replace('HUD CHAS ', '').replace('–', ' to ')})` : ''} and building permits are each the latest available and do not share a single date.`);
+    if (gq) bullet(`**Group quarters.** ${p0(f.group_quarters_share)} of the counted population lives in group quarters. Population-based figures include them; household and housing figures do not.`);
+    if (hasInv) bullet('**The apartment inventory is partial.** It lists only properties in federal subsidy records. Market-rate apartments are not listed, properties are assigned to a community by mailing address, and a property may be missing, duplicated or no longer in service.');
+    else bullet('**No apartment inventory.** Current asking rents, vacancies and the names of apartment properties are not available from public data and are not included.');
+    bullet('**Costs are assumptions.** Construction costs, operating expenses, capitalization rates and mortgage terms are planning-level assumptions applied uniformly. They are not quotes, bids or appraisals, and the financing gaps built on them are illustrative.');
+    bullet('**No site or project is evaluated.** Land, infrastructure, zoning, environmental conditions and absorption for a specific development are outside the scope of this report.');
+    if (GA) bullet('**Program terms change.** State program limits and eligibility rules cited here should be confirmed with the administering agency.');
+    bullet('**Recommendations are general.** They follow mechanically from the data patterns and have not been reviewed against local plans, policies or market knowledge.');
+    P('The data are believed to be accurate as published by their sources, but no warranty is made as to accuracy or completeness. Section 6 lists the local analysis that would address these limitations.', { before: 120 });
+
     H1('Summary of Findings');
     P(`This assessment documents housing conditions in ${f.name}, ${f.state}, and measures the need for workforce housing: homes affordable to households earning 80% to 120% of area median income (AMI). Rental and owner-occupied findings are presented separately so each can be read alone.`);
     B.push({ t: 'eyebrow', text: `${nm} at a glance  ·  ${period}` });

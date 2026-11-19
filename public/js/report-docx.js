@@ -205,7 +205,13 @@
     let nfig = 0, ntab = 0, id = 100;
     model.blocks.forEach((b) => {
       switch (b.t) {
-        case 'h1': id++; toc.push({ level: 1, num: b.num, title: b.title, id }); body.push(h1(b.title, b.num, id)); break;
+        case 'h1': {
+          // A section starts on a new page, so a trailing spacer from the block before it is dropped: left in, it can
+          // spill onto a page of its own and leave that page blank.
+          const last = body[body.length - 1];
+          if (last) [spacer(), spacer(200)].forEach((sp) => { if (body[body.length - 1].endsWith(sp)) body[body.length - 1] = body[body.length - 1].slice(0, -sp.length); });
+          id++; toc.push({ level: 1, num: b.num, title: b.title, id }); body.push(h1(b.title, b.num, id)); break;
+        }
         case 'h2': id++; toc.push({ level: 2, title: b.title, id }); body.push(h2(b.title, id)); break;
         case 'p': body.push(para(b.text, b)); break;
         case 'eyebrow': body.push(eyebrow(b.text)); break;
