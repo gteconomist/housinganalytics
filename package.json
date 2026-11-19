@@ -34,6 +34,7 @@
     "acs-extra": "node scripts/fetch-acs-extra.mjs",
     "acs-published": "node scripts/fetch-acs-published.mjs",
     "report-extra": "node scripts/fetch-report-extra.mjs",
+    "report-sources": "node scripts/fetch-report-sources.mjs",
     "permits": "node scripts/fetch-permits.mjs",
     "report-data": "node scripts/build-report-data.mjs"
   },

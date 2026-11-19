@@ -72,6 +72,11 @@ async function main() {
   const extra = await J(join(ROOT, 'src', 'data', 'report-extra.json'), { order: { acs: [], dec: [] }, places: {}, counties: {} });
   const permits = await J(join(ROOT, 'src', 'data', 'permits-county.json'), { years: [], counties: {} });
   const gap = await J(join(ROOT, 'src', 'data', 'housing-gap-summary.json'), { places: {}, counties: {} });
+  // Public sources for the Word report (npm run report-sources): HUD Fair Market Rents,
+  // subsidized apartment inventory, FHFA county price index, mortgage rate.
+  const src = await J(join(ROOT, 'src', 'data', 'report-sources.json'), {});
+  const fmrOf = (fips) => { const r = src.fmr?.counties?.[fips]; return r ? { br0: r[0], br1: r[1], br2: r[2], br3: r[3], br4: r[4] } : undefined; };
+  const invOf = (fips, place) => { const l = (src.inventory?.counties?.[fips] || []).filter((p) => !place || p[4] === place).map((p) => p.slice(0, 4)); return l.length ? l : undefined; };
   const mIdx = await J(join(ROOT, 'public', 'master-data', 'index.json'), { places: [] });
   const placeCounty = Object.fromEntries(mIdx.places.map((p) => [p.geoid, p.county_fips]));
   // Census-PUBLISHED state medians and rates (never a weighted average of counties).
@@ -93,12 +98,14 @@ async function main() {
   for (const c of counties) {
     const b = bucket(c.state_fips, c.state_name);
     if (!b.state.ctx && c._context) b.state.ctx = { state: c._context.state || null, national: c._context.national || null };
-    b.counties[c.geoid] = { f: slim(c), x: x(extra.counties[c.geoid], true), gap: gap.counties?.[c.geoid] || null, permits: permits.counties[c.geoid] || null };
+    b.counties[c.geoid] = { f: slim(c), x: x(extra.counties[c.geoid], true), gap: gap.counties?.[c.geoid] || null, permits: permits.counties[c.geoid] || null,
+      fmr: fmrOf(c.geoid), hpi: src.hpi?.counties?.[c.geoid], inv: invOf(c.geoid) };
   }
   for (const p of places) {
     const b = bucket(p.state_fips, p.state_name);
     if (!b.state.ctx && p._context) b.state.ctx = { state: p._context.state || null, national: p._context.national || null };
-    b.places[p.geoid] = { f: slim(p), x: x(extra.places[p.geoid], false), gap: gap.places?.[p.geoid] || null, county: p.parent_county_fips || placeCounty[p.geoid] || null };
+    b.places[p.geoid] = { f: slim(p), x: x(extra.places[p.geoid], false), gap: gap.places?.[p.geoid] || null, county: p.parent_county_fips || placeCounty[p.geoid] || null,
+      inv: invOf(p.parent_county_fips || placeCounty[p.geoid], p.geoid) };
   }
 
   await mkdir(join(OUT, 'states'), { recursive: true });
@@ -112,6 +119,7 @@ async function main() {
     acs_label: 'ACS 2020–2024 5-Year Estimates',
     permit_years: permits.years, permit_source: permits.source || null,
     gap_vintage: gap.vintage || null, extra_vintage: extra.vintage || null,
+    sources: { as_of: src.asOf || null, fmr_year: src.fmr?.year || null, mortgage: src.mortgage || null, hpi_years: src.hpi ? [src.hpi.from, src.hpi.to] : null },
     states: Object.keys(byState).sort(),
   }));
   console.log(`report-data: ${places.length} places, ${counties.length} counties, ${Object.keys(byState).length} state bundles, ${(bytes / 1e6).toFixed(1)} MB`);

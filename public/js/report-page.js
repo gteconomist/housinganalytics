@@ -148,6 +148,7 @@
   let timer = null;
   function recompute() {
     pack = E.buildPack(ctx, inputs); save(ctx.target.geoid);
+    if (ctx.hpi) pack.facts.hpi = ctx.hpi;
     const out = $('[data-pack]'); out.innerHTML = '';
     const sev = { high: 'Must address', medium: 'Check', low: 'Note', info: 'Evidence' };
     const fl = el('section', { class: 'rp-flags' }, `<h2>What to watch in this community</h2><p class="rp-hint">Conditions the engine found that change how the numbers should be read. They travel with the data pack.</p>`
@@ -157,6 +158,20 @@
     pack.exhibits.forEach((ex) => exs.appendChild(renderExhibit(ex)));
     out.appendChild(exs);
     if (window.HAExport && window.HAExport.rescan) window.HAExport.rescan();
+  }
+
+  // The Word report: rule-written narrative (report-narrative.js) laid out by report-docx.js.
+  let skeleton = null;
+  async function word(btn) {
+    const label = btn.textContent; btn.disabled = true; btn.textContent = 'Building report…';
+    try {
+      if (!skeleton) skeleton = await J(result.dataset.skeleton || '/report-template/skeleton.json');
+      const model = window.HANarrative.build(pack), out = window.HADocx.build(model, skeleton);
+      const blob = new Blob([out.bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const a = el('a', { href: URL.createObjectURL(blob), download: model.fileName });
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) { console.error(e); btn.textContent = 'Could not build the report'; setTimeout(() => { btn.textContent = label; }, 4000); btn.disabled = false; return; }
+    btn.textContent = label; btn.disabled = false;
   }
 
   function download() {
@@ -180,10 +195,17 @@
         countyModel: cf ? (ana.counties[cf] || {}).model || null : null, meta,
       };
       inputs = deep(clone(E.DEFAULTS), load(geoid) || {});
+      // Public sources carried in the report data fill any input the analyst has not set.
+      const crec = place ? (cf && rep.counties[cf]) || {} : rec, cname = (crec.f && crec.f.county_name) || '';
+      if (!inputs.fmr.br2 && crec.fmr) inputs.fmr = Object.assign({ year: (meta.sources && meta.sources.fmr_year) || '' }, crec.fmr);
+      if (!inputs.inventory.length && rec.inv) inputs.inventory = rec.inv.map((p) => ({ name: p[0], built: p[1] || '', units: p[2], program: p[3], restricted: true }));
+      const mort = meta.sources && meta.sources.mortgage;
+      if (mort && mort.rate && inputs.sale.rate === E.DEFAULTS.sale.rate) { inputs.sale.rate = mort.rate; inputs.sale.rateAsOf = mort.date; }
+      ctx.hpi = crec.hpi ? { area: cname, from: crec.hpi[0], to: crec.hpi[1], change_pct: crec.hpi[2], proxy: false } : null;
       const nm = rec.f.place_name || rec.f.county_name || rec.f.name;
       result.innerHTML = `<div class="hg-head"><div class="hg-kick">Report builder</div><h2 class="hg-title">${esc(nm)}, ${esc(rec.f.state_name)}</h2>
         <p class="hg-sub">${place && ctx.county ? 'Compared with ' + esc(ctx.county.rec.f.county_name) + ' and ' : 'Compared with '}${esc(rec.f.state_name)} · ${esc(meta.acs_label)}</p></div>
-        <div class="rp-bar"><button type="button" class="btn" data-download>Download data pack</button><button type="button" class="link-btn" data-reset>Reset inputs to defaults</button></div>
+        <div class="rp-bar"><button type="button" class="btn" data-word>Download Word report</button><button type="button" class="link-btn" data-download>Download data pack</button><button type="button" class="link-btn" data-reset>Reset inputs to defaults</button></div>
         <section class="rp-inputs"><h2>Analyst inputs</h2><p class="rp-hint">Saved in this browser for this community. Every change recomputes the exhibits below.</p>${formHTML()}</section><div data-pack></div>`;
       fillForm(result); recompute();
       history.replaceState(null, '', `?geo=${geoid}&mode=${place ? 'city' : 'county'}`);
@@ -193,7 +215,8 @@
   result.addEventListener('input', (e) => { const t = e.target; if (!t.dataset.path && !t.dataset.invField) return; readInput(t); clearTimeout(timer); timer = setTimeout(recompute, 350); });
   result.addEventListener('click', (e) => {
     const t = e.target;
-    if (t.matches('[data-download]')) download();
+    if (t.matches('[data-word]')) word(t);
+    else if (t.matches('[data-download]')) download();
     else if (t.matches('[data-reset]')) { inputs = clone(E.DEFAULTS); fillForm(result); recompute(); }
     else if (t.matches('[data-add-inv]')) { inputs.inventory.push({ name: '', built: '', units: null, program: '', restricted: true }); fillForm(result); }
     else if (t.dataset.delInv != null) { inputs.inventory.splice(+t.dataset.delInv, 1); fillForm(result); recompute(); }

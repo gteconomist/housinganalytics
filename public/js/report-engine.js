@@ -125,7 +125,10 @@
     const eduTot = (r) => sum([r.edu_lt_9th, r.edu_9_12_no_diploma, r.edu_hs_grad, r.edu_some_college, r.edu_associates, r.edu_bachelors, r.edu_graduate]);
     const bachPlus = (r) => pct(sum([r.edu_bachelors, r.edu_graduate]), eduTot(r));
     const noHs = (r) => pct(sum([r.edu_lt_9th, r.edu_9_12_no_diploma]), eduTot(r));
-    const kids = (r) => (r.hh_with_children_u18 != null ? r.hh_with_children_u18 : r.hh_with_children);
+    // Poverty and households with children: prefer the published ACS tables carried in report-extra (B17001, B11005).
+    const xa = (r) => (r && r.x && r.x.acs) || {};
+    const pov = (r, fb) => { const a = xa(r); return a.pov_den ? a.pov_num / a.pov_den * 100 : fb; };
+    const kids = (r) => (xa(T.rec).hh_kids != null ? xa(T.rec).hh_kids : r.hh_with_children_u18 != null ? r.hh_with_children_u18 : r.hh_with_children);
     const gq = x.acs ? x.acs.gq : null, gqShare = div(gq, f.population_total);
     const hhPop = gq != null ? f.population_total - gq : null;
 
@@ -136,7 +139,7 @@
       owner_share: pct(own, hh), renter_share: pct(ren, hh),
       households_with_children: kids(f), households_with_children_share: pct(kids(f), hh),
       mhi: f.hh_income_median, mhi_owner: f.income_median_owner, mhi_renter: f.income_median_renter,
-      poverty_rate: f.poverty_rate, median_age: f.median_age,
+      poverty_rate: pov(T.rec, f.poverty_rate), median_age: f.median_age,
     });
 
     // ── flags that change how the rest must be read ────────────────────────
@@ -183,7 +186,7 @@
       geoRow('Median household income', { v: f.hh_income_median, fmt: 'usd' }, cf && { v: cf.hh_income_median, fmt: 'usd' }, { v: sp.hh_income_median != null ? sp.hh_income_median : s24.median_hh_income, fmt: 'usd' }),
       geoRow('Per capita income', { v: f.per_capita_income, fmt: 'usd' }, cf && { v: cf.per_capita_income, fmt: 'usd' }, { v: sp.per_capita_income != null ? sp.per_capita_income : s24.per_capita_income, fmt: 'usd' }),
       geoRow("Bachelor's degree or higher (25+)", { v: bachPlus(f), fmt: 'pct1' }, cf && { v: bachPlus(cf), fmt: 'pct1' }, { v: pct(s24.edu_bachelors_or_higher, sum([s24.edu_less_than_hs, s24.edu_hs_or_higher])), fmt: 'pct1' }),
-      geoRow('Poverty rate (individuals)', { v: f.poverty_rate, fmt: 'pct1' }, cf && { v: cf.poverty_rate, fmt: 'pct1' }, { v: sp.poverty_rate, fmt: 'pct1' }),
+      geoRow('Poverty rate (individuals)', { v: pov(T.rec, f.poverty_rate), fmt: 'pct1' }, cf && { v: pov(C && C.rec, cf.poverty_rate), fmt: 'pct1' }, { v: sp.poverty_rate, fmt: 'pct1' }),
     ], `U.S. Census Bureau, ${acsLabel}`,
     gqShare >= 0.05 ? 'Population, median age, per capita income and education include the group quarters population. Poverty is measured only for people outside institutions.' : ''));
 

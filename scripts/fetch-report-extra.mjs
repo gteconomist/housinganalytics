@@ -63,8 +63,9 @@ const STATES = (process.env.CENSUS_STATE || '').trim()
   ? process.env.CENSUS_STATE.split(',').map((s) => s.trim().padStart(2, '0'))
   : ALL_STATE_FIPS;
 
-const ACS = ['B26001_001E', 'B01003_001E', 'B19013_001M', 'B25077_001M', 'B25064_001M', 'B25001_001M', 'B25003_003M', 'B25004_008M'];
-const ACS_ORDER = ['gq', 'pop', 'mhi_moe', 'value_moe', 'rent_moe', 'units_moe', 'renters_moe', 'other_vacant_moe'];
+const ACS = ['B26001_001E', 'B01003_001E', 'B19013_001M', 'B25077_001M', 'B25064_001M', 'B25001_001M', 'B25003_003M', 'B25004_008M',
+  'B17001_002E', 'B17001_001E', 'B11005_002E'];   // people below poverty, poverty universe, households with people under 18
+const ACS_ORDER = ['gq', 'pop', 'mhi_moe', 'value_moe', 'rent_moe', 'units_moe', 'renters_moe', 'other_vacant_moe', 'pov_num', 'pov_den', 'hh_kids'];
 const DEC20 = ['H1_001N', 'H3_002N', 'P1_001N', 'P18_001N'];
 const DEC10 = ['H001001', 'H003002', 'P001001', 'P042001'];
 const DEC_ORDER = ['units', 'occupied', 'pop', 'gq'];
